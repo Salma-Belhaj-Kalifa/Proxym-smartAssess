@@ -1,0 +1,53 @@
+server:
+  port: 8080
+
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/assessmentdb
+    username: postgres
+    password: postgres123
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 10MB
+      enabled: true
+      file-size-threshold: 0
+      resolve-lazily: false
+  web:
+    resources:
+      static-locations: classpath:/static/,classpath:/public/,classpath:/resources/,classpath:/META-INF/resources/
+  mvc:
+    dispatch-options-request: true
+    hiddenmethod:
+      filter:
+        enabled: true
+  main:
+    allow-bean-definition-overriding: true
+  application:
+    name: smart-assess
+
+jwt:
+  secret: L1u2EBtApzhNIww+Da46j2GzdMoqF4KiVSlLXR7vMDE=
+  expiration: 86400
+
+# Configuration pour l'analyse IA (FastAPI)
+ai:
+  service:
+    url: ${AI_SERVICE_URL:http://localhost:8000}
+    timeout: ${AI_SERVICE_TIMEOUT:30000}
+    retry-attempts: ${AI_SERVICE_RETRY_ATTEMPTS:3}
+
+# Logging
+logging:
+  level:
+    com.example.smart_assess: INFO
+    org.springframework.web: INFO
+    com.zaxxer.hikari: WARN
+    org.springframework.web.multipart: DEBUG
