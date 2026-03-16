@@ -1,0 +1,9 @@
+# CV Parser Requirements
+fastapi
+uvicorn
+python-multipart
+python-dotenv==1.0.0
+pymupdf==1.24.1
+python-docx==1.1.0
+requests
+aiohttp

@@ -1,0 +1,118 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 98%;
+    --foreground: 240 10% 10%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 240 10% 10%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 10% 10%;
+
+    --primary: 263 70% 58%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 250 15% 95%;
+    --secondary-foreground: 240 10% 30%;
+
+    --muted: 250 10% 95%;
+    --muted-foreground: 240 5% 46%;
+
+    --accent: 263 70% 95%;
+    --accent-foreground: 263 70% 50%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 240 6% 90%;
+    --input: 240 6% 90%;
+    --ring: 263 70% 58%;
+
+    --radius: 0.75rem;
+
+    --sidebar-background: 255 25% 14%;
+    --sidebar-foreground: 0 0% 90%;
+    --sidebar-primary: 263 70% 58%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 255 20% 20%;
+    --sidebar-accent-foreground: 0 0% 95%;
+    --sidebar-border: 255 15% 22%;
+    --sidebar-ring: 263 70% 58%;
+
+    /* Custom tokens */
+    --success: 142 71% 45%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 0%;
+    --info: 217 91% 60%;
+    --info-foreground: 0 0% 100%;
+
+    --gradient-primary: linear-gradient(135deg, hsl(263 70% 58%), hsl(280 80% 65%));
+    --gradient-card: linear-gradient(145deg, hsl(0 0% 100%), hsl(250 15% 97%));
+    --gradient-hero: linear-gradient(180deg, hsl(255 25% 14%) 0%, hsl(263 30% 16%) 50%, hsl(255 20% 12%) 100%);
+
+    --shadow-glow: 0 0 30px -5px hsl(263 70% 58% / 0.2);
+    --shadow-card: 0 1px 3px 0 hsl(0 0% 0% / 0.06), 0 1px 2px -1px hsl(0 0% 0% / 0.06);
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-family: 'Inter', sans-serif;
+  }
+}
+
+/* Dark section for landing/login panels */
+.dark-section {
+  --background: 255 25% 14%;
+  --foreground: 0 0% 95%;
+  --card: 255 20% 18%;
+  --card-foreground: 0 0% 95%;
+  --popover: 255 20% 18%;
+  --popover-foreground: 0 0% 95%;
+  --secondary: 255 15% 22%;
+  --secondary-foreground: 0 0% 90%;
+  --muted: 255 10% 22%;
+  --muted-foreground: 255 5% 55%;
+  --accent: 263 70% 58%;
+  --accent-foreground: 0 0% 100%;
+  --border: 255 10% 24%;
+  --input: 255 10% 24%;
+  color: hsl(0 0% 95%);
+  background: var(--gradient-hero);
+}
+
+@layer utilities {
+  .text-gradient {
+    @apply bg-clip-text text-transparent;
+    background-image: var(--gradient-primary);
+  }
+
+  .glass-card {
+    @apply bg-card border border-border rounded-xl;
+    box-shadow: var(--shadow-card);
+  }
+
+  .glass-card-dark {
+    background: hsl(255 20% 18% / 0.8);
+    backdrop-filter: blur(12px);
+    border: 1px solid hsl(255 10% 24% / 0.5);
+    border-radius: var(--radius);
+    box-shadow: 0 4px 24px -4px hsl(0 0% 0% / 0.3);
+  }
+
+  .glow-border {
+    box-shadow: var(--shadow-glow);
+  }
+}
