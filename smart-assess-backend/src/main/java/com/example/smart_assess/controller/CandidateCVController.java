@@ -128,7 +128,7 @@ public class CandidateCVController {
 
     @GetMapping("/download/{cvId}")
     public ResponseEntity<ByteArrayResource> downloadCV(@PathVariable Long cvId) {
-        CandidateCVDto cvDto = cvService.getCVByCandidateId(cvId);
+        CandidateCVDto cvDto = cvService.getCVById(cvId);
         byte[] data = cvService.downloadCV(cvDto.getId());
 
         ByteArrayResource resource = new ByteArrayResource(data);

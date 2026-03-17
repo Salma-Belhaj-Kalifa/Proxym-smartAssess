@@ -1,5 +1,7 @@
 package com.example.smart_assess.controller;
 
+import com.example.smart_assess.repository.InternshipPositionRepository;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -10,8 +12,11 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/debug")
+@RequiredArgsConstructor
 @Slf4j
 public class DebugController {
+
+    private final InternshipPositionRepository positionRepository;
 
     @GetMapping("/test")
     public ResponseEntity<Map<String, String>> test() {
@@ -20,6 +25,42 @@ public class DebugController {
         response.put("message", "Debug endpoint is working");
         response.put("timestamp", String.valueOf(System.currentTimeMillis()));
         return ResponseEntity.ok(response);
+    }
+    
+    @PostMapping("/activate-all-positions")
+    public ResponseEntity<Map<String, Object>> activateAllPositions() {
+        log.info("=== ACTIVATING ALL POSITIONS ===");
+        Map<String, Object> response = new HashMap<>();
+        
+        try {
+            var positions = positionRepository.findAll();
+            int activatedCount = 0;
+            
+            for (var position : positions) {
+                if (!position.getIsActive()) {
+                    position.setIsActive(true);
+                    positionRepository.save(position);
+                    activatedCount++;
+                    log.info("Activated position ID: {} - {}", position.getId(), position.getTitle());
+                }
+            }
+            
+            response.put("success", true);
+            response.put("message", "Positions activated successfully");
+            response.put("activatedCount", activatedCount);
+            response.put("totalPositions", positions.size());
+            
+            log.info("Successfully activated {} out of {} positions", activatedCount, positions.size());
+            
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            response.put("success", false);
+            response.put("error", e.getMessage());
+            log.error("Error activating positions", e);
+            
+            return ResponseEntity.status(500).body(response);
+        }
     }
     
     @PostMapping("/minimal-test/{candidateId}")

@@ -54,6 +54,10 @@ class GenerateRequest(BaseModel):
     number_of_questions: int
     question_types: List[str]
 
+class GenerateFromProfileRequest(BaseModel):
+    candidate_profile: dict
+    number_of_questions: int = 5
+
 @router.get("/health")
 async def health_check():
     return {"status": "healthy", "service": "CV Analysis API"}
@@ -64,11 +68,11 @@ async def generate_questions(request: GenerateRequest):
     return await generator.generate(profile_json, num_questions=request.number_of_questions)
 
 @router.post("/generate-from-profile")
-async def generate_questions_from_profile(candidate_profile: dict, number_of_questions: int = 5):
+async def generate_questions_from_profile(request: GenerateFromProfileRequest):
     """
     Generate questions directly from candidate profile JSON (output from analyze-cv endpoint)
     """
-    return await generator.generate(candidate_profile, num_questions=number_of_questions)
+    return await generator.generate(request.candidate_profile, num_questions=request.number_of_questions)
 
 @router.post("/analyze-cv")
 async def analyze_cv(file: UploadFile = File(...)):

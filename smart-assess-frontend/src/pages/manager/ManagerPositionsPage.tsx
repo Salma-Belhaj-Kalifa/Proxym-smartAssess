@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, Search, Filter, Edit, Trash2, Users, Briefcase, Calendar, MoreVertical, Eye, X, CheckCircle } from 'lucide-react';
+import { Plus, Search, Filter, Edit, Trash2, Users, Briefcase, Calendar, MoreVertical, Eye, X, CheckCircle, Power } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -22,17 +22,6 @@ const ManagerPositionsPage: React.FC = () => {
   const deletePositionMutation = useDeletePosition();
   const togglePositionStatusMutation = useTogglePositionStatus();
   const queryClient = useQueryClient();
-  
-  console.log('=== POSITIONS DATA UPDATE ===');
-  console.log('Positions:', positions);
-  console.log('Positions length:', positions.length);
-  if (positions.length > 0) {
-    console.log('First position:', positions[0]);
-    console.log('First position isActive:', positions[0].isActive);
-  }
-  
-  console.log('=== INIT MANAGER POSITIONS PAGE ===');
-  console.log('Toggle mutation:', togglePositionStatusMutation);
   
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
@@ -57,7 +46,6 @@ const ManagerPositionsPage: React.FC = () => {
   const filteredPositions = positions.filter(position => {
     const matchesSearch = position.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          position.description.toLowerCase().includes(searchTerm.toLowerCase());
-    // Logique cohérente : si isActive est true, undefined, ou null, considérer comme actif
     const isActive = position.isActive !== false;
     const matchesFilter = filterStatus === 'all' || 
                          (filterStatus === 'active' && isActive) ||
@@ -65,7 +53,6 @@ const ManagerPositionsPage: React.FC = () => {
     return matchesSearch && matchesFilter;
   });
 
-  // Supprimer l'ancienne fonction getStatusBadge - remplacée par PositionStatusBadge component
 
   // Créer une position
   const handleCreatePosition = async () => {
@@ -179,13 +166,22 @@ const ManagerPositionsPage: React.FC = () => {
   const handleDeletePosition = async (positionId: number) => {
     try {
       const applicantCount = getApplicantsCount(positionId);
+      
       if (applicantCount > 0) {
-        toast.error(`Impossible de supprimer ce poste : ${applicantCount} candidat(s) ont postulé`);
-        return;
+        // Confirmer la suppression avec les candidatures
+        const confirmed = window.confirm(
+          `ATTENTION : ${applicantCount} candidat(s) ont postulé à ce poste.\n\n` +
+          `Voulez-vous vraiment supprimer ce poste ET toutes les candidatures associées ?\n\n` +
+          `Cette action est irréversible !`
+        );
+        
+        if (!confirmed) {
+          return;
+        }
       }
 
       await deletePositionMutation.mutateAsync(positionId);
-      toast.success('Position supprimée avec succès');
+      toast.success('Position et candidatures associées supprimées avec succès');
     } catch (error: any) {
       console.error('Error deleting position:', error);
       toast.error('Erreur lors de la suppression de la position');
@@ -196,41 +192,138 @@ const ManagerPositionsPage: React.FC = () => {
   const handleToggleStatus = async (position: any) => {
     console.log('=== HANDLE TOGGLE STATUS CALLED ===');
     console.log('Position:', position);
+    console.log('Position isActive:', position.isActive);
+    
+    // Logique stricte : vérifier explicitement si isActive est true
+    const currentIsActive = position.isActive === true;
+    const newIsActive = !currentIsActive;
     
     try {
-      // Logique cohérente : si isActive est true, undefined, ou null, considérer comme actif
-      const currentIsActive = position.isActive !== false;
-      const newIsActive = !currentIsActive;
-      
-      console.log('Current isActive:', currentIsActive);
+      console.log('Current isActive (strict):', currentIsActive);
       console.log('New isActive:', newIsActive);
       
+      // Afficher un toast de chargement
+      const loadingToast = toast.loading(`Changement du statut en cours...`, {
+        description: `${newIsActive ? 'Activation' : 'Désactivation'} de la position "${position.title}"`
+      });
+      
+      // Mise à jour optimiste immédiate
+      console.log('=== OPTIMISTIC UPDATE ===');
+      const beforeUpdate = positions.find((p: any) => p.id === position.id);
+      console.log('Before update:', { id: beforeUpdate?.id, isActive: beforeUpdate?.isActive });
+      
+      queryClient.setQueryData(['positions'], (oldData: any) => {
+        if (!oldData) return oldData;
+        const updated = oldData.map((p: any) => 
+          p.id === position.id ? { ...p, isActive: newIsActive } : p
+        );
+        const afterOptimistic = updated.find((p: any) => p.id === position.id);
+        console.log('After optimistic update:', { id: afterOptimistic?.id, isActive: afterOptimistic?.isActive });
+        return updated;
+      });
+
       const result = await togglePositionStatusMutation.mutateAsync({ 
         id: position.id, 
         isActive: newIsActive 
       });
       
-      // Forcer la mise à jour manuelle du cache après le succès
-      setTimeout(() => {
-        queryClient.setQueryData(['positions'], (oldData: any) => {
-          if (!oldData) return oldData;
-          
-          const updatedData = oldData.map((p: any) => 
-            p.id === position.id 
-              ? { ...p, isActive: newIsActive }
-              : p
-          );
-          
-          console.log('=== MANUAL CACHE UPDATE ===');
-          console.log('Updated data manually:', updatedData);
-          return updatedData;
-        });
-      }, 100);
+      console.log('Toggle result:', { id: result.id, isActive: result.isActive });
       
-      toast.success(`Position ${newIsActive ? 'activée' : 'désactivée'} avec succès`);
+      // Mettre à jour avec les données réelles du serveur
+      queryClient.setQueryData(['positions'], (oldData: any) => {
+        if (!oldData) return oldData;
+        const updated = oldData.map((p: any) => 
+          p.id === position.id ? result : p
+        );
+        const afterServer = updated.find((p: any) => p.id === position.id);
+        console.log('After server update:', { id: afterServer?.id, isActive: afterServer?.isActive });
+        return updated;
+      });
+      
+      // Fermer le toast de chargement et afficher le succès
+      toast.dismiss(loadingToast);
+      toast.success(`Position ${newIsActive ? 'activée' : 'désactivée'} avec succès`, {
+        description: `La position "${position.title}" est maintenant ${newIsActive ? 'active' : 'inactive'}`
+      });
+      
+      // Forcer la mise à jour du cache
+      queryClient.invalidateQueries({ queryKey: ['positions'] });
+      queryClient.refetchQueries({ queryKey: ['positions'] });
+      
+      // Vérifier les données après refetch
+      setTimeout(() => {
+        const currentData = queryClient.getQueryData(['positions']);
+        console.log('=== DATA AFTER REFETCH ===');
+        console.log('Current positions count:', (currentData as any[])?.length);
+        const updatedPosition = (currentData as any[])?.find((p: any) => p.id === position.id);
+        console.log('Updated position after refetch:', { 
+          id: updatedPosition?.id, 
+          isActive: updatedPosition?.isActive,
+          title: updatedPosition?.title 
+        });
+        
+        // Vérifier toutes les positions pour voir s'il y a un problème général
+        (currentData as any[])?.forEach((p: any) => {
+          console.log(`Position ${p.id} (${p.title}): isActive = ${p.isActive}`);
+        });
+      }, 1000);
+      
     } catch (error: any) {
       console.error('Error toggling position status:', error);
-      toast.error('Erreur lors de la modification du statut');
+      
+      // Restaurer l'état précédent en cas d'erreur
+      queryClient.setQueryData(['positions'], (oldData: any) => {
+        if (!oldData) return oldData;
+        return oldData.map((p: any) => 
+          p.id === position.id ? { ...p, isActive: currentIsActive } : p
+        );
+      });
+      
+      toast.error('Erreur lors de la modification du statut', {
+        description: error?.response?.data?.message || error?.message || 'Une erreur est survenue'
+      });
+    }
+  };
+
+  // Activer toutes les positions inactives
+  const handleActivateAllPositions = async () => {
+    const inactivePositions = positions.filter(position => position.isActive !== true);
+    
+    if (inactivePositions.length === 0) {
+      toast.info('Toutes les positions sont déjà actives');
+      return;
+    }
+    
+    try {
+      const loadingToast = toast.loading(`Activation de ${inactivePositions.length} position(s)...`, {
+        description: 'Veuillez patienter pendant que nous activons toutes les positions'
+      });
+      
+      // Activer toutes les positions inactives
+      await Promise.all(
+        inactivePositions.map(position =>
+          togglePositionStatusMutation.mutateAsync({
+            id: position.id,
+            isActive: true
+          })
+        )
+      );
+      
+      toast.dismiss(loadingToast);
+      toast.success(`${inactivePositions.length} position(s) activée(s) avec succès`, {
+        description: 'Toutes les positions sont maintenant actives et visibles pour les candidats'
+      });
+      
+      // Forcer la mise à jour du cache
+      queryClient.invalidateQueries({ queryKey: ['positions'] });
+      queryClient.refetchQueries({ queryKey: ['positions'] });
+      
+    } catch (error: any) {
+      console.error('Error activating all positions:', error);
+      
+      toast.error('Erreur lors de l\'activation des positions', {
+        description: error?.response?.data?.message || error?.message || 'Une erreur est survenue'
+      });
     }
   };
 
@@ -274,25 +367,36 @@ const ManagerPositionsPage: React.FC = () => {
           <h1 className="text-3xl font-bold text-gray-900">Gestion des positions</h1>
           <p className="text-gray-600 mt-1">Gérez les postes ouverts et les candidatures</p>
         </div>
-        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-          <DialogTrigger asChild>
-            <Button className="flex items-center gap-2">
-              <Plus className="w-4 h-4" />
-              Nouvelle position
+        <div className="flex gap-2">
+          {positions.filter(p => p.isActive !== true).length > 0 && (
+            <Button 
+              onClick={handleActivateAllPositions}
+              variant="outline"
+              className="flex items-center gap-2"
+            >
+              <Power className="w-4 h-4" />
+              Activer toutes ({positions.filter(p => p.isActive !== true).length})
             </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>
-                {editingPosition ? 'Modifier la position' : 'Créer une nouvelle position'}
-              </DialogTitle>
-              <DialogDescription>
-                {editingPosition 
-                  ? 'Modifiez les informations de la position existante.'
-                  : 'Remplissez les informations pour créer une nouvelle position de stage.'
-                }
-              </DialogDescription>
-            </DialogHeader>
+          )}
+          <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+            <DialogTrigger asChild>
+              <Button className="flex items-center gap-2">
+                <Plus className="w-4 h-4" />
+                Nouvelle position
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl">
+              <DialogHeader>
+                <DialogTitle>
+                  {editingPosition ? 'Modifier la position' : 'Créer une nouvelle position'}
+                </DialogTitle>
+                <DialogDescription>
+                  {editingPosition 
+                    ? 'Modifiez les informations de la position existante.'
+                    : 'Remplissez les informations pour créer une nouvelle position de stage.'
+                  }
+                </DialogDescription>
+              </DialogHeader>
             <div className="space-y-4 p-4">
               <div>
                 <Label htmlFor="title">Titre du poste *</Label>
@@ -343,7 +447,7 @@ const ManagerPositionsPage: React.FC = () => {
                   id="acceptedDomains"
                   value={formData.acceptedDomains}
                   onChange={(e) => setFormData({...formData, acceptedDomains: e.target.value})}
-                  placeholder="gmail.com, outlook.com, yahoo.com (séparez par des virgules)"
+                  placeholder="informatique, marketing(séparez par des virgules)"
                 />
               </div>
               
@@ -378,6 +482,7 @@ const ManagerPositionsPage: React.FC = () => {
             </div>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       {/* Filtres */}
@@ -427,18 +532,18 @@ const ManagerPositionsPage: React.FC = () => {
           </Card>
         ) : (
           filteredPositions.map((position) => (
-            <Card key={position.id} className="hover:shadow-lg transition-shadow">
+            <Card key={position.id} className="hover:shadow-md transition-shadow">
               <CardContent className="p-6">
                 <div className="flex justify-between items-start">
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-2">
-                      <h3 className="text-lg font-semibold text-gray-900">{position.title}</h3>
+                      <h3 className="text-xl font-semibold text-gray-900">{position.title}</h3>
                       <PositionStatusBadge position={position} />
                     </div>
-                    <p className="text-gray-600 mb-4 line-clamp-2">{position.description}</p>
-                    <div className="flex flex-wrap gap-2 mb-4">
+                    <p className="text-gray-600 mb-3 line-clamp-2">{position.description}</p>
+                    <div className="flex flex-wrap gap-2 mb-3">
                       {position.requiredSkills?.slice(0, 3).map((skill: string, index: number) => (
-                        <Badge key={index} variant="outline" className="text-xs">
+                        <Badge key={index} variant="secondary" className="text-xs">
                           {skill}
                         </Badge>
                       ))}
@@ -450,66 +555,62 @@ const ManagerPositionsPage: React.FC = () => {
                     </div>
                     <div className="flex items-center gap-4 text-sm text-gray-500">
                       <div className="flex items-center gap-1">
-                        <Users className="w-4 h-4" />
-                        <span>{getApplicantsCount(position.id)} candidats</span>
+                        <Briefcase className="w-4 h-4" />
+                        {position.company}
                       </div>
                       <div className="flex items-center gap-1">
-                        <Calendar className="w-4 h-4" />
-                        <span>{new Date(position.createdAt).toLocaleDateString('fr-FR')}</span>
+                        <Users className="w-4 h-4" />
+                        {getApplicantsCount(position.id)} candidat(s)
                       </div>
                     </div>
                   </div>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="sm">
-                        <MoreVertical className="w-4 h-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem asChild>
-                        <Link to={`/manager/postes/${position.id}`}>
-                          <Eye className="w-4 h-4 mr-2" />
-                          Voir les détails
-                        </Link>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem asChild>
-                        <Link to={`/manager/postes/${position.id}/candidatures`}>
-                          <Users className="w-4 h-4 mr-2" />
-                          Voir les candidatures
-                        </Link>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => openEditDialog(position)}
-                      >
-                        <Edit className="w-4 h-4 mr-2" />
-                        Modifier
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => handleToggleStatus(position)}
-                        className={position.isActive !== false ? 'text-orange-600' : 'text-green-600'}
-                      >
-                        <PositionStatusBadge position={position} />
-                        {position.isActive !== false ? (
-                          <>
-                            <X className="w-4 h-4 mr-2" />
-                            Désactiver
-                          </>
-                        ) : (
-                          <>
-                            <CheckCircle className="w-4 h-4 mr-2" />
-                            Activer
-                          </>
-                        )}
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => handleDeletePosition(position.id)}
-                        className="text-red-600"
-                      >
-                        <Trash2 className="w-4 h-4 mr-2" />
-                        Supprimer
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => openEditDialog(position)}
+                    >
+                      <Edit className="w-4 h-4" />
+                    </Button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="outline" size="sm">
+                          <MoreVertical className="w-4 h-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem
+                          onClick={() => handleToggleStatus(position)}
+                          className={position.isActive === true ? 'text-orange-600' : 'text-green-600'}
+                        >
+                          {position.isActive === true ? (
+                            <>
+                              <X className="w-4 h-4 mr-2" />
+                              Désactiver
+                            </>
+                          ) : (
+                            <>
+                              <CheckCircle className="w-4 h-4 mr-2" />
+                              Activer
+                            </>
+                          )}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => openEditDialog(position)}
+                        >
+                          <Edit className="w-4 h-4 mr-2" />
+                          Modifier
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => handleDeletePosition(position.id)}
+                          className="text-red-600"
+                        >
+                          <Trash2 className="w-4 h-4 mr-2" />
+                          Supprimer
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
                 </div>
               </CardContent>
             </Card>

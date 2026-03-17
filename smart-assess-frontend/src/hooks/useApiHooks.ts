@@ -4,8 +4,6 @@ import { API_ENDPOINTS } from '@/config/apiEndpoints';
 import { toast } from 'sonner';
 import { authService } from '@/services/apiService';
 
-// ================= TYPES =================
-
 export interface User {
   id: number;
   email: string;
@@ -37,8 +35,6 @@ export interface Candidate {
   status: string;
   createdAt: string;
 }
-
-// ================= AUTHENTICATION =================
 
 export const useAuth = () => {
   const queryClient = useQueryClient();
@@ -99,8 +95,6 @@ export const useAuth = () => {
   };
 };
 
-// ================= POSITIONS =================
-
 export const usePositions = () => {
   return useQuery({
     queryKey: ['positions'],
@@ -108,7 +102,7 @@ export const usePositions = () => {
       const response = await apiClient.get(API_ENDPOINTS.POSITIONS.GET_ALL);
       return response.data;
     },
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    staleTime: 30 * 1000, // 30 secondes au lieu de 5 minutes
     gcTime: 10 * 60 * 1000, // 10 minutes
   });
 };
@@ -137,13 +131,7 @@ export const useUpdatePosition = () => {
   
   return useMutation({
     mutationFn: async ({ id, data }: { id: number; data: any }) => {
-      console.log('=== UPDATE POSITION ===');
-      console.log('ID:', id);
-      console.log('PositionData:', data);
-      console.log('Endpoint:', API_ENDPOINTS.POSITIONS.UPDATE(id));
-      
       const response = await apiClient.put(API_ENDPOINTS.POSITIONS.UPDATE(id), data);
-      console.log('Update Response:', response);
       return response.data;
     },
     onSuccess: () => {
@@ -152,9 +140,6 @@ export const useUpdatePosition = () => {
       toast.success('Position mise à jour avec succès');
     },
     onError: (error: any) => {
-      console.error('Error updating position:', error);
-      console.error('Error response:', error.response);
-      console.error('Error data:', error.response?.data);
       toast.error('Erreur lors de la mise à jour de la position');
     }
   });
@@ -178,33 +163,18 @@ export const useTogglePositionStatus = () => {
   
   return useMutation({
     mutationFn: async ({ id, isActive }: { id: number; isActive: boolean }) => {
-      console.log('=== TOGGLE POSITION STATUS ===');
-      console.log('ID:', id);
-      console.log('New isActive:', isActive);
-      console.log('Endpoint:', API_ENDPOINTS.POSITIONS.TOGGLE_STATUS(id));
-      
       const response = await apiClient.patch(API_ENDPOINTS.POSITIONS.TOGGLE_STATUS(id), { isActive });
-      console.log('Toggle Response:', response);
       return response.data;
     },
     onSuccess: (updatedPosition) => {
-      console.log('=== TOGGLE SUCCESS ===');
-      console.log('Updated position from API:', updatedPosition);
-      
-      // Mettre à jour le cache immédiatement avec les nouvelles données
       queryClient.setQueryData(['positions'], (oldData: any) => {
         if (!oldData) return oldData;
-        
-        console.log('=== UPDATING CACHE ===');
-        console.log('Old data:', oldData);
         
         const updatedData = oldData.map((position: any) => 
           position.id === updatedPosition.id 
             ? { ...position, isActive: updatedPosition.isActive }
             : position
         );
-        
-        console.log('New data:', updatedData);
         return updatedData;
       });
       
@@ -221,15 +191,10 @@ export const useTogglePositionStatus = () => {
       toast.success('Statut de la position modifié avec succès');
     },
     onError: (error: any) => {
-      console.error('Error toggling position status:', error);
-      console.error('Error response:', error.response);
-      console.error('Error data:', error.response?.data);
       toast.error('Erreur lors de la modification du statut');
     }
   });
 };
-
-// ================= CANDIDATES =================
 
 export const useCandidates = () => {
   return useQuery({
@@ -280,8 +245,6 @@ export const useUpdateProfile = () => {
   });
 };
 
-// ================= TESTS =================
-
 export const useTests = () => {
   return useQuery({
     queryKey: ['tests'],
@@ -322,8 +285,6 @@ export const useGenerateTest = () => {
   });
 };
 
-// ================= CANDIDATURES =================
-
 export const useCandidatures = () => {
   return useQuery({
     queryKey: ['candidatures'],
@@ -331,7 +292,7 @@ export const useCandidatures = () => {
       const response = await apiClient.get('/candidatures');
       return response.data;
     },
-    staleTime: 5 * 60 * 1000,
+    staleTime: 30 * 1000, // Réduit à 30 secondes au lieu de 5 minutes
     gcTime: 10 * 60 * 1000,
   });
 };
@@ -340,14 +301,7 @@ export const useCandidaturesByPosition = (positionId: number) => {
   return useQuery({
     queryKey: ['candidatures', 'position', positionId],
     queryFn: async () => {
-      console.log('=== useCandidaturesByPosition ===');
-      console.log('PositionId:', positionId);
-      console.log('API_ENDPOINTS:', API_ENDPOINTS);
-      console.log('Endpoint URL:', API_ENDPOINTS.CANDIDATURES.BY_POSITION(positionId));
-      
       const response = await apiClient.get(API_ENDPOINTS.CANDIDATURES.BY_POSITION(positionId));
-      console.log('API Response:', response);
-      console.log('API Response data:', response.data);
       return response.data;
     },
     enabled: !!positionId,
@@ -357,18 +311,10 @@ export const useCandidaturesByPosition = (positionId: number) => {
 };
 
 export const useCandidaturesByCandidate = (candidateId: number) => {
-  console.log('=== useCandidaturesByCandidate ===');
-  console.log('CandidateId:', candidateId);
-  console.log('API_ENDPOINTS:', API_ENDPOINTS);
-  console.log('Endpoint URL:', API_ENDPOINTS.CANDIDATURES.BY_CANDIDATE(candidateId));
-  
   return useQuery({
     queryKey: ['candidatures', 'candidate', candidateId],
     queryFn: async () => {
-      console.log('Making API call to:', API_ENDPOINTS.CANDIDATURES.BY_CANDIDATE(candidateId));
       const response = await apiClient.get(API_ENDPOINTS.CANDIDATURES.BY_CANDIDATE(candidateId));
-      console.log('API Response:', response);
-      console.log('API Response data:', response.data);
       return response.data;
     },
     enabled: !!candidateId,
@@ -396,8 +342,6 @@ export const useCreateCandidature = () => {
   });
 };
 
-// ================= CV UPLOAD =================
-
 export const useCVUpload = () => {
   const queryClient = useQueryClient();
   
@@ -419,8 +363,6 @@ export const useCVUpload = () => {
     },
   });
 };
-
-// ================= TECHNICAL PROFILES =================
 
 export const useTechnicalProfiles = (candidateId?: number) => {
   return useQuery({
@@ -448,6 +390,22 @@ export const useCreateTechnicalProfile = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['technical-profiles'] });
+    },
+  });
+};
+
+export const useUpdateCandidature = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async ({ id, status }: { id: number; status: string }) => {
+      const response = await apiClient.put(`/candidatures/${id}/status`, { status });
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['candidatures'] });
+      queryClient.invalidateQueries({ queryKey: ['candidatures', 'candidate'] });
+      queryClient.invalidateQueries({ queryKey: ['candidatures', 'position'] });
     },
   });
 };

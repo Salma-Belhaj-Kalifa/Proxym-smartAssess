@@ -8,7 +8,7 @@ import { authService } from "@/services/apiService";
 const navItems = [
   { label: "Tableau de bord", icon: LayoutDashboard, path: "/manager/dashboard" },
   { label: "Postes de stage", icon: Briefcase, path: "/manager/postes" },
-  { label: "Candidatures", icon: Users, path: "/manager/candidats" },
+  { label: "Candidats", icon: Users, path: "/manager/candidats" },
   { label: "Résultats", icon: FileText, path: "/manager/resultats" },
   { label: "Mon profil", icon: User, path: "/manager/profil" },
 ];

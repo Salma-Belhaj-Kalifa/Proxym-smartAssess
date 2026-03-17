@@ -10,22 +10,10 @@ import { useAuth, useCandidaturesByCandidate } from '@/hooks/useApiHooks';
 
 export default function CandidateApplicationsPage() {
   const { user } = useAuth();
-  
-  // Debug: Vérifier les données utilisateur
-  console.log('=== DEBUG CANDIDATURES ===');
-  console.log('User:', user);
-  console.log('User ID:', user?.id);
-  console.log('User Role:', user?.role);
+
   
   const { data: candidatures = [], isLoading, error, refetch } = useCandidaturesByCandidate(user?.id || 0);
-  
-  // Debug: Vérifier les données de candidatures
-  console.log('Candidatures data:', candidatures);
-  console.log('Loading:', isLoading);
-  console.log('Error:', error);
-  
   const [searchTerm, setSearchTerm] = useState('');
-
   const getStatusText = (status: string) => {
     switch (status) {
       case 'PENDING': return 'En cours';
@@ -35,16 +23,8 @@ export default function CandidateApplicationsPage() {
     }
   };
 
-  // Mapper les données pour l'affichage
-  console.log('=== MAPPING CANDIDATURES ===');
-  console.log('Raw candidatures:', candidatures);
   
   const applications = candidatures.map(c => {
-    console.log('Processing candidature:', c);
-    console.log('c.positionTitle:', c.positionTitle);
-    console.log('c.positionCompany:', c.positionCompany);
-    console.log('c.status:', c.status);
-    console.log('c.appliedAt:', c.appliedAt);
     
     return {
       id: c.id,
@@ -56,8 +36,6 @@ export default function CandidateApplicationsPage() {
     };
   });
   
-  console.log('Mapped applications:', applications);
-
   const filteredApplications = applications.filter(app => 
     app.position.toLowerCase().includes(searchTerm.toLowerCase()) ||
     (app.company && app.company.toLowerCase().includes(searchTerm.toLowerCase()))

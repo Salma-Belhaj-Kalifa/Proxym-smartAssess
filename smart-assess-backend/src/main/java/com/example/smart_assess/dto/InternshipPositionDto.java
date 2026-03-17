@@ -15,7 +15,7 @@ public class InternshipPositionDto {
     private String company;
     private List<String> requiredSkills;
     private List<String> acceptedDomains;
-    private boolean isActive;
+    private Boolean isActive;
     private Long createdBy;
     private String createdByEmail;
     private LocalDateTime createdAt;

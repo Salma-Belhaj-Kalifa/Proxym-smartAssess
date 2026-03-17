@@ -9,6 +9,7 @@ import java.util.List;
 public interface CandidateCVService {
     CandidateCVDto uploadCV(Long candidateId, MultipartFile file);
     CandidateCVDto getCVByCandidateId(Long candidateId);
+    CandidateCVDto getCVById(Long cvId);
     byte[] downloadCV(Long cvId);
     void deleteCV(Long cvId);
     List<CandidateCVDto> getAllCVs();

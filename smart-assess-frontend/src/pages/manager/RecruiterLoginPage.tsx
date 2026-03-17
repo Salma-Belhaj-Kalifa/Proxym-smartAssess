@@ -210,9 +210,91 @@ export default function RecruiterLoginPage() {
                 </div>
 
                 <form onSubmit={handleSignup} className="space-y-4">
-                  {/* ... champ prénom, nom, email, téléphone, rôle, mot de passe, confirmation */}
-                  {/* Utiliser exactement la même UI que ton code original pour les champs */}
-                  {/* ... */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Prénom</Label>
+                      <Input
+                        type="text"
+                        placeholder="Jean"
+                        value={firstName}
+                        onChange={(e) => setFirstName(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Nom</Label>
+                      <Input
+                        type="text"
+                        placeholder="Dupont"
+                        value={lastName}
+                        onChange={(e) => setLastName(e.target.value)}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Email professionnel</Label>
+                    <div className="relative">
+                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <Input
+                        className="pl-10"
+                        type="email"
+                        placeholder="nom@proxym.tn"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Téléphone</Label>
+                    <Input
+                      type="tel"
+                      placeholder="+216 12 345 678"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Rôle</Label>
+                    <select
+                      className="w-full p-2 border rounded-md"
+                      value={role}
+                      onChange={(e) => setRole(e.target.value)}
+                    >
+                      <option value="MANAGER">Manager</option>
+                      <option value="HR">RH</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Mot de passe</Label>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <Input
+                        className="pl-10"
+                        type="password"
+                        placeholder="•••"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Confirmer mot de passe</Label>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <Input
+                        className="pl-10"
+                        type="password"
+                        placeholder="•••"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                      />
+                    </div>
+                  </div>
+
                   <Button className="w-full" type="submit" disabled={isLoading}>
                     {isLoading ? "Inscription..." : "S'inscrire"}
                   </Button>

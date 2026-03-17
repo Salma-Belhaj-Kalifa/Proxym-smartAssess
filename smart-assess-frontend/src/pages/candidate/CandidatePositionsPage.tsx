@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Search, Briefcase, MapPin, Building, Clock, Users, Star, ChevronRight } from 'lucide-react';
+import { Search, Briefcase, MapPin, Building, Clock, Users, Star, ChevronRight, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -36,7 +36,11 @@ const CandidatePositionsPage: React.FC = () => {
   const loadPositions = async () => {
     try {
       setIsLoading(true);
+      console.log('=== CANDIDATE: Loading positions ===');
       const data = await positionService.getPublic();
+      console.log('=== CANDIDATE: Positions received ===', data);
+      console.log('=== CANDIDATE: Position statuses ===', data.map(p => ({ id: p.id, title: p.title, isActive: p.isActive })));
+      
       setPositions(data);
       setFilteredPositions(data);
       setError(null);
@@ -97,14 +101,24 @@ const CandidatePositionsPage: React.FC = () => {
         </div>
 
         {/* Barre de recherche */}
-        <div className="relative max-w-2xl mx-auto">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-          <Input
-            placeholder="Rechercher par titre, compétence ou mot-clé..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-12 h-12 text-lg"
-          />
+        <div className="flex gap-4 items-center max-w-2xl mx-auto">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+            <Input
+              placeholder="Rechercher par titre, compétence ou mot-clé..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-12 h-12 text-lg"
+            />
+          </div>
+          <Button 
+            onClick={loadPositions} 
+            variant="outline" 
+            className="h-12 px-4"
+            disabled={isLoading}
+          >
+            <RefreshCw className={`w-5 h-5 ${isLoading ? 'animate-spin' : ''}`} />
+          </Button>
         </div>
 
         {/* Positions sélectionnées */}
@@ -165,8 +179,8 @@ const CandidatePositionsPage: React.FC = () => {
                         <h3 className="text-xl font-semibold text-gray-900">
                           {position.title}
                         </h3>
-                        <Badge variant={position.isActive ? 'default' : 'secondary'}>
-                          {position.isActive ? 'Actif' : 'Inactif'}
+                        <Badge variant={position.isActive === true ? 'default' : 'secondary'}>
+                          {position.isActive === true ? 'Actif' : 'Inactif'}
                         </Badge>
                       </div>
                       <p className="text-gray-600 mb-4 line-clamp-3">
@@ -185,14 +199,7 @@ const CandidatePositionsPage: React.FC = () => {
                         )}
                       </div>
                       <div className="flex items-center gap-4 text-sm text-gray-500">
-                        <div className="flex items-center gap-1">
-                          <Building className="w-4 h-4" />
-                          <span>Poste à temps plein</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <MapPin className="w-4 h-4" />
-                          <span>Tunis, Tunisie</span>
-                        </div>
+                  
                         <div className="flex items-center gap-1">
                           <Clock className="w-4 h-4" />
                           <span>Publié le {new Date(position.createdAt).toLocaleDateString('fr-FR')}</span>

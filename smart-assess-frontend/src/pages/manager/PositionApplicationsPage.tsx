@@ -63,10 +63,10 @@ export default function PositionApplicationsPage() {
       id: c.id,
       candidate: {
         id: c.candidateId,
-        firstName: c.candidateFirstName || 'Prénom',
-        lastName: c.candidateLastName || 'Nom',
-        email: c.candidateEmail || 'email@example.com',
-        phone: c.candidatePhone || '+216 00 000 000'
+        firstName: c.candidateFirstName || '',
+        lastName: c.candidateLastName || '',
+        email: c.candidateEmail || '',
+        phone: c.candidatePhone || ''
       },
       position: {
         id: c.internshipPositionId || id,

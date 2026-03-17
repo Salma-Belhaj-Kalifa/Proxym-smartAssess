@@ -8,6 +8,8 @@ import { Badge } from '@/components/ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { toast } from 'sonner';
 import { useCandidatures, usePositions } from '@/hooks/useApiHooks';
+import { getStatusLabel, getStatusColor, getStatusVariant, getStatusBadgeClass } from '@/utils/statusMappings';
+import { useQueryClient, useQuery } from '@tanstack/react-query';
 
 interface Application {
   id: number;
@@ -35,32 +37,48 @@ interface Application {
 export default function ApplicationsPage() {
   const { data: candidatures = [], isLoading, error, refetch } = useCandidatures();
   const { data: positions = [] } = usePositions();
+  const queryClient = useQueryClient();
   
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [positionFilter, setPositionFilter] = useState<number | 'all'>('all');
 
+  // Forcer le rafraîchissement des données
+  const handleRefresh = async () => {
+    // Invalider le cache et forcer le rechargement
+    await queryClient.invalidateQueries({ queryKey: ['candidatures'] });
+    await refetch();
+    toast.success('Données actualisées');
+  };
+
   // Mapper les données de candidatures pour l'affichage
-  const applications = candidatures.map(c => ({
-    id: c.id,
-    candidate: {
-      id: c.candidateId || c.id,
-      firstName: c.candidateFirstName || c.firstName || 'Prénom',
-      lastName: c.candidateLastName || c.lastName || 'Nom',
-      email: c.candidateEmail || c.email || 'email@example.com',
-      phone: c.candidatePhone || c.phone || '+216 00 000 000'
-    },
-    position: {
-      id: c.positionId || 1,
-      title: c.positionTitle || 'Poste non spécifié',
-      company: c.positionCompany || 'Entreprise'
-    },
-    status: c.status || 'PENDING',
-    appliedAt: c.appliedAt || new Date().toISOString(),
-    cvUrl: c.cvUrl,
-    aiScore: c.aiScore,
-    aiAnalysis: c.aiAnalysis
-  }));
+  const applications = candidatures.map(c => {
+    console.log('Candidature data:', c);
+    console.log('Candidature status:', c.status);
+    
+    return {
+      id: c.id,
+      candidate: {
+        id: c.candidateId || c.id,
+        firstName: c.candidateFirstName || c.firstName || '',
+        lastName: c.candidateLastName || c.lastName || '',
+        email: c.candidateEmail || c.email || '',
+        phone: c.candidatePhone || c.phone || ''
+      },
+      position: {
+        id: c.internshipPositionId || c.positionId || 0,
+        title: c.positionTitle || 'Poste non spécifié',
+        company: c.positionCompany || 'Entreprise'
+      },
+      status: c.status || 'PENDING', // S'assurer que le statut est bien défini
+      appliedAt: c.appliedAt || new Date().toISOString(),
+      cvUrl: c.cvUrl,
+      aiScore: c.aiScore,
+      aiAnalysis: c.aiAnalysis,
+      testGenerated: c.testGenerated,
+      testCompleted: c.testCompleted
+    };
+  });
 
   const filteredApplications = applications.filter(app => {
     const matchesSearch = 
@@ -76,20 +94,39 @@ export default function ApplicationsPage() {
   });
 
   const getStatusBadge = (status: string) => {
+    const label = getStatusLabel(status);
+    const badgeClass = getStatusBadgeClass(status);
+    const variant = getStatusVariant(status);
+    
+    // Ajouter des icônes pour certains statuts
+    let icon = null;
     switch (status) {
       case 'PENDING':
-        return <Badge variant="secondary" className="flex items-center gap-1"><Clock className="w-3 h-3" /> En attente</Badge>;
+        icon = <Clock className="w-3 h-3" />;
+        break;
       case 'ACCEPTED':
-        return <Badge className="bg-green-100 text-green-800 border-green-300 flex items-center gap-1"><CheckCircle className="w-3 h-3" /> Accepté</Badge>;
+        icon = <CheckCircle className="w-3 h-3" />;
+        break;
       case 'REJECTED':
-        return <Badge variant="destructive" className="flex items-center gap-1"><XCircle className="w-3 h-3" /> Refusé</Badge>;
-      case 'TEST_GENERATED':
-        return <Badge className="bg-blue-100 text-blue-800 border-blue-300 flex items-center gap-1"><FileText className="w-3 h-3" /> Test généré</Badge>;
-      case 'TEST_COMPLETED':
-        return <Badge className="bg-purple-100 text-purple-800 border-purple-300 flex items-center gap-1"><CheckCircle className="w-3 h-3" /> Test complété</Badge>;
-      default:
-        return <Badge variant="outline">{status}</Badge>;
+        icon = <XCircle className="w-3 h-3" />;
+        break;
+      case 'TEST_SENT':
+        icon = <FileText className="w-3 h-3" />;
+        break;
+      case 'IN_PROGRESS':
+        icon = <AlertCircle className="w-3 h-3" />;
+        break;
+      case 'COMPLETED':
+        icon = <CheckCircle className="w-3 h-3" />;
+        break;
     }
+    
+    return (
+      <Badge variant={variant} className={`flex items-center gap-1 ${badgeClass}`}>
+        {icon}
+        {label}
+      </Badge>
+    );
   };
 
   const handleGenerateTest = async (applicationId: number) => {
@@ -125,12 +162,12 @@ export default function ApplicationsPage() {
     <div className="p-6 lg:p-8">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Candidatures</h1>
+          <h1 className="text-3xl font-bold text-foreground">Candidats</h1>
           <p className="text-muted-foreground">
-            {filteredApplications.length} candidature{filteredApplications.length > 1 ? 's' : ''} trouvée{filteredApplications.length > 1 ? 's' : ''}
+            {filteredApplications.length} candidat{filteredApplications.length > 1 ? 's' : ''} trouvé{filteredApplications.length > 1 ? 's' : ''}
           </p>
         </div>
-        <Button onClick={() => refetch()} variant="outline">
+        <Button onClick={handleRefresh} variant="outline">
           Actualiser
         </Button>
       </div>
@@ -158,10 +195,11 @@ export default function ApplicationsPage() {
               >
                 <option value="all">Tous les statuts</option>
                 <option value="PENDING">En attente</option>
+                <option value="TEST_SENT">Test envoyé</option>
+                <option value="IN_PROGRESS">Test en cours</option>
+                <option value="COMPLETED">Test terminé</option>
                 <option value="ACCEPTED">Acceptés</option>
                 <option value="REJECTED">Refusés</option>
-                <option value="TEST_GENERATED">Test généré</option>
-                <option value="TEST_COMPLETED">Test complété</option>
               </select>
               <select
                 value={positionFilter}

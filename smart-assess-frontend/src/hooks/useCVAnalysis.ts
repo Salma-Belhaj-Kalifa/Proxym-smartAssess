@@ -40,15 +40,11 @@ export const useCVAnalysis = () => {
 
   const analyzeCV = useCallback(async (file: File) => {
     if (!file) return;
-
     setIsAnalyzing(true);
     setAnalysisError(null);
 
     try {
-      // L'analyse est maintenant gérée par le backend via le workflow complet
-      // Plus d'appel direct à FastAPI depuis le frontend
-      console.log('CV analysis will be handled by backend workflow');
-      setAnalysis(null); // Réinitialiser l'analyse
+      setAnalysis(null); 
     } catch (error) {
       console.error('CV Analysis failed:', error);
       setAnalysisError(error instanceof Error ? error.message : 'Analysis failed');
@@ -58,7 +54,6 @@ export const useCVAnalysis = () => {
   }, []);
 
   const generateQuestions = useCallback(async (profile: CVAnalysisResult, numberOfQuestions: number = 5) => {
-    // La génération de questions est maintenant gérée par le backend
     console.log('Question generation will be handled by backend');
     return [];
   }, []);

@@ -28,7 +28,7 @@ export default function CandidateProfilePage() {
 
   // Synchroniser tempFormData quand les données du profil changent
   useEffect(() => {
-    if (profileData) {
+    if (profileData?.firstName || profileData?.lastName || profileData?.email || profileData?.phone) {
       setTempFormData({
         firstName: profileData.firstName || '',
         lastName: profileData.lastName || '',
@@ -36,7 +36,7 @@ export default function CandidateProfilePage() {
         phone: profileData.phone || '',
       });
     }
-  }, [profileData]);
+  }, [profileData?.firstName, profileData?.lastName, profileData?.email, profileData?.phone]);
 
   const handleCancel = () => {
     // Remettre les données originales du profil

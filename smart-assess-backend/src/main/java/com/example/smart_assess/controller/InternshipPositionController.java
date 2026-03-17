@@ -6,6 +6,7 @@ import com.example.smart_assess.dto.TogglePositionStatusRequest;
 import com.example.smart_assess.service.InternshipPositionService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -16,6 +17,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/positions")
 @RequiredArgsConstructor
+@Slf4j
 public class InternshipPositionController {
 
     private final InternshipPositionService positionService;
@@ -46,7 +48,11 @@ public class InternshipPositionController {
 
     @GetMapping("/public")
     public ResponseEntity<List<InternshipPositionDto>> getPublicPositions() {
-        return ResponseEntity.ok(positionService.getActivePositions());
+        log.info("=== GET PUBLIC POSITIONS CALLED ===");
+        List<InternshipPositionDto> positions = positionService.getActivePositions();
+        log.info("Returning {} public positions", positions.size());
+        positions.forEach(p -> log.info("Public position - ID: {}, Title: {}, IsActive: {}", p.getId(), p.getTitle(), p.getIsActive()));
+        return ResponseEntity.ok(positions);
     }
 
     @GetMapping("/active")

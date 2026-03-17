@@ -42,9 +42,6 @@ public class AIAnalysisController {
             @PathVariable Long candidateId,
             @RequestParam(name = "file", required = false) MultipartFile file) {
 
-        log.info("=== CV ANALYSIS WORKFLOW ===");
-        log.info("Candidate ID: {}", candidateId);
-
         if (file == null || file.isEmpty()) {
             Map<String, Object> errorResponse = new HashMap<>();
             errorResponse.put("error", "File is null or empty");

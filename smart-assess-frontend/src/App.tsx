@@ -9,6 +9,8 @@ import CandidateLoginPage from "./pages/candidate/CandidateLoginPage";
 import CandidatePositionsPage from "./pages/candidate/CandidatePositionsPage";
 import SubmissionPageSimple from './pages/candidate/SubmissionPageSimple';
 import TestInterfacePage from "./pages/common/TestInterfacePage";
+import CandidateTestPage from "./pages/candidate/CandidateTestPage";
+import TestSubmittedPage from "./pages/candidate/TestSubmittedPage";
 import CandidateLayout from "./components/CandidateLayout";
 import CandidateDashboardPage from "./pages/candidate/CandidateDashboardPage";
 import CandidateProfilePage from "./pages/candidate/CandidateProfilePage";
@@ -20,6 +22,7 @@ import ManagerProfilePage from "./pages/manager/ManagerProfilePage";
 import ApplicationsPage from "./pages/manager/ApplicationsPage";
 import EvaluationReportPage from "./pages/manager/EvaluationReportPage";
 import GenerateTestPage from "./pages/manager/GenerateTestPage";
+import TestReviewPage from "./pages/manager/TestReviewPage";
 import QuestionValidationPage from "./pages/manager/QuestionValidationPage";
 import PositionApplicationsPage from "./pages/manager/PositionApplicationsPage";
 import PositionDetailPage from "./pages/manager/PositionDetailPage";
@@ -50,6 +53,8 @@ const App = () => (
           
           {/* Test Routes */}
           <Route path="/test/:id" element={<TestInterfacePage />} />
+          <Route path="/candidate/test/:token" element={<CandidateTestPage />} />
+          <Route path="/candidate/test-submitted" element={<TestSubmittedPage />} />
           
           {/* Manager Routes */}
           <Route path="/manager" element={<ManagerLayout />}>
@@ -62,6 +67,7 @@ const App = () => (
             <Route path="resultats/:id" element={<EvaluationReportPage />} />
             <Route path="candidats/:id/generer-test" element={<GenerateTestPage />} />
             <Route path="candidats/:id" element={<GenerateTestPage />} />
+            <Route path="test-review/:testId" element={<TestReviewPage />} />
             <Route path="tests/:id/questions" element={<QuestionValidationPage />} />
             <Route path="profil" element={<ManagerProfilePage />} />
             <Route path="settings" element={<div className="p-8 text-foreground">Paramètres</div>} />

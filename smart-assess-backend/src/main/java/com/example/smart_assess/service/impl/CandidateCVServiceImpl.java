@@ -94,6 +94,13 @@ public class CandidateCVServiceImpl implements CandidateCVService {
     }
 
     @Override
+    public CandidateCVDto getCVById(Long cvId) {
+        CandidateCV cv = cvRepository.findById(cvId)
+                .orElseThrow(() -> new RuntimeException("CV not found with ID: " + cvId));
+        return toDto(cv);
+    }
+
+    @Override
     public byte[] downloadCV(Long cvId) {
         CandidateCV cv = cvRepository.findById(cvId)
                 .orElseThrow(() -> new RuntimeException("CV not found"));
