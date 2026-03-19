@@ -7,6 +7,7 @@ import com.example.smart_assess.enums.CandidatureStatus;
 import com.example.smart_assess.service.CandidatureService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -15,6 +16,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/candidatures")
 @RequiredArgsConstructor
+@Slf4j
 public class CandidatureController {
 
     private final CandidatureService candidatureService;
@@ -31,12 +33,38 @@ public class CandidatureController {
 
     @GetMapping("/{id}")
     public ResponseEntity<CandidatureDto> getCandidatureById(@PathVariable Long id) {
-        return ResponseEntity.ok(candidatureService.getCandidatureById(id));
+        log.info("=== GET CANDIDATURE BY ID CALLED ===");
+        log.info("Requested candidature ID: {}", id);
+        
+        try {
+            CandidatureDto candidature = candidatureService.getCandidatureById(id);
+            log.info("Candidature found: {}", candidature != null ? "YES" : "NO");
+            if (candidature != null) {
+                log.info("Candidature details - ID: {}, Candidate: {} {}, Status: {}", 
+                    candidature.getId(), 
+                    candidature.getCandidateFirstName(),
+                    candidature.getCandidateLastName(),
+                    candidature.getStatus());
+            }
+            return ResponseEntity.ok(candidature);
+        } catch (Exception e) {
+            log.error("Error getting candidature by ID: {}", id, e);
+            return ResponseEntity.status(500).build();
+        }
     }
 
     @GetMapping("/candidate/{candidateId}")
     public ResponseEntity<List<CandidatureDto>> getCandidaturesByCandidate(@PathVariable Long candidateId) {
-        return ResponseEntity.ok(candidatureService.getCandidaturesByCandidate(candidateId));
+        log.info("=== GET CANDIDATURES BY CANDIDATE CALLED ===");
+        log.info("Candidate ID: {}", candidateId);
+        try {
+            List<CandidatureDto> candidatures = candidatureService.getCandidaturesByCandidate(candidateId);
+            log.info("Successfully retrieved {} candidatures for candidate {}", candidatures.size(), candidateId);
+            return ResponseEntity.ok(candidatures);
+        } catch (Exception e) {
+            log.error("Error getting candidatures for candidate {}", candidateId, e);
+            return ResponseEntity.status(500).build();
+        }
     }
 
     @GetMapping("/position/{positionId}")
@@ -49,9 +77,21 @@ public class CandidatureController {
         return ResponseEntity.ok(candidatureService.getCandidaturesByStatus(status));
     }
 
-    @PatchMapping("/{id}/status")
+    @PutMapping("/{id}/status")
     public ResponseEntity<CandidatureDto> updateStatus(@PathVariable Long id, @Valid @RequestBody UpdateCandidatureStatusRequest request) {
-        return ResponseEntity.ok(candidatureService.updateStatus(id, request));
+        log.info("=== UPDATE CANDIDATURE STATUS CALLED ===");
+        log.info("Candidature ID: {}", id);
+        log.info("New status: {}", request.getStatus());
+        log.info("Rejection reason: {}", request.getRejectionReason());
+        
+        try {
+            CandidatureDto updatedCandidature = candidatureService.updateStatus(id, request);
+            log.info("Candidature status updated successfully: {}", updatedCandidature.getStatus());
+            return ResponseEntity.ok(updatedCandidature);
+        } catch (Exception e) {
+            log.error("Error updating candidature status: {}", id, e);
+            return ResponseEntity.status(500).build();
+        }
     }
 
     @DeleteMapping("/{id}")

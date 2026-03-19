@@ -32,6 +32,21 @@ spring:
     allow-bean-definition-overriding: true
   application:
     name: smart-assess
+  # Configuration email
+  mail:
+    host: ${SMTP_HOST:smtp.gmail.com}
+    port: ${SMTP_PORT:587}
+    username: ${SMTP_USERNAME:salmabelhajkalifa@gmail.com}
+    password: ${SMTP_PASSWORD:shee bdpi vqrb wlxi}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+          connectiontimeout: 10000
+          timeout: 10000
+          writetimeout: 10000
 
 jwt:
   secret: L1u2EBtApzhNIww+Da46j2GzdMoqF4KiVSlLXR7vMDE=
@@ -43,6 +58,14 @@ ai:
     url: ${AI_SERVICE_URL:http://localhost:8000}
     timeout: ${AI_SERVICE_TIMEOUT:30000}
     retry-attempts: ${AI_SERVICE_RETRY_ATTEMPTS:3}
+
+# Configuration application
+app:
+  frontend:
+    url: ${FRONTEND_URL:http://localhost:5173}
+  test:
+    expiration:
+      hours: ${TEST_EXPIRATION_HOURS:72}
 
 # Logging
 logging:

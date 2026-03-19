@@ -9,7 +9,11 @@ public interface ManagerService {
     ManagerDto createManager(CreateManagerRequest request);
     ManagerDto updateManager(Long id, CreateManagerRequest request);
     void deleteManager(Long id);
+    void deleteMyProfile();
     ManagerDto getManagerById(Long id);
     ManagerDto getManagerByEmail(String email);
     List<ManagerDto> getAllManagers();
+    
+    // Vérifier si l'utilisateur est le propriétaire du profil
+    boolean isOwner(Long managerId, String email);
 }

@@ -2,12 +2,14 @@ package com.example.smart_assess.service.impl;
 
 import com.example.smart_assess.dto.CreateCandidateRequest;
 import com.example.smart_assess.dto.CandidateDto;
-import com.example.smart_assess.entity.Candidate;
+import com.example.smart_assess.entity.*;
 import com.example.smart_assess.enums.Role;
-import com.example.smart_assess.repository.CandidateRepository;
+import com.example.smart_assess.repository.*;
 import com.example.smart_assess.service.CandidateService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -21,6 +23,7 @@ public class CandidateServiceImpl implements CandidateService {
 
     private final CandidateRepository candidateRepository;
     private final PasswordEncoder passwordEncoder;
+    private final CandidatureRepository candidatureRepository;
 
     @Override
     public CandidateDto createCandidate(CreateCandidateRequest request) {
@@ -60,7 +63,80 @@ public class CandidateServiceImpl implements CandidateService {
     public void deleteCandidate(Long id) {
         Candidate candidate = candidateRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Candidate not found"));
-        candidateRepository.delete(candidate);
+        
+        log.info("=== DÉBUT SUPPRESSION CANDIDAT {} ===", id);
+        log.info("Email: {}", candidate.getEmail());
+        
+        try {
+            // Compter les données qui seront supprimées par cascade
+            int candidatureCount = candidatureRepository.findByCandidate_Id(id).size();
+            CandidateCV cv = candidate.getCv();
+            boolean hasCV = cv != null;
+            boolean hasTechnicalProfile = hasCV && cv.getTechnicalProfile() != null;
+            
+            log.info("Données qui seront supprimées : {} candidature(s), CV: {}, Profil technique: {}", 
+                candidatureCount, hasCV, hasTechnicalProfile);
+            
+            // La suppression du candidat déclenchera les cascades automatiquement grâce à CascadeType.ALL
+            candidateRepository.delete(candidate);
+            
+            log.info("=== CANDIDAT {} SUPPRIMÉ AVEC SUCCÈS ===", id);
+            log.info("Suppression en cascade effectuée via JPA CascadeType.ALL");
+            
+        } catch (Exception e) {
+            log.error("Erreur lors de la suppression du candidat {}: {}", id, e.getMessage(), e);
+            throw new RuntimeException("Impossible de supprimer ce candidat. Erreur lors de la suppression des données associées.", e);
+        }
+    }
+
+    @Override
+    public void deleteMyProfile() {
+        // Récupérer l'email de l'utilisateur authentifié
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        String email = authentication.getName();
+        
+        if (email == null || email.isBlank()) {
+            throw new RuntimeException("Utilisateur non authentifié");
+        }
+        
+        Candidate candidate = candidateRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("Candidat non trouvé"));
+        
+        log.info("=== DÉBUT AUTO-SUPPRESSION CANDIDAT {} ===", candidate.getId());
+        log.info("Email: {}", email);
+        
+        try {
+            // Compter les données qui seront supprimées par cascade
+            int candidatureCount = candidatureRepository.findByCandidate_Id(candidate.getId()).size();
+            CandidateCV cv = candidate.getCv();
+            boolean hasCV = cv != null;
+            boolean hasTechnicalProfile = hasCV && cv.getTechnicalProfile() != null;
+            
+            log.info("Données qui seront supprimées : {} candidature(s), CV: {}, Profil technique: {}", 
+                candidatureCount, hasCV, hasTechnicalProfile);
+            
+            // La suppression du candidat déclenchera les cascades automatiquement grâce à CascadeType.ALL
+            candidateRepository.delete(candidate);
+            
+            log.info("=== AUTO-SUPPRESSION CANDIDAT {} TERMINÉE AVEC SUCCÈS ===", candidate.getId());
+            log.info("Suppression en cascade effectuée via JPA CascadeType.ALL");
+            
+        } catch (Exception e) {
+            log.error("Erreur lors de l'auto-suppression du candidat {}: {}", candidate.getId(), e.getMessage(), e);
+            throw new RuntimeException("Impossible de supprimer votre profil. Erreur lors de la suppression des données associées.", e);
+        }
+    }
+
+    @Override
+    public boolean isOwner(Long candidateId, String email) {
+        try {
+            Candidate candidate = candidateRepository.findById(candidateId)
+                    .orElse(null);
+            return candidate != null && candidate.getEmail().equals(email);
+        } catch (Exception e) {
+            log.error("Error checking ownership for candidate {}: {}", candidateId, e.getMessage());
+            return false;
+        }
     }
 
     @Override

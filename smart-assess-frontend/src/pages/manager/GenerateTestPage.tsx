@@ -63,16 +63,21 @@ const GenerateTestPage = () => {
       try {
         setIsLoading(true);
         
-        // Récupérer les détails de la candidature
-        const candidatureResponse = await apiService.candidatureService.getById(Number(id));
-        console.log('Candidature response:', candidatureResponse);
-        console.log('Candidature data:', candidatureResponse.data);
+        const storedCandidature = sessionStorage.getItem('selectedCandidature');
+        let candidature;
         
-        // Les données sont directement dans la réponse, pas dans .data
-        const candidature = candidatureResponse;
+        if (storedCandidature) {
+          candidature = JSON.parse(storedCandidature);          
+          sessionStorage.removeItem('selectedCandidature');
+        } else {
+          const candidatureResponse = await apiService.candidatureService.getById(Number(id));
+          
+          candidature = candidatureResponse;
+        }
         
         if (!candidature) {
           console.error('No candidature data found');
+          setIsLoading(false);
           return;
         }
         
@@ -88,26 +93,20 @@ const GenerateTestPage = () => {
             company: candidature.positionCompany || 'Entreprise'
           },
           status: candidature.status || 'PENDING',
-          appliedAt: candidature.appliedAt || new Date().toISOString(),
+          appliedAt: candidature.appliedAt,
           cvUrl: candidature.cvUrl
         };
-        
-        console.log('Setting candidate data:', candidateDataToSet);
+   
         setCandidateData(candidateDataToSet);
 
-        // Récupérer le profil technique si disponible
         if (candidature.candidateId) {
           try {
             const profileResponse = await apiService.technicalProfileService.getByCandidateId(candidature.candidateId);
-            console.log('Technical profile response:', profileResponse);
             
-            // Les données sont directement dans la réponse, pas dans .data
             const profileData = profileResponse;
             if (profileData) {
-              console.log('Setting technical profile:', profileData);
               setTechnicalProfile(profileData);
               
-              // Mettre à jour l'URL du CV si disponible via cvId
               if (profileData.cvId && !candidateData.cvUrl) {
                 setCandidateData(prev => ({
                   ...prev!,
@@ -118,7 +117,6 @@ const GenerateTestPage = () => {
           } catch (profileError) {
             console.log('No technical profile found for this candidate - this is normal if no CV has been uploaded/analyzed yet');
             
-            // Essayer de récupérer l'URL du CV depuis la candidature directement
             if (candidature.cvUrl) {
               setCandidateData(prev => ({
                 ...prev!,
@@ -139,51 +137,45 @@ const GenerateTestPage = () => {
     loadCandidateData();
   }, [id]);
 
-  // Surveiller les changements de candidateData pour debugging
   useEffect(() => {
     console.log('CandidateData updated:', candidateData);
   }, [candidateData]);
 
-  // Vérifier si un test existe déjà pour cette candidature
   const checkExistingTest = async () => {
     if (!candidateData?.id) {
       console.log('No candidate data ID available');
       return;
     }
-    
-    console.log('Checking existing test for candidate ID:', candidateData.id);
-    
+        
     try {
       setIsCheckingExistingTest(true);
       
-      // Utiliser l'endpoint dédié pour vérifier l'existence SANS générer de test
       const response = await apiService.testService.checkExistingTest(candidateData.id);
-      console.log('Check existing test response:', response);
       
       if (response.hasTest) {
-        // Un test existe déjà
         setExistingTest({
           existingTestId: response.testId,
           existingTestToken: response.token,
           existingTestStatus: response.status,
           existingTestCreatedAt: response.createdAt
         });
-        console.log('Existing test detected:', response);
         toast.info("Un test existe déjà pour cette candidature");
       } else {
-        // Aucun test n'existe
         setExistingTest(null);
-        console.log('No existing test found for candidature:', candidateData.id);
       }
       
     } catch (error: any) {
-      console.log('Error checking existing test:', error);
-      console.log('Error status:', error.response?.status);
-      console.log('Error data:', error.response?.data);
-      
-      // En cas d'erreur, on suppose qu'aucun test n'existe pour ne pas bloquer l'interface
       setExistingTest(null);
       console.error('Error occurred while checking existing test, assuming no test exists');
+      if (error.response?.status === 401) {
+        toast.error('Session expirée, veuillez vous reconnecter');
+      } else if (error.response?.status === 403) {
+        toast.error('Vous n\'avez pas les permissions pour vérifier les tests');
+      } else if (error.response?.status === 404) {
+        console.log('Endpoint not found - this is expected if the backend is not updated yet');
+      } else if (error.response?.status >= 500) {
+        toast.error('Erreur serveur lors de la vérification du test');
+      }
     } finally {
       setIsCheckingExistingTest(false);
     }
@@ -191,7 +183,6 @@ const GenerateTestPage = () => {
 
   useEffect(() => {
     if (candidateData?.id && technicalProfile) {
-      // Attendre un peu pour éviter les race conditions
       const timer = setTimeout(() => {
         checkExistingTest();
       }, 500);
@@ -200,19 +191,14 @@ const GenerateTestPage = () => {
     }
   }, [candidateData?.id, technicalProfile]);
 
-  // Fonction pour obtenir l'URL du CV
   const getCvUrl = () => {
-    // Priorité 1: URL depuis candidateData.cvUrl
     if (candidateData?.cvUrl) {
       return candidateData.cvUrl;
     }
-    
-    // Priorité 2: URL depuis technicalProfile.cvId
     if (technicalProfile?.cvId) {
       return `/api/candidates/download/${technicalProfile.cvId}`;
     }
     
-    // Priorité 3: Essayer avec l'ID de la candidature (si le CV est stocké avec la candidature)
     if (candidateData?.id) {
       return `/api/candidates/download/candidature/${candidateData.id}`;
     }
@@ -222,7 +208,6 @@ const GenerateTestPage = () => {
 
   const cvUrl = getCvUrl();
 
-  // Fonction pour télécharger le CV avec authentification
   const downloadCV = async () => {
     if (!cvUrl) return;
     
@@ -255,7 +240,6 @@ const GenerateTestPage = () => {
     }
   };
 
-  // Fonction pour ouvrir le CV dans un nouvel onglet
   const openCV = async () => {
     if (!cvUrl) return;
     
@@ -273,23 +257,18 @@ const GenerateTestPage = () => {
       
       const blob = await response.blob();
       
-      // Créer une URL blob avec le bon type MIME
       const blobUrl = URL.createObjectURL(blob);
       
-      // Ouvrir dans un nouvel onglet
       const newWindow = window.open(blobUrl, '_blank');
       
       if (newWindow) {
-        // Focus sur la nouvelle fenêtre
         newWindow.focus();
         toast.success('CV ouvert dans un nouvel onglet');
         
-        // Nettoyer l'URL après un certain temps
         setTimeout(() => {
           URL.revokeObjectURL(blobUrl);
         }, 10000); // 10 secondes
       } else {
-        // Si le popup est bloqué, télécharger directement
         const link = document.createElement('a');
         link.href = blobUrl;
         link.download = `CV_${candidateData?.firstName}_${candidateData?.lastName}.pdf`;
@@ -298,7 +277,6 @@ const GenerateTestPage = () => {
         document.body.removeChild(link);
         toast.info('Le popup a été bloqué. Le CV a été téléchargé à la place.');
         
-        // Nettoyer l'URL
         setTimeout(() => {
           URL.revokeObjectURL(blobUrl);
         }, 1000);
@@ -310,7 +288,6 @@ const GenerateTestPage = () => {
     }
   };
 
-  // Extraire les compétences et autres données du profil technique
   const extractSkillsFromProfile = () => {
     if (!technicalProfile?.parsedData) return [];
     
@@ -318,11 +295,9 @@ const GenerateTestPage = () => {
     const skills = [];
     let hasRealSkills = false;
     
-    // Extraire les compétences depuis Technical Information.technologies
     if (data["Technical Information"]?.["technologies"]) {
       const techData = data["Technical Information"]["technologies"];
       
-      // Parcourir toutes les catégories de technologies
       Object.keys(techData).forEach(category => {
         const categorySkills = techData[category];
         if (Array.isArray(categorySkills)) {
@@ -339,7 +314,6 @@ const GenerateTestPage = () => {
       });
     }
     
-    // Retourner les compétences seulement si des compétences réelles ont été trouvées
     return hasRealSkills ? skills.slice(0, 6) : [];
   };
 
@@ -349,7 +323,6 @@ const GenerateTestPage = () => {
     const data = technicalProfile.parsedData;
     let analysis = [];
     
-    // Informations personnelles
     if (data["Basic Information"]?.["full_name"]) {
       analysis.push(`**${data["Basic Information"]["full_name"]}`);
     }
@@ -362,12 +335,10 @@ const GenerateTestPage = () => {
       analysis.push(`${data["Basic Information"]["phone"]}`);
     }
     
-    // Domaine et expérience
     if (data["Technical Information"]?.["domain"]) {
       analysis.push(`**Domaine d'expertise :** ${data["Technical Information"]["domain"]}`);
     }
     
-    // Expérience professionnelle
     if (data["Work Experience"] && data["Work Experience"].length > 0) {
       const expCount = data["Work Experience"].length;
       const latestJob = data["Work Experience"][0];
@@ -383,14 +354,11 @@ const GenerateTestPage = () => {
       }
     }
     
-    // Projets
     if (data["Projects"] && data["Projects"].length > 0) {
       const projectCount = data["Projects"].length;
       analysis.push(`**${projectCount} projet(s) réalisé(s)**`);
       
-      // Afficher les 2-3 premiers projets les plus récents
-      const recentProjects = data["Projects"].slice(0, 2);
-      recentProjects.forEach((project, index) => {
+      data["Projects"].forEach((project, index) => {
         if (project.name) {
           const techStack = project.technologies && project.technologies.length > 0 
             ? ` (${project.technologies.slice(0, 3).join(', ')})` 
@@ -400,7 +368,6 @@ const GenerateTestPage = () => {
       });
     }
     
-    // Compétences techniques principales
     const allSkills = [];
     if (data["Technical Information"]?.["technologies"]) {
       Object.values(data["Technical Information"]["technologies"]).forEach(categorySkills => {
@@ -421,14 +388,11 @@ const GenerateTestPage = () => {
       analysis.push(`**Compétences principales :** ${topSkills.join(', ')}`);
     }
     
-    // Certifications
     if (data["Certifications"] && data["Certifications"].length > 0) {
       const certCount = data["Certifications"].length;
       analysis.push(`**${certCount} certification(s) obtenue(s)**`);
       
-      // Afficher les certifications les plus pertinentes
-      const topCerts = data["Certifications"].slice(0, 2);
-      topCerts.forEach(cert => {
+      data["Certifications"].forEach(cert => {
         if (cert.name) {
           const issuer = cert.issuer ? ` - ${cert.issuer}` : '';
           const date = cert.date ? ` (${cert.date})` : '';
@@ -437,7 +401,6 @@ const GenerateTestPage = () => {
       });
     }
     
-    // Formation
     if (data["Education"] && data["Education"].length > 0) {
       const education = data["Education"][0];
       if (education.degree && education.institution) {
@@ -445,7 +408,6 @@ const GenerateTestPage = () => {
       }
     }
     
-    // Langues
     if (data["Languages"] && data["Languages"].length > 0) {
       const languages = data["Languages"].slice(0, 3).map(lang => 
         typeof lang === 'string' ? lang : lang.name || lang
@@ -454,89 +416,62 @@ const GenerateTestPage = () => {
         analysis.push(`**Langues :** ${languages}`);
       }
     }
-    
-    return analysis.length > 0 ? analysis.join('\n') : "Analyse IA du CV en cours de traitement...";
-  };
+   
+    const hasValidData = data["Work Experience"]?.length > 0 || 
+                       data["Projects"]?.length > 0 || 
+                       Object.keys(data["Technical Information"]?.["technologies"] || {}).length > 0;
 
-  const calculateQualityScore = () => {
-    if (!technicalProfile?.parsedData) return 0;
+    const location = data["Basic Information"]?.["location"];
+    const linkedin = data["Basic Information"]?.["linkedin"];
+    const github = data["Basic Information"]?.["github"];
+    const availability = data["Basic Information"]?.["availability"];
+    const salary = data["Basic Information"]?.["salary_expectation"];
     
-    const data = technicalProfile.parsedData;
-    let score = 0;
-    let hasRealData = false;
+    if (location) analysis.push(`**Localisation :** ${location}`);
+    if (linkedin) analysis.push(`**LinkedIn :** ${linkedin}`);
+    if (github) analysis.push(`**GitHub :** ${github}`);
+    if (availability) analysis.push(`**Disponibilité :** ${availability}`);
+    if (salary) analysis.push(`**Prétentions salariales :** ${salary}`);
     
-    // Points pour les compétences (max 3 points)
-    const allSkills = [];
-    if (data["Technical Information"]?.["technologies"]) {
-      Object.values(data["Technical Information"]["technologies"]).forEach(categorySkills => {
-        if (Array.isArray(categorySkills)) {
-          categorySkills.forEach(skill => {
-            if (typeof skill === 'string' && skill.trim()) {
-              allSkills.push(skill);
-              hasRealData = true;
-            } else if (skill && skill.name && skill.name.trim()) {
-              allSkills.push(skill.name);
-              hasRealData = true;
-            }
-          });
-        }
-      });
+    const strengths = data["Technical Information"]?.["strengths"];
+    const improvements = data["Technical Information"]?.["areas_for_improvement"];
+    
+    if (strengths) {
+      const strengthText = Array.isArray(strengths) 
+        ? strengths.slice(0, 3).join(', ')
+        : strengths;
+      analysis.push(`**Points forts :** ${strengthText}`);
     }
     
-    if (allSkills.length >= 8) score += 3;
-    else if (allSkills.length >= 5) score += 2;
-    else if (allSkills.length >= 3) score += 1;
-    
-    // Points pour l'expérience (max 3 points)
-    if (data["Work Experience"] && data["Work Experience"].length > 0) {
-      const expCount = data["Work Experience"].length;
-      hasRealData = true;
-      if (expCount >= 3) score += 3;
-      else if (expCount >= 2) score += 2;
-      else if (expCount >= 1) score += 1;
+    if (improvements) {
+      const improvementText = Array.isArray(improvements) 
+        ? improvements.slice(0, 2).join(', ')
+        : improvements;
+      analysis.push(`**Axes d'amélioration :** ${improvementText}`);
     }
-    
-    // Points pour les projets (max 2 points)
-    if (data["Projects"] && data["Projects"].length > 0) {
-      const projectCount = data["Projects"].length;
-      hasRealData = true;
-      if (projectCount >= 3) score += 2;
-      else if (projectCount >= 1) score += 1;
-    }
-    
-    // Points pour les certifications (max 1 point)
-    if (data["Certifications"] && data["Certifications"].length > 0) {
-      hasRealData = true;
-      score += 1;
-    }
-    
-    // Points pour la formation (max 1 point)
-    if (data["Education"] && data["Education"].length > 0) {
-      hasRealData = true;
-      score += 1;
-    }
-    
-    // Si aucune donnée réelle n'a été trouvée, retourner 0
-    return hasRealData ? Math.min(score, 10) : 0;
+   
+    return analysis.length > 0 ? analysis.join('\n') : "Analyse IA du CV en cours de traitement...";
   };
 
   const determineExperienceLevel = () => {
     if (!technicalProfile?.parsedData) return 'N/A';
     
     const data = technicalProfile.parsedData;
-    const score = calculateQualityScore();
     
     // Si le score est 0, aucune donnée réelle n'a été trouvée
-    if (score === 0) return 'N/A';
+    if (!data["Work Experience"] && !data["Projects"] && !data["Technical Information"]?.["technologies"]) {
+      return 'N/A';
+    }
     
-    // Basé sur le score et l'expérience détectée
+    // Basé sur l'expérience et les projets détectés
     const expCount = data["Work Experience"] ? data["Work Experience"].length : 0;
     const projectCount = data["Projects"] ? data["Projects"].length : 0;
+    const skillCount = Object.keys(data["Technical Information"]?.["technologies"] || {}).length;
     
-    if (score >= 8 || expCount >= 5) return 'SENIOR';
-    if (score >= 6 || expCount >= 3) return 'CONFIRMÉ';
-    if (score >= 4 || expCount >= 1) return 'INTERMÉDIAIRE';
-    if (score >= 2 || projectCount >= 2) return 'JUNIOR';
+    // Logique plus simple et basée sur l'expérience réelle
+    if (expCount >= 5 || projectCount >= 5) return 'SENIOR';
+    if (expCount >= 3 || projectCount >= 3) return 'INTERMÉDIAIRE';
+    if (expCount >= 1 || projectCount >= 1) return 'JUNIOR';
     return 'DÉBUTANT';
   };
 
@@ -544,19 +479,17 @@ const GenerateTestPage = () => {
     const checks = [];
     const data = technicalProfile?.parsedData;
     
-    // Vérification du domaine d'expertise
     const candidateDomain = data?.["Technical Information"]?.["domain"];
     const acceptedDomains = candidateData?.position?.acceptedDomains || [];
     
-    // Fonction pour normaliser et comparer les domaines
+    
     const normalizeDomain = (domain: string) => {
       return domain.toLowerCase()
         .trim()
-        .replace(/[^\w\s]/g, '') // Supprimer les caractères spéciaux
-        .replace(/\s+/g, ' '); // Normaliser les espaces
+        .replace(/[^\w\s]/g, '') 
+        .replace(/\s+/g, ' '); 
     };
     
-    // Dictionnaire d'équivalences de domaines (français/anglais)
     const domainEquivalences: { [key: string]: string[] } = {
       'software engineering': ['software engineering', 'ingénierie logicielle', 'développement logiciel', 'informatique', 'software development', 'programmation', 'coding'],
       'data science': ['data science', 'science des données', 'analyse de données', 'data analysis', 'big data', 'machine learning', 'ia', 'intelligence artificielle'],
@@ -570,27 +503,21 @@ const GenerateTestPage = () => {
       'project management': ['project management', 'gestion de projet', 'management', 'chef de projet']
     };
     
-    // Vérifier l'éligibilité du domaine avec correspondance intelligente
     const isDomainEligible = candidateDomain && (
       acceptedDomains.length === 0 || 
       acceptedDomains.some(acceptedDomain => {
         const normalizedAccepted = normalizeDomain(acceptedDomain);
         const normalizedCandidate = normalizeDomain(candidateDomain);
         
-        // Correspondance directe
-        if (normalizedAccepted === normalizedCandidate) return true;
-        
-        // Correspondance partielle
-        if (normalizedAccepted.includes(normalizedCandidate) || normalizedCandidate.includes(normalizedAccepted)) return true;
-        
-        // Vérifier les équivalences sémantiques
         for (const [canonicalDomain, equivalents] of Object.entries(domainEquivalences)) {
           const normalizedCanonical = normalizeDomain(canonicalDomain);
           
-          // Si le domaine accepté correspond à une équivalence
           if (equivalents.some(eq => normalizeDomain(eq) === normalizedAccepted)) {
-            // Vérifier si le domaine du candidat correspond aussi à cette équivalence
-            return equivalents.some(eq => normalizeDomain(eq) === normalizedCandidate);
+            const candidateMatches = equivalents.some(eq => normalizeDomain(eq) === normalizedCandidate);
+            if (candidateMatches) {
+              console.log(`✅ Semantic match found: ${canonicalDomain}`);
+              return true;
+            }
           }
         }
         
@@ -611,7 +538,6 @@ const GenerateTestPage = () => {
         ok: true 
       });
       
-      // Vérification du domaine
       if (candidateDomain) {
         if (isDomainEligible) {
           checks.push({ 
@@ -654,7 +580,6 @@ const GenerateTestPage = () => {
       }
     }
     
-    // Éligibilité globale
     const isEligible = isDomainEligible && data && candidateDomain;
     checks.push({ 
       label: isEligible ? 'Candidature éligible pour génération de test' : 'Candidature non éligible — domaine incompatible', 
@@ -678,7 +603,6 @@ const GenerateTestPage = () => {
            );
   };
 
-  // Forcer la régénération du test (ignorer la détection de test existant)
   const handleForceGenerateTest = async () => {
     if (!candidateData || !technicalProfile) {
       toast.error('Veuillez patienter que les données du candidat soient chargées');
@@ -702,6 +626,10 @@ const GenerateTestPage = () => {
         note: testConfig.note || ""
       });
       
+      console.log('Force generate - Test response received:', testResponse);
+      console.log('Force generate - Test ID from response:', testResponse.testId);
+      console.log('Force generate - Questions from response:', testResponse.questions);
+      
       // Stocker les questions générées dans le localStorage pour la page de révision
       if (testResponse.questions && testResponse.questions.length > 0) {
         const formattedQuestions = testResponse.questions.map((q: any, index: number) => ({
@@ -716,7 +644,7 @@ const GenerateTestPage = () => {
         }));
         
         localStorage.setItem(`test_questions_${testResponse.testId}`, JSON.stringify(formattedQuestions));
-        console.log('Stored questions in localStorage:', formattedQuestions);
+        console.log('Force generate - Stored questions in localStorage:', formattedQuestions);
       }
       
       // Réinitialiser l'état du test existant
@@ -725,19 +653,25 @@ const GenerateTestPage = () => {
       toast.success('Test généré avec succès ! Redirection vers la révision...');
       
       // Rediriger vers la page de révision du test
-      navigate(`/manager/test-review/${testResponse.testId}`);
+      console.log('Force generate - Navigating to:', `/manager/test-review/${testResponse.testId}`);
+      
+      try {
+        navigate(`/manager/test-review/${testResponse.testId}`);
+        console.log('Force generate - Navigation successful');
+      } catch (navError) {
+        console.error('Force generate - Navigation error:', navError);
+        toast.error('Erreur lors de la redirection vers la page de révision');
+      }
       
     } catch (error: any) {
       console.error('Error generating test:', error);
       console.error('Response data:', error.response?.data);
       console.error('Response status:', error.response?.status);
       
-      // Si c'est une erreur 409, gérer le cas du test existant
       if (error.response?.status === 409 && error.response?.data) {
         const errorData = error.response.data;
         
         if (errorData.error === "UN TEST EXISTE DÉJÀ") {
-          // Mettre à jour l'état pour refléter le test existant
           setExistingTest({
             existingTestId: errorData.existingTestId,
             existingTestToken: errorData.existingTestToken,
@@ -778,6 +712,10 @@ const GenerateTestPage = () => {
         note: testConfig.note || ""
       });
       
+      console.log('Normal generate - Test response received:', testResponse);
+      console.log('Normal generate - Test ID from response:', testResponse.testId);
+      console.log('Normal generate - Questions from response:', testResponse.questions);
+      
       // Stocker les questions générées dans le localStorage pour la page de révision
       if (testResponse.questions && testResponse.questions.length > 0) {
         const formattedQuestions = testResponse.questions.map((q: any, index: number) => ({
@@ -792,13 +730,24 @@ const GenerateTestPage = () => {
         }));
         
         localStorage.setItem(`test_questions_${testResponse.testId}`, JSON.stringify(formattedQuestions));
-        console.log('Stored questions in localStorage:', formattedQuestions);
+        console.log('Normal generate - Stored questions in localStorage:', formattedQuestions);
       }
+      
+      // Réinitialiser l'état du test existant
+      setExistingTest(null);
       
       toast.success('Test généré avec succès ! Redirection vers la révision...');
       
       // Rediriger vers la page de révision du test
-      navigate(`/manager/test-review/${testResponse.testId}`);
+      console.log('Normal generate - Navigating to:', `/manager/test-review/${testResponse.testId}`);
+      
+      try {
+        navigate(`/manager/test-review/${testResponse.testId}`);
+        console.log('Normal generate - Navigation successful');
+      } catch (navError) {
+        console.error('Normal generate - Navigation error:', navError);
+        toast.error('Erreur lors de la redirection vers la page de révision');
+      }
       
     } catch (error: any) {
       console.error('Error generating test:', error);
@@ -928,7 +877,7 @@ const GenerateTestPage = () => {
             </div>
             <div className="flex items-center gap-4 mb-4">
               <div className="w-14 h-14 rounded-full bg-primary/20 flex items-center justify-center text-lg font-bold text-primary">
-                {candidateData.firstName[0]}{candidateData.lastName[0]}
+                {candidateData.firstName ? candidateData.firstName[0] : ''}{candidateData.lastName ? candidateData.lastName[0] : ''}
               </div>
               <div>
                 <h2 className="text-lg font-semibold text-foreground">
@@ -1188,54 +1137,114 @@ const GenerateTestPage = () => {
           )}
 
           <div className="glass-card p-6">
-            <h3 className="text-lg font-semibold text-foreground mb-2">Décision du Manager</h3>
-            <p className="text-sm text-muted-foreground mb-4">
-              Cette action générera le test via l'IA et enverra le lien sécurisé par email au candidat.
-            </p>
-            <div className="flex gap-3">
-              <Button 
-                className="flex-1" 
-                onClick={handleGenerateTest}
-                disabled={updateCandidatureMutation.isPending || existingTest !== null}
-              >
-                {existingTest ? 
-                  `Test déjà généré le ${new Date(existingTest.existingTestCreatedAt || '').toLocaleDateString()}` : 
-                  (updateCandidatureMutation.isPending ? 'Génération...' : 'Accepter et générer le test')
-                }
-              </Button>
-              
-              {existingTest && (
-                <Button 
-                  variant="outline"
-                  onClick={() => navigate(`/manager/test-review/${existingTest.existingTestId}`)}
-                >
-                  Voir le test existant
-                </Button>
-              )}
-              
-              {existingTest && (
-                <Button 
-                  variant="destructive"
-                  onClick={handleForceGenerateTest}
-                  disabled={updateCandidatureMutation.isPending}
-                >
-                  Forcer nouvelle génération
-                </Button>
-              )}
-              <Button 
-                variant="outline" 
-                className="border-destructive/50 text-destructive hover:bg-destructive/10"
-                onClick={handleReject}
-                disabled={updateCandidatureMutation.isPending}
-              >
-                Refuser
-              </Button>
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
+                <AlertCircle className="w-4 h-4 text-blue-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-foreground">Décision du Manager</h3>
+                <p className="text-sm text-muted-foreground">
+                  {existingTest 
+                    ? "Un test a déjà été généré pour ce candidat. Vous pouvez consulter le test existant ou le refuser."
+                    : "Générez un test technique personnalisé pour évaluer les compétences du candidat."
+                  }
+                </p>
+              </div>
             </div>
-            <p className="text-xs text-muted-foreground mt-3 flex items-start gap-1">
-              <AlertCircle className="w-3 h-3 mt-0.5 shrink-0" />
-              Le test sera généré automatiquement par le service IA. Un lien d'accès unique sera envoyé à <strong>{candidateData.email}</strong>.
-            </p>
-          </div>
+            </div>
+            
+            {existingTest && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Check className="w-4 h-4 text-blue-600" />
+                  <span className="font-medium text-blue-900">Test déjà généré</span>
+                </div>
+                <div className="text-sm text-blue-800">
+                  <p><strong>Date de génération :</strong> {new Date(existingTest.existingTestCreatedAt).toLocaleDateString('fr-FR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+                  <p><strong>Statut du test :</strong> <span className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium ${
+                    existingTest.existingTestStatus === 'READY' ? 'bg-green-100 text-green-800' :
+                    existingTest.existingTestStatus === 'IN_PROGRESS' ? 'bg-yellow-100 text-yellow-800' :
+                    existingTest.existingTestStatus === 'COMPLETED' ? 'bg-blue-100 text-blue-800' :
+                    'bg-gray-100 text-gray-800'
+                  }`}>
+                    {existingTest.existingTestStatus}
+                  </span></p>
+                </div>
+              </div>
+            )}
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {existingTest ? (
+                <>
+                  {existingTest.existingTestStatus !== 'SUBMITTED' && (
+                    <Button 
+                      variant="default"
+                      onClick={() => navigate(`/manager/test-review/${existingTest.existingTestId}`)}
+                      className="flex items-center gap-2"
+                    >
+                      <Check className="w-4 h-4" />
+                      Voir le test existant
+                    </Button>
+                  )}
+                  
+                  {existingTest.existingTestStatus === 'SUBMITTED' && (
+                    <Button 
+                      variant="default"
+                      onClick={() => navigate(`/manager/test-results/${existingTest.existingTestId}`)}
+                      className="flex items-center gap-2"
+                    >
+                      <Check className="w-4 h-4" />
+                      Voir résultats
+                    </Button>
+                  )}
+                  
+                  <Button 
+                    variant="destructive"
+                    onClick={handleReject}
+                    disabled={updateCandidatureMutation.isPending}
+                    className="bg-red-600 hover:bg-red-700 text-white border-red-600 hover:border-red-700 flex items-center gap-2"
+                  >
+                    <X className="w-4 h-4" />
+                    {updateCandidatureMutation.isPending ? 'Refus...' : 'Refuser'}
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button 
+                    className="flex items-center gap-2" 
+                    onClick={handleGenerateTest}
+                    disabled={updateCandidatureMutation.isPending}
+                  >
+                    <Sparkles className="w-4 h-4" />
+                    {updateCandidatureMutation.isPending ? 'Génération en cours...' : 'Générer le test'}
+                  </Button>
+                  
+                  <Button 
+                    variant="destructive"
+                    onClick={handleReject}
+                    disabled={updateCandidatureMutation.isPending}
+                    className="bg-red-600 hover:bg-red-700 text-white border-red-600 hover:border-red-700 flex items-center gap-2"
+                  >
+                    <X className="w-4 h-4" />
+                    {updateCandidatureMutation.isPending ? 'Refus...' : 'Refuser'}
+                  </Button>
+                </>
+              )}
+            </div>
+            
+            <div className="mt-4 p-3 bg-gray-50 rounded-lg">
+              <p className="text-xs text-gray-600 flex items-start gap-2">
+                <AlertCircle className="w-3 h-3 mt-0.5 shrink-0" />
+                <span>
+                  {existingTest 
+                    ? existingTest.existingTestStatus === 'SUBMITTED' 
+                      ? "Le test a été soumis par le candidat. Vous pouvez consulter les résultats."
+                      : "Le test existant sera envoyé au candidat par email. Vous pouvez le consulter à tout moment."
+                    : `Le test sera généré automatiquement par notre service IA. Un lien d'accès unique sera envoyé à <strong>${candidateData?.email}</strong>.`
+                  }
+                </span>
+              </p>
+            </div>
         </div>
       </div>
     </div>

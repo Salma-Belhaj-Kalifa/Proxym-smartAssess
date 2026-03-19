@@ -12,6 +12,7 @@ import com.example.smart_assess.repository.CandidateRepository;
 import com.example.smart_assess.repository.InternshipPositionRepository;
 import com.example.smart_assess.service.CandidatureService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -19,6 +20,7 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class CandidatureServiceImpl implements CandidatureService {
 
     private final CandidatureRepository candidatureRepository;
@@ -49,14 +51,40 @@ public class CandidatureServiceImpl implements CandidatureService {
 
     @Override
     public CandidatureDto updateStatus(Long id, UpdateCandidatureStatusRequest request) {
-        Candidature candidature = candidatureRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Candidature not found"));
+        log.info("=== UPDATE STATUS IN SERVICE ===");
+        log.info("Candidature ID: {}", id);
+        log.info("Request status: {}", request.getStatus());
+        log.info("Request rejection reason: {}", request.getRejectionReason());
+        
+        try {
+            Candidature candidature = candidatureRepository.findById(id)
+                    .orElseThrow(() -> new RuntimeException("Candidature not found"));
 
-        candidature.setStatus(request.getStatus());
-        candidature.setRejectionReason(request.getRejectionReason());
+            log.info("Found candidature: {}", candidature.getId());
+            log.info("Current status: {}", candidature.getStatus());
+            log.info("Candidature entity before save: {}", candidature);
 
-        candidature = candidatureRepository.save(candidature);
-        return toDto(candidature);
+            candidature.setStatus(request.getStatus());
+            candidature.setRejectionReason(request.getRejectionReason());
+            
+            log.info("Setting new status: {}", request.getStatus());
+            log.info("Setting rejection reason: {}", request.getRejectionReason());
+            log.info("Candidature entity after status update: {}", candidature);
+
+            candidature = candidatureRepository.save(candidature);
+            
+            log.info("Candidature saved successfully");
+            log.info("Saved candidature ID: {}", candidature.getId());
+            log.info("Saved candidature status: {}", candidature.getStatus());
+            log.info("Saved candidature rejection reason: {}", candidature.getRejectionReason());
+            
+            return toDto(candidature);
+        } catch (Exception e) {
+            log.error("Error updating candidature status: {}", id, e);
+            log.error("Error details: {}", e.getMessage());
+            log.error("Error stack trace:", e);
+            throw e;
+        }
     }
 
     @Override
@@ -75,7 +103,8 @@ public class CandidatureServiceImpl implements CandidatureService {
 
     @Override
     public List<CandidatureDto> getCandidaturesByCandidate(Long candidateId) {
-        return candidatureRepository.findByCandidate_Id(candidateId).stream()
+        List<Candidature> candidatures = candidatureRepository.findByCandidate_IdWithRelations(candidateId);
+        return candidatures.stream()
                 .map(this::toDto)
                 .collect(Collectors.toList());
     }
@@ -96,7 +125,7 @@ public class CandidatureServiceImpl implements CandidatureService {
 
     @Override
     public List<CandidatureDto> getAllCandidatures() {
-        return candidatureRepository.findAll().stream()
+        return candidatureRepository.findAllWithRelations().stream()
                 .map(this::toDto)
                 .collect(Collectors.toList());
     }

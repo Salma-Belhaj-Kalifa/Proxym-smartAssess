@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Plus, Search, Filter, Edit, Trash2, Users, Briefcase, Calendar, MoreVertical, Eye, X, CheckCircle, Power } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -22,6 +22,7 @@ const ManagerPositionsPage: React.FC = () => {
   const deletePositionMutation = useDeletePosition();
   const togglePositionStatusMutation = useTogglePositionStatus();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
@@ -75,7 +76,7 @@ const ManagerPositionsPage: React.FC = () => {
       const newPosition = {
         title: formData.title.trim(),
         description: formData.description.trim(),
-        company: formData.company.trim() || 'Non spécifiée',
+        company: "Proxym IT", // Forcer l'entreprise à Proxym IT
         requiredSkills,
         acceptedDomains,
         isActive: true
@@ -121,17 +122,10 @@ const ManagerPositionsPage: React.FC = () => {
         ...editingPosition,
         title: formData.title.trim(),
         description: formData.description.trim(),
-        company: formData.company.trim() || 'Non spécifiée',
+        company: "Proxym IT",
         requiredSkills,
         acceptedDomains
       };
-
-      console.log('=== HANDLE UPDATE POSITION ===');
-      console.log('EditingPosition:', editingPosition);
-      console.log('FormData:', formData);
-      console.log('RequiredSkills:', requiredSkills);
-      console.log('AcceptedDomains:', acceptedDomains);
-      console.log('UpdatedPosition:', updatedPosition);
 
       await updatePositionMutation.mutateAsync({ 
         id: editingPosition.id, 
@@ -188,37 +182,19 @@ const ManagerPositionsPage: React.FC = () => {
     }
   };
 
-  // Basculer le statut d'une position
   const handleToggleStatus = async (position: any) => {
-    console.log('=== HANDLE TOGGLE STATUS CALLED ===');
-    console.log('Position:', position);
-    console.log('Position isActive:', position.isActive);
-    
-    // Logique stricte : vérifier explicitement si isActive est true
     const currentIsActive = position.isActive === true;
     const newIsActive = !currentIsActive;
     
     try {
-      console.log('Current isActive (strict):', currentIsActive);
-      console.log('New isActive:', newIsActive);
-      
-      // Afficher un toast de chargement
       const loadingToast = toast.loading(`Changement du statut en cours...`, {
         description: `${newIsActive ? 'Activation' : 'Désactivation'} de la position "${position.title}"`
       });
-      
-      // Mise à jour optimiste immédiate
-      console.log('=== OPTIMISTIC UPDATE ===');
-      const beforeUpdate = positions.find((p: any) => p.id === position.id);
-      console.log('Before update:', { id: beforeUpdate?.id, isActive: beforeUpdate?.isActive });
-      
       queryClient.setQueryData(['positions'], (oldData: any) => {
         if (!oldData) return oldData;
         const updated = oldData.map((p: any) => 
           p.id === position.id ? { ...p, isActive: newIsActive } : p
         );
-        const afterOptimistic = updated.find((p: any) => p.id === position.id);
-        console.log('After optimistic update:', { id: afterOptimistic?.id, isActive: afterOptimistic?.isActive });
         return updated;
       });
 
@@ -226,10 +202,7 @@ const ManagerPositionsPage: React.FC = () => {
         id: position.id, 
         isActive: newIsActive 
       });
-      
-      console.log('Toggle result:', { id: result.id, isActive: result.isActive });
-      
-      // Mettre à jour avec les données réelles du serveur
+            
       queryClient.setQueryData(['positions'], (oldData: any) => {
         if (!oldData) return oldData;
         const updated = oldData.map((p: any) => 
@@ -240,17 +213,14 @@ const ManagerPositionsPage: React.FC = () => {
         return updated;
       });
       
-      // Fermer le toast de chargement et afficher le succès
       toast.dismiss(loadingToast);
       toast.success(`Position ${newIsActive ? 'activée' : 'désactivée'} avec succès`, {
         description: `La position "${position.title}" est maintenant ${newIsActive ? 'active' : 'inactive'}`
       });
       
-      // Forcer la mise à jour du cache
       queryClient.invalidateQueries({ queryKey: ['positions'] });
       queryClient.refetchQueries({ queryKey: ['positions'] });
       
-      // Vérifier les données après refetch
       setTimeout(() => {
         const currentData = queryClient.getQueryData(['positions']);
         console.log('=== DATA AFTER REFETCH ===');
@@ -425,10 +395,13 @@ const ManagerPositionsPage: React.FC = () => {
                 <Label htmlFor="company">Entreprise</Label>
                 <Input
                   id="company"
-                  value={formData.company}
-                  onChange={(e) => setFormData({...formData, company: e.target.value})}
-                  placeholder="Nom de l'entreprise"
+                  value="Proxym IT"
+                  disabled
+                  className="bg-gray-50 text-gray-700 cursor-not-allowed"
                 />
+                <p className="text-sm text-gray-500 mt-1">
+                  L'entreprise est définie par défaut sur Proxym IT
+                </p>
               </div>
               
               <div>
@@ -594,6 +567,12 @@ const ManagerPositionsPage: React.FC = () => {
                               Activer
                             </>
                           )}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => navigate(`/manager/postes/${position.id}`)}
+                        >
+                          <Eye className="w-4 h-4 mr-2" />
+                          Voir détails
                         </DropdownMenuItem>
                         <DropdownMenuItem
                           onClick={() => openEditDialog(position)}

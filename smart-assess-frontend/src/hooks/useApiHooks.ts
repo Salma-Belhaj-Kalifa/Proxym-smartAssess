@@ -102,8 +102,8 @@ export const usePositions = () => {
       const response = await apiClient.get(API_ENDPOINTS.POSITIONS.GET_ALL);
       return response.data;
     },
-    staleTime: 30 * 1000, // 30 secondes au lieu de 5 minutes
-    gcTime: 10 * 60 * 1000, // 10 minutes
+    staleTime: 30 * 1000,
+    gcTime: 10 * 60 * 1000,
   });
 };
 
@@ -178,11 +178,9 @@ export const useTogglePositionStatus = () => {
         return updatedData;
       });
       
-      // Forcer le rafraîchissement complet et immédiat
       queryClient.invalidateQueries({ queryKey: ['positions'] });
       queryClient.refetchQueries({ queryKey: ['positions'] });
       
-      // Forcer un re-render du composant
       setTimeout(() => {
         queryClient.invalidateQueries({ queryKey: ['positions'] });
         queryClient.refetchQueries({ queryKey: ['positions'] });
@@ -292,8 +290,8 @@ export const useCandidatures = () => {
       const response = await apiClient.get('/candidatures');
       return response.data;
     },
-    staleTime: 30 * 1000, // Réduit à 30 secondes au lieu de 5 minutes
-    gcTime: 10 * 60 * 1000,
+    staleTime: 5 * 1000,
+    gcTime: 30 * 1000,
   });
 };
 
@@ -333,7 +331,6 @@ export const useCreateCandidature = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['candidatures'] });
-      console.log('Candidature créée avec succès!');
     },
     onError: (error: any) => {
       console.error('Erreur lors de la création de la candidature');

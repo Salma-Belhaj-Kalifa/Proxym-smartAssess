@@ -1,34 +1,23 @@
 package com.example.smart_assess.controller;
 
+import com.example.smart_assess.entity.*;
 import com.example.smart_assess.enums.CandidatureStatus;
-import com.example.smart_assess.entity.Candidature;
-import com.example.smart_assess.entity.GeneratedTest;
-import com.example.smart_assess.entity.InternshipPosition;
-import com.example.smart_assess.entity.TechnicalProfile;
-import com.example.smart_assess.entity.TestQuestion;
 import com.example.smart_assess.enums.QuestionType;
 import com.example.smart_assess.enums.TestStatus;
-import com.example.smart_assess.repository.CandidatureRepository;
-import com.example.smart_assess.repository.GeneratedTestRepository;
-import com.example.smart_assess.repository.InternshipPositionRepository;
-import com.example.smart_assess.entity.*;
 import com.example.smart_assess.repository.*;
+import com.example.smart_assess.service.EmailService;
 import com.example.smart_assess.service.TechnicalProfileService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.reactive.function.client.WebClient;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.UUID;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @RestController
@@ -39,121 +28,146 @@ public class GeneratedTestController {
 
     private final GeneratedTestRepository generatedTestRepository;
     private final CandidatureRepository candidatureRepository;
-    private final InternshipPositionRepository internshipPositionRepository;
     private final TestQuestionRepository testQuestionRepository;
     private final TestSessionRepository testSessionRepository;
     private final TechnicalProfileService technicalProfileService;
+    private final EmailService emailService;
     private final WebClient.Builder webClientBuilder;
     private final ObjectMapper objectMapper;
 
+    @Value("${app.frontend.url}")
+    private String frontendUrl;
+
+    // =========================
+    // CHECK EXISTING TEST
+    // =========================
     @GetMapping("/check-existing/{candidatureId}")
     @PreAuthorize("hasRole('MANAGER')")
     public ResponseEntity<Map<String, Object>> checkExistingTest(@PathVariable Long candidatureId) {
+        log.info("GeneratedTestController: check-existing endpoint called for candidature {}", candidatureId);
+        
         try {
-            log.info("Checking existing test for candidature ID: {}", candidatureId);
-            
             Optional<GeneratedTest> existingTest = generatedTestRepository.findByCandidature_Id(candidatureId);
-            
-            Map<String, Object> result = new HashMap<>();
             
             if (existingTest.isPresent()) {
                 GeneratedTest test = existingTest.get();
-                result.put("hasTest", true);
-                result.put("testId", test.getId());
-                result.put("token", test.getToken());
-                result.put("status", test.getStatus().toString());
-                result.put("createdAt", test.getCreatedAt().toString());
-                log.info("Found existing test for candidature {}: test ID {}", candidatureId, test.getId());
+                return ResponseEntity.ok(Map.of(
+                        "hasTest", true,
+                        "testId", test.getId(),
+                        "token", test.getToken(),
+                        "status", test.getStatus().toString(),
+                        "createdAt", test.getCreatedAt()
+                ));
             } else {
-                result.put("hasTest", false);
-                log.info("No existing test found for candidature {}", candidatureId);
+                return ResponseEntity.ok(Map.of(
+                        "hasTest", false
+                ));
             }
             
-            return ResponseEntity.ok(result);
-            
         } catch (Exception e) {
-            log.error("Error checking existing test for candidature {}", candidatureId, e);
+            log.error("Check existing test error for candidature {}: {}", candidatureId, e.getMessage(), e);
             return ResponseEntity.status(500).body(Map.of("error", e.getMessage()));
         }
     }
 
+    // =========================
+    // TEST ENDPOINT
+    // =========================
+    @GetMapping("/test-endpoint")
+    public ResponseEntity<Map<String, Object>> testEndpoint() {
+        log.info("=== TEST ENDPOINT CALLED ===");
+        return ResponseEntity.ok(Map.of(
+                "message", "GeneratedTestController is working",
+                "timestamp", LocalDateTime.now()
+        ));
+    }
+
+    // =========================
+    // GET TEST FOR REVIEW
+    // =========================
+    @GetMapping("/{id}/review")
+    @PreAuthorize("hasRole('MANAGER')")
+    public ResponseEntity<Map<String, Object>> getTestForReview(@PathVariable Long id) {
+        log.info("=== GET TEST FOR REVIEW CALLED ===");
+        log.info("Test ID: {}", id);
+        
+        try {
+            log.info("Looking for test with ID: {}", id);
+            GeneratedTest test = generatedTestRepository.findById(id)
+                    .orElseThrow(() -> new RuntimeException("Test not found"));
+            
+            log.info("Test found: {} with status: {}", test.getId(), test.getStatus());
+            
+            // Récupérer les questions du test
+            List<Map<String, Object>> questions = test.getQuestions().stream()
+                    .map(q -> Map.of(
+                            "id", q.getId(),
+                            "questionText", q.getQuestionText(),
+                            "questionType", q.getQuestionType().toString(),
+                            "options", q.getOptions(),
+                            "correctAnswer", q.getCorrectAnswer(),
+                            "skillTag", q.getSkillTag(),
+                            "maxScore", q.getMaxScore(),
+                            "orderIndex", q.getOrderIndex()
+                    ))
+                    .collect(Collectors.toList());
+            
+            return ResponseEntity.ok(Map.of(
+                    "id", test.getId(),
+                    "token", test.getToken(),
+                    "status", test.getStatus().toString(),
+                    "createdAt", test.getCreatedAt(),
+                    "deadline", test.getDeadline(),
+                    "timeLimitMinutes", test.getTimeLimitMinutes(),
+                    "questions", questions,
+                    "internshipPosition", Map.of(
+                            "id", test.getInternshipPosition().getId(),
+                            "title", test.getInternshipPosition().getTitle()
+                    ),
+                    "candidate", Map.of(
+                            "id", test.getCandidature().getCandidate().getId(),
+                            "firstName", test.getCandidature().getCandidate().getFirstName(),
+                            "lastName", test.getCandidature().getCandidate().getLastName(),
+                            "email", test.getCandidature().getCandidate().getEmail()
+                    )
+            ));
+            
+        } catch (Exception e) {
+            log.error("Get test for review error for test {}: {}", id, e.getMessage(), e);
+            return ResponseEntity.status(500).body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    // =========================
+    // GENERATE TEST
+    // =========================
     @PostMapping("/generate")
     @PreAuthorize("hasRole('MANAGER')")
     public ResponseEntity<Map<String, Object>> generateTest(@RequestBody Map<String, Object> testData) {
-        Map<String, Object> result = new HashMap<>();
-
         try {
             Long candidatureId = Long.valueOf(testData.get("candidatureId").toString());
-            String level = testData.get("level").toString();
             Integer questionCount = Integer.valueOf(testData.get("questionCount").toString());
             Integer duration = Integer.valueOf(testData.get("duration").toString());
             String deadline = testData.get("deadline").toString();
-            String note = testData.get("note").toString();
 
-            log.info("=== GENERATING TEST ===");
-            log.info("Candidature ID: {}", candidatureId);
-            log.info("Level: {}", level);
-            log.info("Question Count: {}", questionCount);
-            log.info("Duration: {}", duration);
-            log.info("Deadline: {}", deadline);
-            log.info("Note: {}", note);
-
-            // Vérifier candidature
             Candidature candidature = candidatureRepository.findById(candidatureId)
-                    .orElseThrow(() -> new RuntimeException("Candidature not found with ID: " + candidatureId));
+                    .orElseThrow(() -> new RuntimeException("Candidature not found"));
 
-            // ===== VALIDATION =====
-            // Vérifier si un test existe déjà pour cette candidature
             Optional<GeneratedTest> existingTest = generatedTestRepository.findByCandidature_Id(candidatureId);
             if (existingTest.isPresent()) {
-                GeneratedTest test = existingTest.get();
-                result.put("success", false);
-                result.put("error", "UN TEST EXISTE DÉJÀ");
-                result.put("message", "Un test a déjà été généré pour cette candidature le " + test.getCreatedAt().toLocalDate());
-                result.put("existingTestId", test.getId());
-                result.put("existingTestToken", test.getToken());
-                result.put("existingTestStatus", test.getStatus().toString());
-                result.put("existingTestCreatedAt", test.getCreatedAt().toString()); // Ajouter la date de création
-                
-                // Inclure les questions si elles existent
-                if (test.getQuestions() != null && !test.getQuestions().isEmpty()) {
-                    List<Map<String, Object>> questionsData = test.getQuestions().stream()
-                            .map(q -> {
-                                Map<String, Object> questionMap = new HashMap<>();
-                                questionMap.put("id", q.getId());
-                                questionMap.put("question", q.getQuestionText());
-                                questionMap.put("question_type", q.getQuestionType().toString());
-                                questionMap.put("options", q.getOptions() != null ? 
-                                        objectMapper.convertValue(q.getOptions(), List.class) : new ArrayList<>());
-                                questionMap.put("correct_answer", q.getCorrectAnswer());
-                                questionMap.put("technology", q.getSkillTag());
-                                return questionMap;
-                            })
-                            .collect(Collectors.toList());
-                    result.put("questions", questionsData);
-                    log.info("Included {} existing questions in 409 response", questionsData.size());
-                } else {
-                    result.put("questions", new ArrayList<>());
-                    log.info("No questions found for existing test, returning empty list");
-                }
-                
-                log.warn("Test generation attempted for candidature {} - Test already exists: {}", candidatureId, test.getId());
-                return ResponseEntity.status(409).body(result); // 409 Conflict
+                return ResponseEntity.status(409).body(Map.of(
+                        "success", false,
+                        "message", "Un test existe déjà"
+                ));
             }
 
-            InternshipPosition position = candidature.getInternshipPosition();
+            TechnicalProfile technicalProfile = technicalProfileService
+                    .findByCandidateId(candidature.getCandidate().getId())
+                    .orElseThrow(() -> new RuntimeException("Technical profile not found"));
 
-            // ===== CALL FASTAPI =====
-            // Récupérer le profil technique via le CV du candidat
-            TechnicalProfile technicalProfile = technicalProfileService.findByCandidateId(candidature.getCandidate().getId())
-                .orElseThrow(() -> new RuntimeException("Technical profile not found for candidate"));
-            
             Map<String, Object> aiPayload = new HashMap<>();
             aiPayload.put("candidate_profile", technicalProfile.getParsedData());
             aiPayload.put("number_of_questions", questionCount);
-
-            log.info("Sending request to AI API with {} questions, level: {}", questionCount, level);
-            log.info("AI payload: {}", aiPayload);
 
             Map aiResponse = webClientBuilder.build()
                     .post()
@@ -163,14 +177,6 @@ public class GeneratedTestController {
                     .bodyToMono(Map.class)
                     .block();
 
-            log.info("AI response: {}", aiResponse);
-
-            if (aiResponse == null) {
-                throw new RuntimeException("AI generation failed");
-            }
-
-            // ===== CREATE TEST =====
-            // Créer le test sans sauvegarder les questions
             GeneratedTest test = GeneratedTest.builder()
                     .candidature(candidature)
                     .internshipPosition(candidature.getInternshipPosition())
@@ -182,428 +188,286 @@ public class GeneratedTestController {
                     .timeLimitMinutes(duration)
                     .build();
 
-            test = generatedTestRepository.save(test);
-            log.info("Test created with ID: {}", test.getId());
+            generatedTestRepository.save(test);
 
-            // Stocker les questions en mémoire (temporaire) - ne pas sauvegarder en base
-            List<Map<String, Object>> questionsData = (List<Map<String, Object>>) aiResponse.get("questions");
-            log.info("Received {} questions from AI API (requested: {})", questionsData.size(), questionCount);
-            log.info("Questions stored temporarily - will be saved on validation");
-
-            // Mettre à jour le statut de la candidature
             candidature.setStatus(CandidatureStatus.TEST_SENT);
             candidatureRepository.save(candidature);
-            log.info("Updated candidature status to TEST_SENT for candidature ID: {}", candidatureId);
 
-            result.put("success", true);
-            result.put("testId", test.getId());
-            result.put("token", test.getToken());
-            result.put("questions", questionsData); // Retourner les questions pour l'affichage
-            result.put("message", "Test generated successfully. Please review and validate the questions.");
-
-            return ResponseEntity.ok(result);
+            return ResponseEntity.ok(Map.of(
+                    "success", true,
+                    "testId", test.getId(),
+                    "token", test.getToken(),
+                    "questions", aiResponse.get("questions")
+            ));
 
         } catch (Exception e) {
-            result.put("success", false);
-            result.put("error", e.getMessage());
-
-            log.error("Error generating test", e);
-
-            return ResponseEntity.status(500).body(result);
-        }
-    }
-
-    @GetMapping("/{id}")
-    public ResponseEntity<Map<String, Object>> getTest(@PathVariable Long id) {
-        Map<String, Object> result = new HashMap<>();
-
-        try {
-            GeneratedTest test = generatedTestRepository.findById(id)
-                    .orElseThrow(() -> new RuntimeException("Test not found with ID: " + id));
-
-            result.put("success", true);
-            result.put("test", test);
-
-            return ResponseEntity.ok(result);
-
-        } catch (Exception e) {
-            result.put("success", false);
-            result.put("error", e.getMessage());
-
-            return ResponseEntity.status(404).body(result);
-        }
-    }
-
-    @GetMapping("/candidature/{candidatureId}")
-    public ResponseEntity<Map<String, Object>> getTestByCandidature(@PathVariable Long candidatureId) {
-        Map<String, Object> result = new HashMap<>();
-
-        try {
-            GeneratedTest test = generatedTestRepository.findByCandidature_Id(candidatureId)
-                    .orElse(null);
-
-            if (test == null) {
-                result.put("success", false);
-                result.put("message", "No test found for this candidature");
-                return ResponseEntity.ok(result);
-            }
-
-            result.put("success", true);
-            result.put("test", test);
-
-            return ResponseEntity.ok(result);
-
-        } catch (Exception e) {
-            result.put("success", false);
-            result.put("error", e.getMessage());
-
-            return ResponseEntity.status(500).body(result);
-        }
-    }
-
-    @GetMapping("/{id}/review")
-    @PreAuthorize("hasRole('MANAGER')")
-    public ResponseEntity<Map<String, Object>> getTestForReview(@PathVariable Long id) {
-        try {
-            log.info("Getting test for review - ID: {}", id);
-            
-            GeneratedTest test = generatedTestRepository.findById(id)
-                    .orElseThrow(() -> new RuntimeException("Test not found"));
-            
-            Map<String, Object> reviewData = new HashMap<>();
-            reviewData.put("testId", test.getId());
-            reviewData.put("token", test.getToken());
-            reviewData.put("candidatureId", test.getCandidature().getId());
-            reviewData.put("candidateName", test.getCandidature().getCandidate().getFirstName() + " " + 
-                            test.getCandidature().getCandidate().getLastName());
-            reviewData.put("positionTitle", test.getInternshipPosition().getTitle());
-            
-            // Si le test est en mode DRAFT, les questions ne sont pas encore en base
-            // Elles seront retournées comme une liste vide pour être gérées côté frontend
-            List<Map<String, Object>> questions = new ArrayList<>();
-            
-            if (test.getStatus() != TestStatus.DRAFT && test.getQuestions() != null) {
-                // Si le test n'est plus en DRAFT, récupérer les questions de la base
-                questions = test.getQuestions().stream()
-                        .map(q -> {
-                            Map<String, Object> questionMap = new HashMap<>();
-                            questionMap.put("id", q.getId());
-                            questionMap.put("questionText", q.getQuestionText());
-                            questionMap.put("questionType", q.getQuestionType().toString());
-                            questionMap.put("options", q.getOptions() != null ? 
-                                    objectMapper.convertValue(q.getOptions(), List.class) : new ArrayList<>());
-                            questionMap.put("correctAnswer", q.getCorrectAnswer());
-                            questionMap.put("skillTag", q.getSkillTag());
-                            questionMap.put("maxScore", q.getMaxScore());
-                            questionMap.put("orderIndex", q.getOrderIndex());
-                            return questionMap;
-                        })
-                        .collect(Collectors.toList());
-            }
-            
-            reviewData.put("questions", questions);
-            reviewData.put("isDraft", test.getStatus() == TestStatus.DRAFT);
-            
-            log.info("Returning test review data with {} questions (isDraft: {})", questions.size(), test.getStatus() == TestStatus.DRAFT);
-            return ResponseEntity.ok(reviewData);
-            
-        } catch (Exception e) {
-            log.error("Error getting test for review", e);
+            log.error("Generate test error", e);
             return ResponseEntity.status(500).body(Map.of("error", e.getMessage()));
         }
     }
 
+    // =========================
+    // SAVE QUESTIONS
+    // =========================
     @PutMapping("/{id}/questions")
     @PreAuthorize("hasRole('MANAGER')")
     public ResponseEntity<Map<String, Object>> updateTestQuestions(
-            @PathVariable Long id, 
+            @PathVariable Long id,
             @RequestBody Map<String, Object> request) {
-        
+
         try {
-            log.info("Updating test questions - ID: {}", id);
-            
             GeneratedTest test = generatedTestRepository.findById(id)
                     .orElseThrow(() -> new RuntimeException("Test not found"));
-            
+
             @SuppressWarnings("unchecked")
-            List<Map<String, Object>> questionsData = (List<Map<String, Object>>) request.get("questions");
-            
-            // Supprimer les anciennes questions
+            List<Map<String, Object>> questionsData =
+                    (List<Map<String, Object>>) request.get("questions");
+
             testQuestionRepository.deleteAll(test.getQuestions());
-            
-            // Créer les nouvelles questions
+
             List<TestQuestion> newQuestions = new ArrayList<>();
+
             for (int i = 0; i < questionsData.size(); i++) {
-                Map<String, Object> questionData = questionsData.get(i);
-                
-                TestQuestion testQuestion = TestQuestion.builder()
+                Map<String, Object> q = questionsData.get(i);
+
+                TestQuestion question = TestQuestion.builder()
                         .test(test)
-                        .questionText((String) questionData.get("questionText"))
-                        .questionType(QuestionType.valueOf((String) questionData.get("questionType")))
-                        .options(objectMapper.valueToTree(questionData.get("options")))
-                        .correctAnswer((String) questionData.get("correctAnswer"))
-                        .skillTag((String) questionData.get("skillTag"))
-                        .maxScore(((Number) questionData.getOrDefault("maxScore", 1.0)).doubleValue())
+                        .questionText((String) q.get("questionText"))
+                        .questionType(QuestionType.valueOf((String) q.get("questionType")))
+                        .options(objectMapper.valueToTree(q.get("options")))
+                        .correctAnswer((String) q.get("correctAnswer"))
+                        .skillTag((String) q.get("skillTag"))
+                        .maxScore(1.0)
                         .orderIndex(i)
                         .build();
-                
-                testQuestion = testQuestionRepository.save(testQuestion);
-                newQuestions.add(testQuestion);
+
+                newQuestions.add(testQuestionRepository.save(question));
             }
-            
+
             test.setQuestions(newQuestions);
             generatedTestRepository.save(test);
-            
-            log.info("Successfully updated {} questions for test ID: {}", newQuestions.size(), id);
-            return ResponseEntity.ok(Map.of("success", true, "questionsCount", newQuestions.size()));
-            
+
+            return ResponseEntity.ok(Map.of(
+                    "success", true,
+                    "questionsCount", newQuestions.size()
+            ));
+
         } catch (Exception e) {
-            log.error("Error updating test questions", e);
+            log.error("Update questions error", e);
             return ResponseEntity.status(500).body(Map.of("error", e.getMessage()));
         }
     }
 
+    // =========================
+    // GENERATE LINK + SEND EMAIL
+    // =========================
     @PostMapping("/{id}/generate-link")
     @PreAuthorize("hasRole('MANAGER')")
     public ResponseEntity<Map<String, Object>> generateTestLink(@PathVariable Long id) {
+        log.info("=== GENERATE TEST LINK CALLED ===");
+        log.info("Test ID: {}", id);
+        
         try {
-            log.info("Generating test link - ID: {}", id);
-            
+            log.info("Looking for test with ID: {}", id);
             GeneratedTest test = generatedTestRepository.findById(id)
                     .orElseThrow(() -> new RuntimeException("Test not found"));
             
-            // Mettre à jour le statut du test à READY
+            log.info("Test found: {} with status: {}", test.getId(), test.getStatus());
+
             if (test.getStatus() == TestStatus.DRAFT) {
+                log.info("Updating test status from DRAFT to READY");
                 test.setStatus(TestStatus.READY);
                 generatedTestRepository.save(test);
-                log.info("Test {} status updated to READY", id);
+                log.info("Test status updated successfully");
             }
-            
-            String testLink = "http://localhost:5173/candidate/test/" + test.getToken();
-            
-            Map<String, Object> response = new HashMap<>();
-            response.put("success", true);
-            response.put("testLink", testLink);
-            response.put("token", test.getToken());
-            response.put("testId", test.getId());
-            response.put("candidateName", test.getCandidature().getCandidate().getFirstName() + " " + 
-                            test.getCandidature().getCandidate().getLastName());
-            
-            return ResponseEntity.ok(response);
-            
+
+            String testLink = frontendUrl + "/candidate/test/" + test.getToken();
+            log.info("Generated test link: {}", testLink);
+
+            Candidate candidate = test.getCandidature().getCandidate();
+            log.info("Candidate for link generation: {} {}", candidate.getFirstName(), candidate.getLastName());
+
+            // Tenter d'envoyer l'email, mais ne pas échouer si ça ne marche pas
+            try {
+                String subject = "Votre test technique est prêt";
+
+                String body = """
+                        Bonjour %s,
+
+                        Votre test technique pour le poste "%s" est prêt.
+
+                        Cliquez ici :
+                        %s
+
+                        Deadline : %s
+
+                        Bonne chance !
+
+                        SmartAssess Team
+                        """.formatted(
+                        candidate.getFirstName(),
+                        test.getInternshipPosition().getTitle(),
+                        testLink,
+                        test.getDeadline()
+                );
+
+                log.info("Preparing to send email to: {}", candidate.getEmail());
+                emailService.sendEmail(
+                        candidate.getEmail(),
+                        subject,
+                        body
+                );
+                log.info("Email sent successfully to: {}", candidate.getEmail());
+                
+                return ResponseEntity.ok(Map.of(
+                        "success", true,
+                        "testLink", testLink,
+                        "message", "Lien généré et email envoyé"
+                ));
+                
+            } catch (Exception emailError) {
+                log.warn("Email failed but link generated successfully: {}", emailError.getMessage());
+                return ResponseEntity.ok(Map.of(
+                        "success", true,
+                        "testLink", testLink,
+                        "message", "Lien généré (email non envoyé - configuration requise)",
+                        "emailWarning", "L'email n'a pas pu être envoyé. Veuillez configurer le service email."
+                ));
+            }
+
         } catch (Exception e) {
-            log.error("Error generating test link", e);
+            log.error("Generate link error", e);
             return ResponseEntity.status(500).body(Map.of("error", e.getMessage()));
         }
     }
 
+    // =========================
+    // PUBLIC TEST ACCESS
+    // =========================
     @GetMapping("/public/{token}")
     public ResponseEntity<Map<String, Object>> getPublicTest(@PathVariable String token) {
         try {
-            log.info("Getting public test - Token: {}", token);
-            
             GeneratedTest test = generatedTestRepository.findByToken(token)
-                    .orElseThrow(() -> new RuntimeException("Test not found or invalid token"));
-            
-            // Vérifier si le test est prêt
-            if (test.getStatus() != TestStatus.READY && test.getStatus() != TestStatus.DRAFT) {
-                return ResponseEntity.status(403).body(Map.of("error", "Test is not ready yet"));
+                    .orElseThrow(() -> new RuntimeException("Test invalid"));
+
+            if (test.getDeadline().isBefore(LocalDateTime.now())) {
+                return ResponseEntity.status(410).body(Map.of("error", "Test expired"));
             }
-            
-            // Vérifier si le test n'est pas expiré
-            if (test.getDeadline().isBefore(java.time.LocalDateTime.now())) {
-                return ResponseEntity.status(410).body(Map.of("error", "Test has expired"));
-            }
-            
-            // Mettre à jour le statut de la candidature à IN_PROGRESS si c'est la première fois
-            if (test.getCandidature().getStatus() == CandidatureStatus.TEST_SENT) {
-                test.getCandidature().setStatus(CandidatureStatus.IN_PROGRESS);
-                candidatureRepository.save(test.getCandidature());
-                log.info("Candidature {} status updated to IN_PROGRESS (test accessed)", 
-                    test.getCandidature().getId());
-            }
-            
-            // NE PAS créer la session ici - elle sera créée quand le candidat cliquera sur "Commencer"
-            log.info("Test page accessed for test ID: {} (session not created yet)", test.getId());
-            
-            Map<String, Object> publicData = new HashMap<>();
-            publicData.put("testId", test.getId());
-            publicData.put("token", test.getToken());
-            publicData.put("positionTitle", test.getInternshipPosition().getTitle());
-            publicData.put("duration", test.getTimeLimitMinutes());
-            publicData.put("deadline", test.getDeadline().toString());
-            
-            // Convertir les questions en format public
+
             List<Map<String, Object>> questions = test.getQuestions().stream()
-                    .map(q -> {
-                        Map<String, Object> questionMap = new HashMap<>();
-                        questionMap.put("id", q.getId());
-                        questionMap.put("questionText", q.getQuestionText());
-                        questionMap.put("questionType", q.getQuestionType().toString());
-                        questionMap.put("options", q.getOptions() != null ? 
-                                objectMapper.convertValue(q.getOptions(), List.class) : new ArrayList<>());
-                        // Ne pas inclure la réponse correcte pour le candidat
-                        questionMap.put("skillTag", q.getSkillTag());
-                        questionMap.put("maxScore", q.getMaxScore());
-                        questionMap.put("orderIndex", q.getOrderIndex());
-                        return questionMap;
-                    })
+                    .map(q -> Map.of(
+                            "id", q.getId(),
+                            "questionText", q.getQuestionText(),
+                            "questionType", q.getQuestionType().toString(),
+                            "options", q.getOptions()
+                    ))
                     .collect(Collectors.toList());
-            
-            publicData.put("questions", questions);
-            
-            log.info("Returning public test data with {} questions for token: {}", questions.size(), token);
-            return ResponseEntity.ok(publicData);
-            
+
+            return ResponseEntity.ok(Map.of(
+                    "testId", test.getId(),
+                    "questions", questions,
+                    "duration", test.getTimeLimitMinutes()
+            ));
+
         } catch (Exception e) {
-            log.error("Error getting public test", e);
+            log.error("Public test error", e);
             return ResponseEntity.status(500).body(Map.of("error", e.getMessage()));
         }
     }
 
+    // =========================
+    // START TEST
+    // =========================
     @PostMapping("/public/{token}/start")
     public ResponseEntity<Map<String, Object>> startTest(@PathVariable String token) {
         try {
-            log.info("Starting test - Token: {}", token);
-            
             GeneratedTest test = generatedTestRepository.findByToken(token)
-                    .orElseThrow(() -> new RuntimeException("Test not found or invalid token"));
-            
-            // Vérifier si le test est prêt
-            if (test.getStatus() != TestStatus.READY && test.getStatus() != TestStatus.DRAFT) {
-                return ResponseEntity.status(403).body(Map.of("error", "Test is not ready yet"));
-            }
-            
-            // Vérifier si le test n'est pas expiré
-            if (test.getDeadline().isBefore(LocalDateTime.now())) {
-                return ResponseEntity.status(410).body(Map.of("error", "Test has expired"));
-            }
-            
-            // Vérifier si une session existe déjà
-            Optional<TestSession> existingSession = testSessionRepository.findByTest_Id(test.getId());
-            if (existingSession.isPresent()) {
-                return ResponseEntity.status(409).body(Map.of(
-                    "error", "Test already started",
-                    "sessionId", existingSession.get().getId()
-                ));
-            }
-            
-            // Créer la session de test
-            TestSession testSession = TestSession.builder()
-                .test(test)
-                .startedAt(LocalDateTime.now())
-                .build();
-            testSessionRepository.save(testSession);
-            
-            // Mettre à jour le statut de la candidature à IN_PROGRESS
-            if (test.getCandidature().getStatus() == CandidatureStatus.TEST_SENT) {
-                test.getCandidature().setStatus(CandidatureStatus.IN_PROGRESS);
-                candidatureRepository.save(test.getCandidature());
-                log.info("Candidature {} status updated to IN_PROGRESS (test started)", 
-                    test.getCandidature().getId());
-            }
-            
-            Map<String, Object> response = new HashMap<>();
-            response.put("success", true);
-            response.put("sessionId", testSession.getId());
-            response.put("testId", test.getId());
-            response.put("startedAt", testSession.getStartedAt().toString());
-            
-            log.info("Test session {} created for test ID: {}", testSession.getId(), test.getId());
-            return ResponseEntity.ok(response);
-            
+                    .orElseThrow(() -> new RuntimeException("Test invalid"));
+
+            TestSession session = TestSession.builder()
+                    .test(test)
+                    .startedAt(LocalDateTime.now())
+                    .build();
+
+            testSessionRepository.save(session);
+
+            return ResponseEntity.ok(Map.of(
+                    "success", true,
+                    "sessionId", session.getId()
+            ));
+
         } catch (Exception e) {
-            log.error("Error starting test", e);
+            log.error("Start test error", e);
             return ResponseEntity.status(500).body(Map.of("error", e.getMessage()));
         }
     }
 
+    // =========================
+    // SUBMIT TEST
+    // =========================
     @PostMapping("/{id}/submit")
-    public ResponseEntity<Map<String, Object>> submitTest(@PathVariable Long id, @RequestBody Map<String, Object> submissionData) {
+    public ResponseEntity<Map<String, Object>> submitTest(
+            @PathVariable Long id,
+            @RequestBody Map<String, Object> submissionData) {
+        
         try {
-            log.info("Submitting test - ID: {}", id);
+            log.info("=== SUBMIT TEST CALLED ===");
+            log.info("Test ID: {}", id);
+            log.info("Submission data: {}", submissionData);
             
             GeneratedTest test = generatedTestRepository.findById(id)
                     .orElseThrow(() -> new RuntimeException("Test not found"));
             
-            // Vérifier si le test est prêt
-            if (test.getStatus() != TestStatus.READY) {
-                return ResponseEntity.status(403).body(Map.of("error", "Test is not ready for submission"));
+            String token = (String) submissionData.get("token");
+            if (!test.getToken().equals(token)) {
+                return ResponseEntity.status(403).body(Map.of("error", "Invalid token"));
             }
             
-            // Vérifier si le test n'est pas déjà soumis
-            if (test.getStatus() == TestStatus.SUBMITTED || test.getStatus() == TestStatus.IN_PROGRESS) {
-                return ResponseEntity.status(403).body(Map.of("error", "Test has already been submitted"));
-            }
-            
-            // Extraire les réponses
             @SuppressWarnings("unchecked")
-            Map<Long, String> answers = (Map<Long, String>) submissionData.get("answers");
-            Integer timeSpent = (Integer) submissionData.getOrDefault("timeSpent", 0);
+            Map<Integer, String> answers = (Map<Integer, String>) submissionData.get("answers");
+            Integer timeSpent = (Integer) submissionData.get("timeSpent");
             
-            log.info("Received {} answers for test ID: {}", answers.size(), id);
-            
-            // Calculer le score
-            double totalScore = 0;
-            double maxPossibleScore = 0;
-            int correctAnswers = 0;
-            
-            for (TestQuestion question : test.getQuestions()) {
-                String userAnswer = answers.get(question.getId());
-                String correctAnswer = question.getCorrectAnswer();
-                
-                maxPossibleScore += question.getMaxScore();
-                
-                if (userAnswer != null && userAnswer.equals(correctAnswer)) {
-                    totalScore += question.getMaxScore();
-                    correctAnswers++;
-                }
-                
-                log.debug("Question {} - User: {}, Correct: {}, Points: {}", 
-                    question.getId(), userAnswer, correctAnswer, 
-                    userAnswer != null && userAnswer.equals(correctAnswer) ? question.getMaxScore() : 0);
+            // Find existing session or create new one
+            TestSession session = testSessionRepository.findFirstByTestIdOrderByStartedAtDesc(test.getId())
+                    .orElse(null);
+                    
+            if (session == null) {
+                session = TestSession.builder()
+                        .test(test)
+                        .startedAt(LocalDateTime.now())
+                        .build();
             }
             
-            double scorePercentage = maxPossibleScore > 0 ? (totalScore / maxPossibleScore) * 100 : 0;
+            // Update session with submission data
+            session.setSubmittedAt(LocalDateTime.now());
+            session.setTimeSpentMinutes(timeSpent != null ? timeSpent / 60 : 0);
             
-            // Mettre à jour le statut du test
+            testSessionRepository.save(session);
+            
+            // Update test status
             test.setStatus(TestStatus.SUBMITTED);
             generatedTestRepository.save(test);
             
-            // Récupérer la candidature associée
-            Candidature candidature = test.getCandidature();
+            // Update candidature status to COMPLETED
+            var candidature = test.getCandidature();
+            candidature.setStatus(CandidatureStatus.COMPLETED);
+            candidature.setUpdatedAt(LocalDateTime.now());
             
-            // Mettre à jour le statut de la candidature en fonction du score
-            if (scorePercentage >= 60) { // Seuil de réussite
-                candidature.setStatus(CandidatureStatus.COMPLETED);
-                log.info("Candidature {} status updated to COMPLETED (test passed with {}%)", 
-                    candidature.getId(), Math.round(scorePercentage));
-            } else {
-                candidature.setStatus(CandidatureStatus.COMPLETED); // Ou REJECTED selon les critères
-                log.info("Candidature {} status updated to COMPLETED (test failed with {}%)", 
-                    candidature.getId(), Math.round(scorePercentage));
-            }
+            // ✅ Sauvegarder la candidature en base de données
             candidatureRepository.save(candidature);
             
-            // Créer une réponse simple pour le moment
-            Map<String, Object> result = new HashMap<>();
-            result.put("success", true);
-            result.put("testId", test.getId());
-            result.put("totalScore", totalScore);
-            result.put("maxPossibleScore", maxPossibleScore);
-            result.put("scorePercentage", Math.round(scorePercentage));
-            result.put("correctAnswers", correctAnswers);
-            result.put("totalQuestions", test.getQuestions().size());
-            result.put("timeSpent", timeSpent);
-            result.put("message", "Test submitted successfully");
+            log.info("Candidature status updated to COMPLETED: {}", candidature.getId());
             
-            log.info("Test {} submitted successfully - Score: {}/{} ({}%)", 
-                id, totalScore, maxPossibleScore, Math.round(scorePercentage));
+            log.info("Test submitted successfully: {}", id);
             
-            return ResponseEntity.ok(result);
+            return ResponseEntity.ok(Map.of(
+                    "success", true,
+                    "message", "Test soumis avec succès",
+                    "sessionId", session.getId()
+            ));
             
         } catch (Exception e) {
-            log.error("Error submitting test", e);
+            log.error("Submit test error", e);
             return ResponseEntity.status(500).body(Map.of("error", e.getMessage()));
         }
     }

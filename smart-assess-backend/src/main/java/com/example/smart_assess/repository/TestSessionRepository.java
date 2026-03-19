@@ -9,4 +9,6 @@ import java.util.Optional;
 @Repository
 public interface TestSessionRepository extends JpaRepository<TestSession, Long> {
     Optional<TestSession> findByTest_Id(Long testId);
+    
+    Optional<TestSession> findFirstByTestIdOrderByStartedAtDesc(Long testId);
 }

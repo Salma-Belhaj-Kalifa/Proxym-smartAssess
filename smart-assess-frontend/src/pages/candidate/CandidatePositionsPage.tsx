@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Search, Briefcase, MapPin, Building, Clock, Users, Star, ChevronRight, RefreshCw } from 'lucide-react';
+import { Search, Briefcase, MapPin, Building, Clock, Users, Check, Plus, ChevronRight, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -36,16 +36,11 @@ const CandidatePositionsPage: React.FC = () => {
   const loadPositions = async () => {
     try {
       setIsLoading(true);
-      console.log('=== CANDIDATE: Loading positions ===');
       const data = await positionService.getPublic();
-      console.log('=== CANDIDATE: Positions received ===', data);
-      console.log('=== CANDIDATE: Position statuses ===', data.map(p => ({ id: p.id, title: p.title, isActive: p.isActive })));
-      
       setPositions(data);
       setFilteredPositions(data);
       setError(null);
     } catch (err) {
-      console.error('Erreur lors du chargement des positions:', err);
       setError('Impossible de charger les positions');
     } finally {
       setIsLoading(false);
@@ -211,19 +206,22 @@ const CandidatePositionsPage: React.FC = () => {
                         variant={selectedPositions.includes(position.id) ? "default" : "outline"}
                         onClick={() => togglePositionSelection(position.id)}
                         disabled={!selectedPositions.includes(position.id) && selectedPositions.length >= 3}
-                        className="whitespace-nowrap"
+                        className={`whitespace-nowrap transition-all duration-200 px-4 py-2 ${
+                          selectedPositions.includes(position.id)
+                            ? "bg-blue-600 hover:bg-blue-700 text-white border-blue-600 shadow-lg hover:shadow-xl"
+                            : "border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-gray-400"
+                        }`}
                       >
-                        {selectedPositions.includes(position.id) ? (
-                          <>
-                            <Star className="w-4 h-4 mr-2 fill-current" />
-                            Sélectionné
-                          </>
-                        ) : (
-                          <>
-                            <Star className="w-4 h-4 mr-2" />
-                            Sélectionner
-                          </>
-                        )}
+                        <div className="flex items-center gap-2">
+                          {selectedPositions.includes(position.id) ? (
+                            <Check className="w-4 h-4" />
+                          ) : (
+                            <div className="w-4 h-4 border-2 border-gray-400 rounded"></div>
+                          )}
+                          <span>
+                            {selectedPositions.includes(position.id) ? 'Sélectionné' : 'Sélectionner'}
+                          </span>
+                        </div>
                       </Button>
                     </div>
                   </div>
@@ -234,8 +232,7 @@ const CandidatePositionsPage: React.FC = () => {
         </div>
 
         {/* Message d'aide */}
-        {selectedPositions.length === 0 && (
-          <Card className="bg-gray-50">
+        <Card className="bg-gray-50">
             <CardContent className="p-6 text-center">
               <Users className="w-12 h-12 text-gray-400 mx-auto mb-4" />
               <h3 className="text-lg font-semibold text-gray-900 mb-2">
@@ -246,7 +243,6 @@ const CandidatePositionsPage: React.FC = () => {
               </p>
             </CardContent>
           </Card>
-        )}
       </div>
     </div>
   );

@@ -34,9 +34,9 @@ export const getStatusColor = (status: string): string => {
     case 'ACCEPTED':
       return 'text-green-700 border-green-300 bg-green-50';
     case 'REJECTED':
-      return 'text-red-600 border-red-200';
+      return 'bg-red-100 text-red-800 border-red-300 font-semibold';
     case 'INELIGIBLE':
-      return 'text-red-600 border-red-200';
+      return 'bg-orange-100 text-orange-800 border-orange-300 font-semibold';
     case 'VALIDATED':
       return 'text-blue-600 border-blue-200';
     default:

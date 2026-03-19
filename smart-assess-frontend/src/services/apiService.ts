@@ -15,22 +15,15 @@ export interface User {
   firstName: string;
   lastName: string;
   role: string;
-  phone?: string;
-  department?: string;
-  active: boolean;
-  createdAt: string;
-  updatedAt: string;
   bio?: string;
   linkedin?: string;
   github?: string;
-  // Champs pour le profil technique et CV
   technicalProfile?: any;
   cvAnalysis?: any;
   cvFileName?: string;
   cvAnalyzedAt?: string;
   cvSize?: number;
   cvType?: string;
-  // Informations extraites du CV
   skills?: string[];
   experience?: any[];
   education?: any[];
@@ -47,8 +40,8 @@ export interface Position {
   requiredSkills: string[];
   acceptedDomains: string[];
   isActive: boolean;
-  createdBy: number; // ID du manager
-  createdByEmail?: string; // Email du manager (optionnel)
+  createdBy: number;
+  createdByEmail?: string;
   createdAt: string;
   updatedAt: string;
   candidatures?: Candidate[];
@@ -98,7 +91,6 @@ export interface CVAnalysis {
   createdAt: string;
 }
 
-// Service d'authentification
 export const authService = {
   login: async (credentials: { email: string; password: string }): Promise<AuthResponse> => {
     const response = await apiClient.post(API_ENDPOINTS.AUTH.LOGIN, credentials);
@@ -113,32 +105,57 @@ export const authService = {
   logout: async (): Promise<void> => {
     try {
       await apiClient.post(API_ENDPOINTS.AUTH.LOGOUT);
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
     } catch (error) {
       console.error('Erreur lors du logout API:', error);
-      throw error;
+    } finally {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
     }
+  },
+  
+  handleAuthError: (error: any): boolean => {
+    if (error?.response?.status === 401 || 
+        error?.message?.includes('User not found') ||
+        error?.response?.data?.error?.includes('User not found')) {
+      console.warn('Utilisateur non trouvé, nettoyage du localStorage');
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      window.location.href = '/login';
+      return true;
+    }
+    return false;
   },
   
   getCurrentUser: async (): Promise<User> => {
     const response = await apiClient.get(API_ENDPOINTS.AUTH.ME);
-    console.log('Réponse getCurrentUser API:', response.data);
     return response.data;
   },
 
   updateUserProfile: async (id: number, userData: Partial<User>): Promise<User> => {
-    console.log('Mise à jour profil utilisateur:', userData);
     const response = await apiClient.put(API_ENDPOINTS.USERS.PROFILE(id), userData);
     return response.data;
   }
 };
 
-// Service des positions
 export const positionService = {
   getAll: async (): Promise<Position[]> => {
     const response = await apiClient.get(API_ENDPOINTS.POSITIONS.GET_ALL);
     return response.data;
+  },
+  
+  getById: async (id: number): Promise<Position> => {
+    const response = await apiClient.get(`/positions/${id}`);
+    return response.data;
+  },
+  
+  update: async (id: number, data: Partial<Position>): Promise<Position> => {
+    const response = await apiClient.put(`/positions/${id}`, data);
+    return response.data;
+  },
+  
+  
+  delete: async (id: number): Promise<void> => {
+    await apiClient.delete(API_ENDPOINTS.POSITIONS.DELETE(id));
   },
   
   getPublic: async (): Promise<Position[]> => {
@@ -154,33 +171,9 @@ export const positionService = {
     } catch (error) {
       throw error;
     }
-  },
-  
-  update: async (id: number, positionData: Partial<Position>): Promise<Position> => {
-    
-    try {
-      const response = await apiClient.put(API_ENDPOINTS.POSITIONS.UPDATE(id), positionData);
-      return response.data;
-    } catch (error) {
-      throw error;
-    }
-  },
-  
-  updatePatch: async (id: number, positionData: Partial<Position>): Promise<Position> => {
-    try {
-      const response = await apiClient.patch(`/positions/${id}`, positionData);
-      return response.data;
-    } catch (error) {
-      throw error;
-    }
-  },
-  
-  delete: async (id: number): Promise<void> => {
-    await apiClient.delete(API_ENDPOINTS.POSITIONS.DELETE(id));
   }
 };
 
-// Service des candidats
 export const candidateService = {
   getAll: async (): Promise<Candidate[]> => {
     const response = await apiClient.get(API_ENDPOINTS.CANDIDATES.GET_ALL);
@@ -210,10 +203,6 @@ export const candidateService = {
     const formData = new FormData();
     
     formData.append('file', file, file.name);
-  
-    for (let [key, value] of formData.entries()) {
-      console.log(`${key}:`, value);
-    }
 
     try {
       const response = await apiClient.post(
@@ -280,9 +269,12 @@ export const candidateService = {
   deleteAccount: async (userId: number): Promise<void> => {
     await apiClient.delete(API_ENDPOINTS.USERS.DELETE(userId));
   },
+  
+  deleteMyProfile: async (): Promise<void> => {
+    await apiClient.delete(API_ENDPOINTS.CANDIDATES.DELETE_ME);
+  },
 };
 
-// Service des candidatures
 export const candidatureService = {
   getById: async (id: number): Promise<any> => {
     const response = await apiClient.get(`/candidatures/${id}`);
@@ -310,30 +302,27 @@ export const candidatureService = {
   },
 };
 
-// Service des profils techniques
 export const technicalProfileService = {
   getByCandidateId: async (candidateId: number): Promise<any> => {
     const response = await apiClient.get(`/technical_profiles/candidate/${candidateId}`);
     return response.data;
   },
-  
-  getByCvId: async (cvId: number): Promise<any> => {
-    const response = await apiClient.get(`/technical_profiles/cv/${cvId}`);
-    return response.data;
-  },
-  
+
   create: async (profileData: any): Promise<any> => {
     const response = await apiClient.post('/technical_profiles', profileData);
     return response.data;
   },
-  
-  update: async (id: number, data: any): Promise<any> => {
-    const response = await apiClient.put(`/technical_profiles/${id}`, data);
+
+  update: async (id: number, profileData: any): Promise<any> => {
+    const response = await apiClient.put(`/technical_profiles/${id}`, profileData);
     return response.data;
+  },
+
+  delete: async (id: number): Promise<void> => {
+    await apiClient.delete(`/technical_profiles/${id}`);
   },
 };
 
-// Service des tests
 export const testService = {
   getAll: async (): Promise<Test[]> => {
     const response = await apiClient.get(API_ENDPOINTS.TESTS.GET_ALL);
@@ -363,6 +352,11 @@ export const testService = {
   startTest: async (token: string): Promise<any> => {
     const response = await apiClient.post(`/tests/public/${token}/start`);
     return response.data;
+  },
+  
+  getTestForReview: async (testId: number): Promise<any> => {
+    const response = await apiClient.get(`/tests/${testId}/review`);
+    return response.data;
   }
 };
 
@@ -373,6 +367,25 @@ export default {
   testService,
   candidatureService,
   technicalProfileService,
+  managerService: {
+    getProfile: async (userId: number): Promise<User> => {
+      const response = await apiClient.get(API_ENDPOINTS.MANAGERS.GET_BY_ID(userId));
+      return response.data;
+    },
+    
+    updateProfile: async (userId: number, profileData: Partial<User>): Promise<User> => {
+      const response = await apiClient.put(API_ENDPOINTS.MANAGERS.UPDATE(userId), profileData);
+      return response.data;
+    },
+    
+    deleteMyProfile: async (): Promise<void> => {
+      await apiClient.delete(API_ENDPOINTS.MANAGERS.DELETE_ME);
+    },
+    
+    deleteManager: async (id: number): Promise<void> => {
+      await apiClient.delete(API_ENDPOINTS.MANAGERS.DELETE(id));
+    }
+  },
   userService: {
     getProfile: async (userId: number): Promise<User> => {
       const response = await apiClient.get(API_ENDPOINTS.USERS.PROFILE(userId));

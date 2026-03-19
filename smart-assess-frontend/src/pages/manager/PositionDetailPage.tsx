@@ -1,23 +1,188 @@
-import { useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Edit, Trash2, MapPin, Building, Calendar, Briefcase, Users, DollarSign, Clock, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
+import React, { useState } from 'react';
+import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
+import { ArrowLeft, Edit, Trash2, MapPin, Building, Calendar, Briefcase, Users, DollarSign, Clock, CheckCircle, XCircle, AlertCircle, Save, Eye } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { usePositions, useCandidaturesByPosition } from '@/hooks/useApiHooks';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { useCandidaturesByPosition } from '@/hooks/useApiHooks';
 import { toast } from 'sonner';
+import apiService from '@/services/apiService';
 
 export default function PositionDetailPage() {
+  const location = useLocation();
   const { positionId } = useParams<{ positionId: string }>();
-  const id = parseInt(positionId || '0');
   
-  const { data: positions = [] } = usePositions();
-  const position = positions.find(p => p.id === id);
+  // Essayer de récupérer l'ID depuis plusieurs sources
+  const getIdFromUrl = () => {
+    // 1. Depuis useParams
+    if (positionId) {
+      const id = parseInt(positionId);
+      if (!isNaN(id) && id > 0) {
+        console.log('ID from useParams:', id);
+        return id;
+      }
+    }
+    
+    // 2. Depuis l'URL pathname
+    const pathname = location.pathname;
+    const match = pathname.match(/\/manager\/postes\/(\d+)/);
+    if (match && match[1]) {
+      const id = parseInt(match[1]);
+      if (!isNaN(id) && id > 0) {
+        console.log('ID from pathname:', id);
+        return id;
+      }
+    }
+    
+    // 3. Depuis window.location
+    const windowMatch = window.location.pathname.match(/\/manager\/postes\/(\d+)/);
+    if (windowMatch && windowMatch[1]) {
+      const id = parseInt(windowMatch[1]);
+      if (!isNaN(id) && id > 0) {
+        console.log('ID from window.location:', id);
+        return id;
+      }
+    }
+    
+    console.log('No valid ID found');
+    return 0;
+  };
+  
+  const id = getIdFromUrl();
+  
+  console.log('PositionDetailPage - Final ID:', id);
+  console.log('PositionDetailPage - pathname:', location.pathname);
+  console.log('PositionDetailPage - positionId from params:', positionId);
+  
+  // Utiliser une requête directe pour récupérer le poste par ID
+  const [position, setPosition] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(id > 0); // Loading seulement si ID valide
+  
   const { data: candidatures = [] } = useCandidaturesByPosition(id);
   
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [editFormData, setEditFormData] = useState({
+    title: '',
+    description: '',
+    company: '',
+    requiredSkills: '',
+    acceptedDomains: '',
+    isActive: true
+  });
+  
+  // Charger le poste directement par ID
+  React.useEffect(() => {
+    const loadPosition = async () => {
+      if (id > 0) {
+        try {
+          setIsLoading(true);
+          console.log('Loading position with ID:', id);
+          const positionData = await apiService.positionService.getById(id);
+          console.log('Position data received:', positionData);
+          setPosition(positionData);
+          
+          // Initialiser le formulaire d'édition
+          setEditFormData({
+            title: positionData.title,
+            description: positionData.description,
+            company: positionData.company,
+            requiredSkills: positionData.requiredSkills.join(', '),
+            acceptedDomains: positionData.acceptedDomains.join(', '),
+            isActive: positionData.isActive
+          });
+        } catch (error: any) {
+          console.error('Error loading position:', error);
+          toast.error('Erreur lors du chargement du poste');
+        } finally {
+          setIsLoading(false);
+        }
+      } else {
+        console.log('Invalid position ID:', id, 'PositionId param:', positionId);
+        setIsLoading(false);
+      }
+    };
+    
+    loadPosition();
+  }, [id]); // Ajouter positionId comme dépendance
+  
+  const navigate = useNavigate();
+
+  const handleEdit = () => {
+    if (position) {
+      setEditFormData({
+        title: position.title,
+        description: position.description,
+        company: position.company,
+        requiredSkills: position.requiredSkills.join(', '),
+        acceptedDomains: position.acceptedDomains.join(', '),
+        isActive: position.isActive
+      });
+      setIsEditDialogOpen(true);
+    }
+  };
+
+  const handleSave = async () => {
+    if (!position) return;
+
+    try {
+      setIsSaving(true);
+      
+      const updatedData = {
+        ...editFormData,
+        requiredSkills: editFormData.requiredSkills.split(',').map(skill => skill.trim()).filter(skill => skill),
+        acceptedDomains: editFormData.acceptedDomains.split(',').map(domain => domain.trim()).filter(domain => domain)
+      };
+
+      await apiService.positionService.update(position.id, updatedData);
+      
+      // Recharger la page pour mettre à jour les données
+      window.location.reload();
+      
+      setIsEditDialogOpen(false);
+      toast.success('Poste mis à jour avec succès');
+    } catch (error: any) {
+      console.error('Error updating position:', error);
+      toast.error('Erreur lors de la mise à jour du poste');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!position) return;
+
+    try {
+      setIsDeleting(true);
+      await apiService.positionService.delete(position.id);
+      toast.success('Poste supprimé avec succès');
+      navigate('/manager/postes');
+    } catch (error: any) {
+      console.error('Error deleting position:', error);
+      toast.error('Erreur lors de la suppression du poste');
+    } finally {
+      setIsDeleting(false);
+      setIsDeleteDialogOpen(false);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <h2 className="text-lg font-semibold mb-2">Chargement du poste...</h2>
+          <p className="text-gray-600">Veuillez patienter</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!position) {
     return (
@@ -57,16 +222,6 @@ export default function PositionDetailPage() {
     }
   };
 
-  const handleDeletePosition = async () => {
-    try {
-      // TODO: Implement delete API call
-      toast.success('Poste supprimé avec succès');
-      window.location.href = '/manager/postes';
-    } catch (error) {
-      toast.error('Erreur lors de la suppression du poste');
-    }
-  };
-
   const stats = {
     total: candidatures.length,
     pending: candidatures.filter(c => c.status === 'PENDING').length,
@@ -82,261 +237,367 @@ export default function PositionDetailPage() {
           <Link to="/manager/postes">
             <Button variant="outline" size="sm">
               <ArrowLeft className="w-4 h-4 mr-2" />
-              Retour aux postes
+              Retour
             </Button>
           </Link>
           <div>
-            <h1 className="text-3xl font-bold text-foreground">{position.title}</h1>
-            <p className="text-muted-foreground">
-              {position.company} • {getStatusBadge(position.isActive)}
+            <h1 className="text-3xl font-bold text-gray-900">{position.title}</h1>
+            <p className="text-gray-500 flex items-center gap-2 mt-1">
+              <Building className="w-4 h-4" />
+              {position.company}
             </p>
           </div>
         </div>
+        
         <div className="flex gap-2">
-          <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-            <DialogTrigger asChild>
-              <Button variant="outline">
-                <Edit className="w-4 h-4 mr-2" />
-                Modifier
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Modifier le poste</DialogTitle>
-              </DialogHeader>
-              <div className="p-4">
-                <p className="text-gray-600">Fonctionnalité de modification en cours de développement...</p>
-              </div>
-            </DialogContent>
-          </Dialog>
-          
-          <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-            <DialogTrigger asChild>
-              <Button variant="destructive">
-                <Trash2 className="w-4 h-4 mr-2" />
-                Supprimer
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Supprimer le poste</DialogTitle>
-              </DialogHeader>
-              <div className="p-4">
-                <p className="text-gray-600 mb-4">
-                  Êtes-vous sûr de vouloir supprimer le poste "{position.title}" ? Cette action est irréversible.
-                </p>
-                <div className="flex gap-2 justify-end">
-                  <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>
-                    Annuler
-                  </Button>
-                  <Button variant="destructive" onClick={handleDeletePosition}>
-                    Supprimer
-                  </Button>
-                </div>
-              </div>
-            </DialogContent>
-          </Dialog>
+          <Button 
+            variant="outline" 
+            onClick={handleEdit}
+          >
+            <Edit className="w-4 h-4 mr-2" />
+            Modifier
+          </Button>
+          <Button 
+            variant="destructive" 
+            onClick={() => setIsDeleteDialogOpen(true)}
+          >
+            <Trash2 className="w-4 h-4 mr-2" />
+            Supprimer
+          </Button>
         </div>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2">
-              <Users className="w-5 h-5 text-blue-600" />
-              <div>
-                <p className="text-sm text-gray-600">Total candidatures</p>
-                <p className="text-xl font-bold">{stats.total}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2">
-              <Clock className="w-5 h-5 text-yellow-600" />
-              <div>
-                <p className="text-sm text-gray-600">En attente</p>
-                <p className="text-xl font-bold">{stats.pending}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2">
-              <CheckCircle className="w-5 h-5 text-green-600" />
-              <div>
-                <p className="text-sm text-gray-600">Acceptés</p>
-                <p className="text-xl font-bold">{stats.accepted}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2">
-              <XCircle className="w-5 h-5 text-red-600" />
-              <div>
-                <p className="text-sm text-gray-600">Refusés</p>
-                <p className="text-xl font-bold">{stats.rejected}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Position Details */}
+      {/* Main Content */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left Column - Position Details */}
         <div className="lg:col-span-2 space-y-6">
-          {/* Description */}
+          {/* Position Info Card */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Briefcase className="w-5 h-5" />
-                Description du poste
+                Détails du poste
               </CardTitle>
             </CardHeader>
-            <CardContent>
-              <p className="text-gray-700 leading-relaxed">{position.description}</p>
-            </CardContent>
-          </Card>
-
-          {/* Skills Required */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Compétences requises</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex flex-wrap gap-2">
-                {position.requiredSkills.map((skill, index) => (
-                  <Badge key={index} variant="outline" className="text-sm">
-                    {skill}
-                  </Badge>
-                ))}
+            <CardContent className="space-y-4">
+              <div>
+                <h3 className="font-semibold text-gray-900 mb-2">Description</h3>
+                <p className="text-gray-600 leading-relaxed">{position.description}</p>
+              </div>
+              
+              <div>
+                <h3 className="font-semibold text-gray-900 mb-2">Compétences requises</h3>
+                <div className="flex flex-wrap gap-2">
+                  {position.requiredSkills.map((skill, index) => (
+                    <Badge key={index} variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                      {skill}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+              
+              <div>
+                <h3 className="font-semibold text-gray-900 mb-2">Domaines acceptés</h3>
+                <div className="flex flex-wrap gap-2">
+                  {position.acceptedDomains.map((domain, index) => (
+                    <Badge key={index} variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                      {domain}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+              
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="font-semibold text-gray-900">Statut du poste</h3>
+                  <div className="mt-2">
+                    {getStatusBadge(position.isActive)}
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm text-gray-500">Créé le</p>
+                  <p className="font-medium">{new Date(position.createdAt).toLocaleDateString('fr-FR')}</p>
+                </div>
               </div>
             </CardContent>
           </Card>
 
-          {/* Recent Applications */}
-          {candidatures.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center justify-between">
-                  <span className="flex items-center gap-2">
-                    <Users className="w-5 h-5" />
-                    Candidatures récentes
-                  </span>
-                  <Link to={`/manager/postes/${position.id}/candidatures`}>
-                    <Button variant="outline" size="sm">
-                      Voir tout
-                    </Button>
-                  </Link>
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
+          {/* Candidates Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Users className="w-5 h-5" />
+                Candidatures ({stats.total})
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                <div className="text-center p-4 bg-gray-50 rounded-lg">
+                  <div className="text-2xl font-bold text-gray-900">{stats.total}</div>
+                  <div className="text-sm text-gray-500">Total</div>
+                </div>
+                <div className="text-center p-4 bg-yellow-50 rounded-lg">
+                  <div className="text-2xl font-bold text-yellow-600">{stats.pending}</div>
+                  <div className="text-sm text-gray-500">En attente</div>
+                </div>
+                <div className="text-center p-4 bg-green-50 rounded-lg">
+                  <div className="text-2xl font-bold text-green-600">{stats.accepted}</div>
+                  <div className="text-sm text-gray-500">Acceptés</div>
+                </div>
+                <div className="text-center p-4 bg-red-50 rounded-lg">
+                  <div className="text-2xl font-bold text-red-600">{stats.rejected}</div>
+                  <div className="text-sm text-gray-500">Rejetés</div>
+                </div>
+              </div>
+              
+              {candidatures.length > 0 ? (
                 <div className="space-y-3">
-                  {candidatures.slice(0, 3).map((candidature) => (
+                  {candidatures.slice(0, 5).map((candidature) => (
                     <div key={candidature.id} className="flex items-center justify-between p-3 border rounded-lg">
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                          <Users className="w-4 h-4 text-blue-600" />
-                        </div>
                         <div>
-                          <p className="font-medium">
-                            {candidature.candidateFirstName || 'Prénom'} {candidature.candidateLastName || 'Nom'}
-                          </p>
-                          <p className="text-sm text-gray-600">{candidature.candidateEmail || 'email@example.com'}</p>
+                          <p className="font-medium">{candidature.candidateFirstName} {candidature.candidateLastName}</p>
+                          <p className="text-sm text-gray-500">{candidature.candidateEmail}</p>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
                         <Badge className={getStatusColor(candidature.status)}>
-                          {candidature.status === 'PENDING' ? 'En attente' :
-                           candidature.status === 'ACCEPTED' ? 'Accepté' :
-                           candidature.status === 'REJECTED' ? 'Refusé' : candidature.status}
+                          {candidature.status}
                         </Badge>
-                        {candidature.aiScore && (
-                          <span className="text-sm font-medium">
-                            {candidature.aiScore}/10
-                          </span>
-                        )}
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => {
+                            // Naviguer vers la page de génération de test avec le candidat
+                            const candidatureData = {
+                              id: candidature.id,
+                              candidateId: candidature.candidateId,
+                              candidateFirstName: candidature.candidateFirstName,
+                              candidateLastName: candidature.candidateLastName,
+                              candidateEmail: candidature.candidateEmail,
+                              internshipPositionId: candidature.internshipPositionId,
+                              positionTitle: candidature.positionTitle,
+                              positionCompany: candidature.positionCompany,
+                              status: candidature.status,
+                              appliedAt: candidature.appliedAt,
+                              updatedAt: candidature.updatedAt
+                            };
+                            
+                            // Stocker les données du candidat dans sessionStorage pour la page de génération de test
+                            sessionStorage.setItem('selectedCandidature', JSON.stringify(candidatureData));
+                            
+                            // Naviguer vers la page de génération de test
+                            navigate(`/manager/candidats/${candidature.candidateId}/generer-test`);
+                          }}
+                        >
+                          <Eye className="w-4 h-4 mr-1" />
+                          Voir détails
+                        </Button>
                       </div>
                     </div>
                   ))}
+                  {candidatures.length > 5 && (
+                    <div className="text-center mt-4">
+                      <Link to={`/manager/candidats?position=${position.id}`}>
+                        <Button variant="outline" className="w-full max-w-xs">
+                          <Users className="w-4 h-4 mr-2" />
+                          Voir toutes les candidatures ({candidatures.length})
+                        </Button>
+                      </Link>
+                    </div>
+                  )}
                 </div>
-              </CardContent>
-            </Card>
-          )}
-        </div>
-
-        {/* Sidebar */}
-        <div className="space-y-6">
-          {/* Position Info */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Informations</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center gap-3">
-                <Building className="w-4 h-4 text-gray-500" />
-                <div>
-                  <p className="text-sm text-gray-600">Entreprise</p>
-                  <p className="font-medium">{position.company}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <MapPin className="w-4 h-4 text-gray-500" />
-                <div>
-                  <p className="text-sm text-gray-600">Localisation</p>
-                  <p className="font-medium">{position.location || 'Non spécifiée'}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <Calendar className="w-4 h-4 text-gray-500" />
-                <div>
-                  <p className="text-sm text-gray-600">Publié le</p>
-                  <p className="font-medium">
-                    {new Date(position.createdAt).toLocaleDateString('fr-FR')}
-                  </p>
-                </div>
-              </div>
-              {position.salary && (
-                <div className="flex items-center gap-3">
-                  <DollarSign className="w-4 h-4 text-gray-500" />
-                  <div>
-                    <p className="text-sm text-gray-600">Salaire</p>
-                    <p className="font-medium">{position.salary}</p>
-                  </div>
+              ) : (
+                <div className="text-center py-8">
+                  <Users className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                  <p className="text-gray-500">Aucune candidature pour ce poste</p>
                 </div>
               )}
             </CardContent>
           </Card>
+        </div>
 
+        {/* Right Column - Actions & Info */}
+        <div className="space-y-6">
           {/* Quick Actions */}
           <Card>
             <CardHeader>
               <CardTitle>Actions rapides</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              <Link to={`/manager/postes/${position.id}/candidatures`}>
-                <Button className="w-full" variant="outline">
-                  <Users className="w-4 h-4 mr-2" />
-                  Voir les candidatures
-                </Button>
-              </Link>
-              <Button className="w-full" variant="outline">
-                <Briefcase className="w-4 h-4 mr-2" />
-                Dupliquer le poste
+              <Button 
+                variant="outline" 
+                className="w-full justify-start"
+                onClick={handleEdit}
+              >
+                <Edit className="w-4 h-4 mr-2" />
+                Modifier le poste
               </Button>
-              <Button className="w-full" variant="outline">
-                <Calendar className="w-4 h-4 mr-2" />
-                Planifier un entretien
+              <Button 
+                variant="destructive" 
+                className="w-full justify-start"
+                onClick={() => setIsDeleteDialogOpen(true)}
+              >
+                <Trash2 className="w-4 h-4 mr-2" />
+                Supprimer le poste
               </Button>
+            </CardContent>
+          </Card>
+
+          {/* Position Status */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Statut du poste</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  {getStatusBadge(position.isActive)}
+                </div>
+                <div className="text-sm text-gray-600">
+                  {position.isActive 
+                    ? "Ce poste est actif et visible par les candidats"
+                    : "Ce poste est inactif et invisible par les candidats"
+                  }
+                </div>
+              </div>
             </CardContent>
           </Card>
         </div>
       </div>
+
+      {/* Edit Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Modifier le poste</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 p-4">
+            <div>
+              <Label htmlFor="title">Titre du poste</Label>
+              <Input
+                id="title"
+                value={editFormData.title}
+                onChange={(e) => setEditFormData(prev => ({ ...prev, title: e.target.value }))}
+                placeholder="ex: Développeur Frontend"
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="company">Entreprise</Label>
+              <Input
+                id="company"
+                value={editFormData.company}
+                onChange={(e) => setEditFormData(prev => ({ ...prev, company: e.target.value }))}
+                placeholder="ex: TechCorp"
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="description">Description</Label>
+              <Textarea
+                id="description"
+                value={editFormData.description}
+                onChange={(e) => setEditFormData(prev => ({ ...prev, description: e.target.value }))}
+                rows={4}
+                placeholder="Décrivez le poste, les responsabilités, etc."
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="requiredSkills">Compétences requises</Label>
+              <Input
+                id="requiredSkills"
+                value={editFormData.requiredSkills}
+                onChange={(e) => setEditFormData(prev => ({ ...prev, requiredSkills: e.target.value }))}
+                placeholder="React, TypeScript, Node.js (séparées par des virgules)"
+              />
+              <p className="text-sm text-gray-500 mt-1">
+                Séparez les compétences par des virgules
+              </p>
+            </div>
+
+            <div>
+              <Label htmlFor="acceptedDomains">Domaines email acceptés</Label>
+              <Input
+                id="acceptedDomains"
+                value={editFormData.acceptedDomains}
+                onChange={(e) => setEditFormData(prev => ({ ...prev, acceptedDomains: e.target.value }))}
+                placeholder="gmail.com, outlook.com, yahoo.com (séparés par des virgules)"
+              />
+              <p className="text-sm text-gray-500 mt-1">
+                Séparez les domaines par des virgules
+              </p>
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                id="isActive"
+                checked={editFormData.isActive}
+                onChange={(e) => setEditFormData(prev => ({ ...prev, isActive: e.target.checked }))}
+                className="rounded border-gray-300"
+              />
+              <Label htmlFor="isActive">Poste actif</Label>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-4">
+              <Button 
+                variant="outline" 
+                onClick={() => setIsEditDialogOpen(false)}
+              >
+                Annuler
+              </Button>
+              <Button 
+                onClick={handleSave}
+                disabled={isSaving}
+              >
+                <Save className="w-4 h-4 mr-2" />
+                {isSaving ? 'Sauvegarde...' : 'Sauvegarder'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirmer la suppression</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 p-4">
+            <div className="text-center">
+              <Trash2 className="w-12 h-12 text-red-500 mx-auto mb-4" />
+              <h3 className="text-lg font-semibold mb-2">Supprimer le poste</h3>
+              <p className="text-gray-600 mb-4">
+                Êtes-vous sûr de vouloir supprimer le poste "<strong>{position.title}</strong>" ?
+              </p>
+              <p className="text-sm text-red-600 mb-4">
+                Cette action est irréversible et affectera toutes les candidatures associées.
+              </p>
+            </div>
+            
+            <div className="flex justify-end gap-2">
+              <Button 
+                variant="outline" 
+                onClick={() => setIsDeleteDialogOpen(false)}
+                disabled={isDeleting}
+              >
+                Annuler
+              </Button>
+              <Button 
+                variant="destructive" 
+                onClick={handleDelete}
+                disabled={isDeleting}
+              >
+                <Trash2 className="w-4 h-4 mr-2" />
+                {isDeleting ? 'Suppression...' : 'Supprimer'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

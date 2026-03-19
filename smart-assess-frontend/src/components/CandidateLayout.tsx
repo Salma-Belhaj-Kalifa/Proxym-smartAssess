@@ -43,9 +43,9 @@ const CandidateLayout = () => {
 
   return (
     <div className="min-h-screen flex bg-background">
-      {/* Sidebar - stays dark */}
+      {/* Sidebar - FIXED POSITION */}
       <aside className={cn(
-        "flex flex-col border-r transition-all duration-300",
+        "flex flex-col border-r transition-all duration-300 fixed left-0 top-0 h-screen z-40",
         "bg-sidebar text-sidebar-foreground border-sidebar-border",
         collapsed ? "w-16" : "w-64"
       )}>
@@ -61,7 +61,7 @@ const CandidateLayout = () => {
           )}
         </div>
 
-        <nav className="flex-1 p-2 space-y-1">
+        <nav className="flex-1 p-2 space-y-1 overflow-y-auto">
           {navItems.map((item) => {
             const isActive = location.pathname.startsWith(item.path);
             return (
@@ -110,8 +110,11 @@ const CandidateLayout = () => {
         </div>
       </aside>
 
-      {/* Main content - light */}
-      <main className="flex-1 overflow-auto bg-background">
+      {/* Main content - WITH MARGIN TO AVOID SIDEBAR OVERLAP */}
+      <main className={cn(
+        "flex-1 overflow-auto bg-background transition-all duration-300",
+        collapsed ? "ml-16" : "ml-64"
+      )}>
         <Outlet />
       </main>
     </div>

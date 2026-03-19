@@ -28,6 +28,7 @@ export const API_ENDPOINTS = {
     GET_BY_ID: (id: number) => `/candidates/${id}`,
     UPDATE: (id: number) => `/candidates/${id}`,
     DELETE: (id: number) => `/candidates/${id}`,
+    DELETE_ME: '/candidates/me',
     PROFILE: (id: number) => `/candidates/${id}/profile`,
     CV_UPLOAD: '/candidates/cv'
   },
@@ -63,7 +64,8 @@ export const API_ENDPOINTS = {
     CREATE: '/managers',
     GET_BY_ID: (id: number) => `/managers/${id}`,
     UPDATE: (id: number) => `/managers/${id}`,
-    DELETE: (id: number) => `/managers/${id}`
+    DELETE: (id: number) => `/managers/${id}`,
+    DELETE_ME: '/managers/me'
   },
   
   // HR

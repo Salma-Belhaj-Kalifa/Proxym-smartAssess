@@ -99,24 +99,51 @@ public class TechnicalProfileService {
     }
 
     public TechnicalProfileDto createTechnicalProfile(Long cvId, TechnicalProfileDto profileDto) {
-        log.info("Creating technical profile for CV ID: {}", cvId);
+        log.info("=== CREATE TECHNICAL PROFILE ===");
+        log.info("CV ID: {}", cvId);
         log.info("Profile DTO received: {}", profileDto);
-        log.info("Parsed data received: {}", profileDto.getParsedData());
+        
+        if (profileDto == null) {
+            log.error("Profile DTO is null!");
+            throw new RuntimeException("Profile DTO cannot be null");
+        }
+        
+        if (profileDto.getParsedData() == null) {
+            log.error("Parsed data is null in DTO!");
+            throw new RuntimeException("Parsed data cannot be null");
+        }
         
         try {
+            // Vérifier si un profil existe déjà pour ce CV
+            Optional<TechnicalProfile> existingProfile = technicalProfileRepository.findByCv_Id(cvId);
+            
+            if (existingProfile.isPresent()) {
+                log.info("Technical profile already exists for CV ID: {}, updating it", cvId);
+                TechnicalProfile profile = existingProfile.get();
+                profile.setParsedData(profileDto.getParsedData());
+                profile = technicalProfileRepository.save(profile);
+                log.info("Technical profile updated successfully with ID: {}", profile.getId());
+                return convertToDto(profile);
+            }
+            
             // Récupérer le CV
+            log.info("Looking for CV with ID: {}", cvId);
             CandidateCV cv = candidateCVRepository.findById(cvId)
                     .orElseThrow(() -> new RuntimeException("CV not found with ID: " + cvId));
             
             log.info("CV found: {}", cv.getId());
+            log.info("CV file name: {}", cv.getFileName());
+            log.info("CV file size: {} bytes", cv.getFileSizeBytes());
+            log.info("CV candidate ID: {}", cv.getCandidate() != null ? cv.getCandidate().getId() : "null");
+            log.info("Parsed data type: {}", profileDto.getParsedData().getClass().getSimpleName());
             
-            // Créer le profil technique avec les parsed data du DTO
+            // Créer le profil technique directement avec le JsonNode du DTO
             TechnicalProfile profile = TechnicalProfile.builder()
                     .cv(cv)
                     .parsedData(profileDto.getParsedData())
                     .build();
             
-            log.info("Technical profile built: {}", profile);
+            log.info("Technical profile built successfully");
             
             // Sauvegarder
             profile = technicalProfileRepository.save(profile);
@@ -126,6 +153,13 @@ public class TechnicalProfileService {
             
         } catch (Exception e) {
             log.error("Error creating technical profile for CV ID: {}", cvId, e);
+            log.error("Error message: {}", e.getMessage());
+            log.error("Error cause: {}", e.getCause() != null ? e.getCause().getMessage() : "null");
+            log.error("Error type: {}", e.getClass().getSimpleName());
+            
+            // Log complet du stack trace pour debugging
+            log.error("Stack trace:", e);
+            
             throw new RuntimeException("Failed to create technical profile: " + e.getMessage(), e);
         }
     }

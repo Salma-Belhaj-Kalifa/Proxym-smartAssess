@@ -43,7 +43,15 @@ public class InternshipPositionController {
 
     @GetMapping
     public ResponseEntity<List<InternshipPositionDto>> getAllPositions() {
-        return ResponseEntity.ok(positionService.getAllPositions());
+        log.info("=== GET ALL POSITIONS CALLED ===");
+        try {
+            List<InternshipPositionDto> positions = positionService.getAllPositions();
+            log.info("Successfully retrieved {} positions", positions.size());
+            return ResponseEntity.ok(positions);
+        } catch (Exception e) {
+            log.error("Error getting all positions", e);
+            return ResponseEntity.status(500).build();
+        }
     }
 
     @GetMapping("/public")
@@ -67,7 +75,21 @@ public class InternshipPositionController {
 
     @GetMapping("/{id}")
     public ResponseEntity<InternshipPositionDto> getPositionById(@PathVariable Long id) {
-        return ResponseEntity.ok(positionService.getPositionById(id));
+        log.info("=== GET POSITION BY ID CALLED ===");
+        log.info("Requested position ID: {}", id);
+        
+        try {
+            InternshipPositionDto position = positionService.getPositionById(id);
+            log.info("Position found: {}", position != null ? "YES" : "NO");
+            if (position != null) {
+                log.info("Position details - ID: {}, Title: {}, IsActive: {}", 
+                    position.getId(), position.getTitle(), position.getIsActive());
+            }
+            return ResponseEntity.ok(position);
+        } catch (Exception e) {
+            log.error("Error getting position by ID: {}", id, e);
+            return ResponseEntity.status(500).build();
+        }
     }
 
     @PutMapping("/{id}")

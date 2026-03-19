@@ -54,7 +54,6 @@ export const useCVAnalysis = () => {
   }, []);
 
   const generateQuestions = useCallback(async (profile: CVAnalysisResult, numberOfQuestions: number = 5) => {
-    console.log('Question generation will be handled by backend');
     return [];
   }, []);
 

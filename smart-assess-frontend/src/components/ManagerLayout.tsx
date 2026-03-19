@@ -1,5 +1,5 @@
 import { Outlet, Link, useLocation, Navigate } from "react-router-dom";
-import { LayoutDashboard, Briefcase, Users, FileText, Settings, LogOut, ChevronLeft, Menu, User } from "lucide-react";
+import { LayoutDashboard, Briefcase, Users, FileText, Settings, LogOut, ChevronLeft, Menu, User, CheckCircle } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { useAuth } from '@/hooks/useApiHooks';
@@ -9,7 +9,8 @@ const navItems = [
   { label: "Tableau de bord", icon: LayoutDashboard, path: "/manager/dashboard" },
   { label: "Postes de stage", icon: Briefcase, path: "/manager/postes" },
   { label: "Candidats", icon: Users, path: "/manager/candidats" },
-  { label: "Résultats", icon: FileText, path: "/manager/resultats" },
+  { label: "Résultats des tests", icon: CheckCircle, path: "/manager/tests-resultats" },
+  { label: "Résultats IA", icon: FileText, path: "/manager/resultats" },
   { label: "Mon profil", icon: User, path: "/manager/profil" },
 ];
 
@@ -19,7 +20,6 @@ const ManagerLayout = () => {
   const { user } = useAuth();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
-  // Protéger les routes manager - vérifier si l'utilisateur est authentifié et a le bon rôle
   if (!user) {
     return <Navigate to="/recruteur/connexion" replace />;
   }
@@ -29,27 +29,21 @@ const ManagerLayout = () => {
   }
 
   const handleLogout = async () => {
-    console.log('Bouton déconnexion cliqué dans ManagerLayout');
     setIsLoggingOut(true);
     try {
-      // Appel direct de l'API de logout
       await authService.logout();
-      console.log('Logout réussi depuis ManagerLayout');
-      // Forcer la redirection manuellement
       setTimeout(() => {
         window.location.href = '/';
       }, 500);
     } catch (error) {
-      console.error('Erreur lors de la déconnexion:', error);
       setIsLoggingOut(false);
     }
   };
 
   return (
     <div className="min-h-screen flex bg-background">
-      {/* Sidebar - stays dark */}
       <aside className={cn(
-        "flex flex-col border-r transition-all duration-300",
+        "flex flex-col border-r transition-all duration-300 fixed left-0 top-0 h-screen z-40",
         "bg-sidebar text-sidebar-foreground border-sidebar-border",
         collapsed ? "w-16" : "w-64"
       )}>
@@ -65,7 +59,7 @@ const ManagerLayout = () => {
           )}
         </div>
 
-        <nav className="flex-1 p-2 space-y-1">
+        <nav className="flex-1 p-2 space-y-1 overflow-y-auto">
           {navItems.map((item) => {
             const isActive = location.pathname.startsWith(item.path);
             return (
@@ -114,8 +108,10 @@ const ManagerLayout = () => {
         </div>
       </aside>
 
-      {/* Main content - light */}
-      <main className="flex-1 overflow-auto bg-background">
+      <main className={cn(
+        "flex-1 overflow-auto bg-background transition-all duration-300",
+        collapsed ? "ml-16" : "ml-64"
+      )}>
         <Outlet />
       </main>
     </div>

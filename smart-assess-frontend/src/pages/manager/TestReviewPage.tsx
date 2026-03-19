@@ -31,12 +31,24 @@ interface Question {
 }
 
 interface TestReviewData {
-  testId: number;
+  id: number;
+  testId?: number;
   token: string;
-  candidatureId: number;
-  candidateName: string;
-  positionTitle: string;
+  status: string;
+  createdAt: string;
+  deadline: string;
+  timeLimitMinutes: number;
   questions: Question[];
+  internshipPosition: {
+    id: number;
+    title: string;
+  };
+  candidate: {
+    id: number;
+    firstName: string;
+    lastName: string;
+    email: string;
+  };
   isDraft?: boolean;
 }
 
@@ -52,57 +64,62 @@ const TestReviewPage: React.FC = () => {
   const [editingQuestion, setEditingQuestion] = useState<number | null>(null);
 
   useEffect(() => {
+    console.log('TestReviewPage - Component mounted with testId:', testId);
     if (testId) {
+      console.log('TestReviewPage - Loading test data for ID:', testId);
       loadTestData(parseInt(testId));
+    } else {
+      console.error('TestReviewPage - No testId provided in URL params');
+      toast.error('ID de test manquant dans l\'URL');
     }
   }, [testId]);
 
   const loadTestData = async (id: number) => {
     try {
       setIsLoading(true);
+      console.log('TestReviewPage - Loading test data from API for ID:', id);
+      
       // Récupérer les données du test généré avec apiClient
       const response = await apiClient.get(`/tests/${id}/review`);
       const data = response.data;
       
-      // Vérifier si la réponse contient une erreur
-      if (data.error) {
-        throw new Error(data.error);
-      }
+      console.log('TestReviewPage - API response received:', data);
       
-      // Si le test est en DRAFT, récupérer les questions depuis le localStorage
-      if (data.isDraft || data.questions.length === 0) {
-        console.log('Test is DRAFT or has no questions, checking localStorage...');
-        const storedQuestions = localStorage.getItem(`test_questions_${id}`);
-        console.log('LocalStorage key:', `test_questions_${id}`);
-        console.log('Stored questions found:', !!storedQuestions);
-        
-        if (storedQuestions) {
-          try {
-            data.questions = JSON.parse(storedQuestions);
-            console.log('Loaded questions from localStorage:', data.questions);
-            console.log('Number of questions loaded:', data.questions.length);
-          } catch (parseError) {
-            console.error('Error parsing stored questions:', parseError);
-            data.questions = [];
-          }
-        } else {
-          console.warn('No questions found in localStorage for test ID:', id);
-          console.log('Available localStorage keys:', Object.keys(localStorage));
+      // Essayer de récupérer les questions depuis le localStorage d'abord
+      const localStorageQuestions = localStorage.getItem(`test_questions_${id}`);
+      console.log('TestReviewPage - Questions from localStorage:', localStorageQuestions ? 'Found' : 'Not found');
+      
+      if (localStorageQuestions) {
+        try {
+          const parsedQuestions = JSON.parse(localStorageQuestions);
+          console.log('TestReviewPage - Parsed questions from localStorage:', parsedQuestions);
+          console.log('Number of questions loaded:', parsedQuestions.length);
+          setTestData({
+            ...data,
+            questions: parsedQuestions
+          });
+        } catch (parseError) {
+          console.error('Error parsing stored questions:', parseError);
           data.questions = [];
+          setTestData(data);
         }
       } else {
-        console.log('Test is not DRAFT, using questions from backend:', data.questions.length);
+        console.warn('No questions found in localStorage for test ID:', id);
+        console.log('Available localStorage keys:', Object.keys(localStorage));
+        data.questions = [];
+        setTestData(data);
       }
       
-      setTestData(data);
-      console.log('Test data loaded:', data);
-    } catch (error: any) {
-      console.error('Error loading test data:', error);
-      const errorMessage = error.response?.data?.message || error.message || 'Erreur inconnue';
-      toast.error(`Erreur lors du chargement des données du test: ${errorMessage}`);
-      navigate('/manager/candidats');
-    } finally {
       setIsLoading(false);
+      console.log('TestReviewPage - Test data loaded successfully');
+      
+    } catch (error: any) {
+      console.error('TestReviewPage - Error loading test data:', error);
+      console.error('TestReviewPage - Error response:', error.response?.data);
+      console.error('TestReviewPage - Error status:', error.response?.status);
+      
+      setIsLoading(false);
+      toast.error('Erreur lors du chargement des données du test');
     }
   };
 
@@ -167,17 +184,26 @@ const TestReviewPage: React.FC = () => {
   const saveQuestions = async () => {
     if (!testData) return;
     
+    console.log('SaveQuestions - testData structure:', testData);
+    console.log('SaveQuestions - testData.id:', testData.id);
+    
     try {
       setIsSaving(true);
       
+      // Déterminer si le test est en DRAFT basé sur le status
+      const isDraft = testData.status === 'DRAFT';
+      console.log('SaveQuestions - Test is DRAFT:', isDraft);
+      
       // Si le test est en DRAFT, sauvegarder uniquement dans le localStorage
-      if (testData.isDraft) {
-        localStorage.setItem(`test_questions_${testData.testId}`, JSON.stringify(testData.questions));
+      if (isDraft) {
+        console.log('SaveQuestions - Using testId:', testData.id);
+        localStorage.setItem(`test_questions_${testData.id}`, JSON.stringify(testData.questions));
         console.log('Questions saved to localStorage:', testData.questions);
         toast.success('Questions sauvegardées localement');
       } else {
         // Si le test n'est plus en DRAFT, sauvegarder en base
-        const response = await apiClient.put(`/tests/${testData.testId}/questions`, {
+        console.log('SaveQuestions - Using testId for API:', testData.id);
+        const response = await apiClient.put(`/tests/${testData.id}/questions`, {
           questions: testData.questions
         });
         
@@ -195,17 +221,25 @@ const TestReviewPage: React.FC = () => {
   const generateTestLink = async () => {
     if (!testData) return;
     
+    console.log('GenerateTestLink - testData structure:', testData);
+    console.log('GenerateTestLink - testData.id:', testData.id);
+    
     try {
       setIsGeneratingLink(true);
       
+      // Déterminer si le test est en DRAFT basé sur le status
+      const isDraft = testData.status === 'DRAFT';
+      console.log('GenerateTestLink - Test is DRAFT:', isDraft);
+      
       // Si le test est en DRAFT, sauvegarder les questions en base pour la première fois
-      if (testData.isDraft) {
-        const response = await apiClient.put(`/tests/${testData.testId}/questions`, {
+      if (isDraft) {
+        console.log('GenerateTestLink - Using testId for API:', testData.id);
+        const response = await apiClient.put(`/tests/${testData.id}/questions`, {
           questions: testData.questions
         });
         
         // Nettoyer le localStorage après la sauvegarde en base
-        localStorage.removeItem(`test_questions_${testData.testId}`);
+        localStorage.removeItem(`test_questions_${testData.id}`);
         console.log('Questions saved to database and localStorage cleared');
         
         toast.success('Questions sauvegardées en base avec succès');
@@ -215,7 +249,8 @@ const TestReviewPage: React.FC = () => {
       }
       
       // Générer le lien du test
-      const response = await apiClient.post(`/tests/${testData.testId}/generate-link`);
+      console.log('GenerateTestLink - Using testId for generate-link API:', testData.id);
+      const response = await apiClient.post(`/tests/${testData.id}/generate-link`);
       const data = response.data;
       
       const link = `${window.location.origin}/candidate/test/${testData.token}`;
@@ -227,7 +262,7 @@ const TestReviewPage: React.FC = () => {
     } catch (error: any) {
       console.error('Error generating test link:', error);
       const errorMessage = error.response?.data?.message || error.message || 'Erreur inconnue';
-      toast.error(`Erreur lors de la génération du lien du test: ${errorMessage}`);
+      toast.error(`Erreur lors de la génération du lien: ${errorMessage}`);
     } finally {
       setIsGeneratingLink(false);
     }

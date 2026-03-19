@@ -36,7 +36,33 @@ apiClient.interceptors.response.use(
                            error.config?.url?.includes('/auth/register');
       
       if (!isAuthRequest) {
-        // Seulement rediriger pour les autres requêtes 401 (token expiré)
+        // Vérifier si l'erreur est due à un utilisateur supprimé
+        const errorMessage = error.response?.data?.error || error.message || '';
+        const isUserDeleted = errorMessage.includes('User not found') || 
+                              errorMessage.includes('not found with email');
+        
+        console.warn('Erreur 401 détectée:', {
+          url: error.config?.url,
+          isAuthRequest,
+          isUserDeleted,
+          errorMessage
+        });
+        
+        // Nettoyer le localStorage dans tous les cas de 401 non-auth
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        
+        // Rediriger vers la page d'accueil
+        window.location.href = '/';
+      }
+    } else if (error.response?.status === 500) {
+      // Vérifier si l'erreur 500 est due à un utilisateur supprimé
+      const errorMessage = error.response?.data?.error || error.message || '';
+      const isUserDeleted = errorMessage.includes('User not found') || 
+                            errorMessage.includes('not found with email');
+      
+      if (isUserDeleted) {
+        console.warn('Erreur 500 due à utilisateur supprimé, nettoyage du localStorage');
         localStorage.removeItem('token');
         localStorage.removeItem('user');
         window.location.href = '/';

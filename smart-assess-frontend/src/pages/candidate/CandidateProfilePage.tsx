@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useAuth, useProfile, useUpdateProfile } from '@/hooks/useApiHooks';
-import { authService } from '@/services/apiService';
+import { authService, candidateService } from '@/services/apiService';
 
 export default function CandidateProfilePage() {
   const { user } = useAuth();
@@ -93,13 +93,16 @@ export default function CandidateProfilePage() {
 
   const handleDeleteAccount = async () => {
     try {
-      if (user?.id) {
-        await authService.logout();
-        // Déconnecter et rediriger vers la page d'accueil
-        window.location.href = '/';
-      }
+      // Appeler l'API de suppression du profil
+      await candidateService.deleteMyProfile();
+      
+      // Si la suppression réussit, déconnecter et rediriger
+      await authService.logout();
+      window.location.href = '/';
     } catch (error) {
       console.error('Erreur lors de la suppression du compte:', error);
+      // Afficher un message d'erreur à l'utilisateur
+      alert('Erreur lors de la suppression du compte. Veuillez réessayer.');
     } finally {
       setShowDeleteModal(false);
     }

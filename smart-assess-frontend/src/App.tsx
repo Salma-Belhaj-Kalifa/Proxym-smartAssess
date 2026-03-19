@@ -21,8 +21,11 @@ import ManagerPositionsPage from "./pages/manager/ManagerPositionsPage";
 import ManagerProfilePage from "./pages/manager/ManagerProfilePage";
 import ApplicationsPage from "./pages/manager/ApplicationsPage";
 import EvaluationReportPage from "./pages/manager/EvaluationReportPage";
+import AIResultsListPage from "./pages/manager/AIResultsListPage";
 import GenerateTestPage from "./pages/manager/GenerateTestPage";
 import TestReviewPage from "./pages/manager/TestReviewPage";
+import TestResultsPage from "./pages/manager/TestResultsPage";
+import TestResultsListPage from './pages/manager/TestResultsListPage';
 import QuestionValidationPage from "./pages/manager/QuestionValidationPage";
 import PositionApplicationsPage from "./pages/manager/PositionApplicationsPage";
 import PositionDetailPage from "./pages/manager/PositionDetailPage";
@@ -35,7 +38,7 @@ const App = () => (
     <TooltipProvider>
       <Toaster />
       <Sonner />
-      <BrowserRouter>
+      <BrowserRouter future={{ v7_relativeSplatPath: true }}>
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/recruteur/connexion" element={<RecruiterLoginPage />} />
@@ -63,11 +66,13 @@ const App = () => (
             <Route path="postes/:id" element={<PositionDetailPage />} />
             <Route path="postes/:id/candidatures" element={<PositionApplicationsPage />} />
             <Route path="candidats" element={<ApplicationsPage />} />
-            <Route path="resultats" element={<EvaluationReportPage />} />
+            <Route path="resultats" element={<AIResultsListPage />} />
             <Route path="resultats/:id" element={<EvaluationReportPage />} />
+            <Route path="tests-resultats" element={<TestResultsListPage />} />
             <Route path="candidats/:id/generer-test" element={<GenerateTestPage />} />
             <Route path="candidats/:id" element={<GenerateTestPage />} />
             <Route path="test-review/:testId" element={<TestReviewPage />} />
+            <Route path="test-results/:testId" element={<TestResultsPage />} />
             <Route path="tests/:id/questions" element={<QuestionValidationPage />} />
             <Route path="profil" element={<ManagerProfilePage />} />
             <Route path="settings" element={<div className="p-8 text-foreground">Paramètres</div>} />

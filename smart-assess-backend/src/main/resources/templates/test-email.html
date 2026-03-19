@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Technique - PROXYM SmartAssess</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+        .container {
+            background-color: #ffffff;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 24px;
+            font-weight: 600;
+        }
+        .header p {
+            margin: 10px 0 0 0;
+            font-size: 16px;
+            opacity: 0.9;
+        }
+        .content {
+            padding: 40px 30px;
+        }
+        .test-info {
+            background-color: #f8f9fa;
+            border-left: 4px solid #667eea;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 0 5px 5px 0;
+        }
+        .test-info h3 {
+            margin: 0 0 15px 0;
+            color: #667eea;
+            font-size: 18px;
+        }
+        .test-info p {
+            margin: 8px 0;
+            color: #555;
+        }
+        .test-button {
+            display: inline-block;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px 30px;
+            text-decoration: none;
+            border-radius: 25px;
+            font-weight: 600;
+            font-size: 16px;
+            margin: 20px 0;
+            transition: transform 0.2s ease;
+        }
+        .test-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(102, 126, 234, 0.3);
+        }
+        .warning {
+            background-color: #fff3cd;
+            border: 1px solid #ffeaa7;
+            color: #856404;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        .warning strong {
+            color: #d63031;
+        }
+        .footer {
+            background-color: #f8f9fa;
+            padding: 30px;
+            text-align: center;
+            border-top: 1px solid #e9ecef;
+        }
+        .footer p {
+            margin: 5px 0;
+            color: #6c757d;
+            font-size: 14px;
+        }
+        .highlight {
+            background-color: #e7f3ff;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1>📋 Test Technique Disponible</h1>
+            <p th:text="${companyName}"></p>
+        </div>
+
+        <!-- Content -->
+        <div class="content">
+            <p>Bonjour <strong th:text="${candidateName}"></strong>,</p>
+            
+            <p>Nous sommes ravis de vous informer que votre test technique pour le poste de <span class="highlight" th:text="${positionTitle}"></span> est maintenant disponible.</p>
+            
+            <div class="test-info">
+                <h3>📝 Détails du test</h3>
+                <p><strong>Poste:</strong> <span th:text="${positionTitle}"></span></p>
+                <p><strong>Date d'expiration:</strong> <span th:text="${expirationDate}"></span></p>
+                <p><strong>Durée estimée:</strong> 45-60 minutes</p>
+            </div>
+
+            <p style="text-align: center;">
+                <a th:href="${testLink}" class="test-button">
+                    🚀 Commencer le test
+                </a>
+            </p>
+
+            <div class="warning">
+                <strong>⚠️ Important:</strong> Ce lien expirera le <span th:text="${expirationDate}"></span>. 
+                Veuillez compléter le test avant cette date pour éviter tout problème.
+            </div>
+
+            <p>Si vous rencontrez des difficultés techniques ou si vous avez des questions, n'hésitez pas à nous contacter.</p>
+            
+            <p>Cordialement,<br>
+            L'équipe <span th:text="${companyName}"></span></p>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            <p>Cet email a été envoyé automatiquement. Merci de ne pas répondre.</p>
+            <p>© 2024 PROXYM SmartAssess. Tous droits réservés.</p>
+        </div>
+    </div>
+</body>
+</html>

@@ -81,7 +81,6 @@ const CandidateTestPage: React.FC = () => {
       setTestData(data);
       setTimeRemaining(data.duration * 60); // Convertir minutes en secondes
       
-      console.log('Test data loaded:', data);
     } catch (error: any) {
       console.error('Error loading test data:', error);
       const errorMessage = error.response?.data?.message || error.message || 'Erreur inconnue';
@@ -106,7 +105,6 @@ const CandidateTestPage: React.FC = () => {
         setTestStarted(true);
         setTimeRemaining(testData?.duration * 60 || 3600); // Convertir en secondes
         toast.success('Test démarré ! Bonne chance !');
-        console.log('Test session created:', response.sessionId);
       } else {
         toast.error(response.error || 'Erreur lors du démarrage du test');
       }
@@ -156,19 +154,15 @@ const CandidateTestPage: React.FC = () => {
       
       const submissionData = {
         testId: testData.testId,
-        token: testData.token,
+        token: token,  // ✅ Utiliser le token de l'URL
         answers: formattedAnswers,
         timeSpent: (testData.duration * 60) - timeRemaining
       };
-      
-      console.log('Submitting test with data:', submissionData);
-      
       const response = await apiClient.post(`/tests/${testData.testId}/submit`, submissionData);
       
       setTestSubmitted(true);
       toast.success('Test soumis avec succès !');
       
-      // Rediriger vers la page de confirmation avec les résultats
       setTimeout(() => {
         navigate('/candidate/test-submitted', { 
           state: { testResult: response.data } 

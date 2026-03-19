@@ -94,31 +94,19 @@ const SubmissionPageSimple: React.FC = () => {
         });
       }, 200);
 
-      // Utiliser l'utilisateur connecté pour la candidature
-      // Pour l'instant, contourner l'upload de CV et créer directement les candidatures
       if (user?.id) {
-        console.log('=== CREATING CANDIDATURES ===');
-        console.log('Creating candidatures directly for user:', user.id);
-        
-        // Créer les candidatures pour chaque position sélectionnée
+      
         for (const positionId of selectedPositions) {
           await candidateService.createCandidature({
             candidateId: user.id,
             internshipPositionId: positionId,
             status: 'PENDING'
           });
-        }
-        
-        console.log('Candidatures created successfully');
-        
-        // Invalider le cache des candidatures pour forcer le rafraîchissement
+        }        
         queryClient.invalidateQueries({ queryKey: ['candidatures', 'candidate', user.id] });
         
-        // Maintenant essayer l'analyse de CV avec le service IA et sauvegarder dans la base
         if (file) {
-          console.log('=== STARTING CV ANALYSIS AND SAVE ===');
           try {
-            // Analyser le CV avec le service IA
             const iaFormData = new FormData();
             iaFormData.append('file', file);
             
@@ -129,34 +117,24 @@ const SubmissionPageSimple: React.FC = () => {
             
             if (iaResponse.ok) {
               const iaResult = await iaResponse.json();
-              console.log('CV Analysis successful:', iaResult);
               
-              // Sauvegarder le CV et le profil technique en utilisant les entités existantes
               try {
-                // Créer FormData pour l'upload du CV
                 const cvFormData = new FormData();
                 cvFormData.append('file', file);
                 cvFormData.append('candidateId', user.id.toString());
                 
-                // Uploader le CV et créer le profil technique
                 const cvUploadResponse = await apiClient.post('/candidates/cv', cvFormData, {
                   headers: {
                     'Content-Type': 'multipart/form-data',
                   },
                 });
-                
-                console.log('CV uploaded successfully:', cvUploadResponse.data);
-                
-                // Si l'upload réussit, sauvegarder les résultats de l'analyse
+                                
                 if (cvUploadResponse.data.id) {
                   const profileData = {
                     parsedData: iaResult // Les données complètes de l'analyse IA
                   };
-                  
-                  console.log('Sending profile data:', profileData);
-                  
+                                    
                  await apiClient.post(`/technical_profiles/cv/${cvUploadResponse.data.id}`, profileData);
-                  console.log('Technical profile saved successfully');
                   toast.success('CV et profil technique sauvegardés avec succès !');
                 } else {
                   toast.success('CV analysé avec succès !');
@@ -180,12 +158,10 @@ const SubmissionPageSimple: React.FC = () => {
       setUploadProgress(100);
       setSubmitStatus('success');
 
-      // Nettoyer le localStorage
       localStorage.removeItem('selectedPositions');
 
       toast.success('Candidature soumise avec succès !');
 
-      // Rediriger après 3 secondes
       setTimeout(() => {
         navigate('/candidat/candidatures');
       }, 3000);
@@ -205,7 +181,6 @@ const SubmissionPageSimple: React.FC = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-slate-100 p-6">
       <div className="max-w-4xl mx-auto space-y-8">
-        {/* Header */}
         <div className="text-center">
           <Link to="/candidat/postes" className="inline-flex items-center text-blue-600 hover:text-blue-700 mb-4">
             <ArrowLeft className="w-4 h-4 mr-2" />
@@ -219,7 +194,6 @@ const SubmissionPageSimple: React.FC = () => {
           </p>
         </div>
 
-        {/* Progress steps */}
         <div className="flex items-center justify-center space-x-4">
           <div className="flex items-center">
             <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
@@ -285,14 +259,8 @@ const SubmissionPageSimple: React.FC = () => {
                     <div className="flex-1">
                       <h4 className="font-semibold text-gray-900">{position.title}</h4>
                       <div className="flex items-center gap-4 mt-2 text-sm text-gray-600">
-                        <div className="flex items-center gap-1">
-                          <MapPin className="w-4 h-4" />
-                          <span>Tunis, Tunisie</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <Clock className="w-4 h-4" />
-                          <span>Temps plein</span>
-                        </div>
+                      
+                       
                       </div>
                     </div>
                     <Badge className="bg-green-100 text-green-800">

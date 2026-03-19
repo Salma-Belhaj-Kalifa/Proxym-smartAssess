@@ -53,8 +53,6 @@ export default function ApplicationsPage() {
 
   // Mapper les données de candidatures pour l'affichage
   const applications = candidatures.map(c => {
-    console.log('Candidature data:', c);
-    console.log('Candidature status:', c.status);
     
     return {
       id: c.id,

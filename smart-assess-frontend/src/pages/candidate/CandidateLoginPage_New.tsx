@@ -22,10 +22,6 @@ const CandidateLoginPage: React.FC = () => {
     setIsLoading(true);
 
     try {
-      // Simulation de connexion - à remplacer par l'appel API réel
-      console.log('Tentative de connexion candidat:', formData);
-      
-      // Simuler une connexion réussie
       setTimeout(() => {
         localStorage.setItem('userType', 'candidate');
         localStorage.setItem('isAuthenticated', 'true');
