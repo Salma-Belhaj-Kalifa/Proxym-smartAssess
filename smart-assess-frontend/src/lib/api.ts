@@ -1,17 +1,17 @@
 import axios from 'axios';
+import { getCookie, deleteCookie, clearAuthCookies } from '@/utils/cookies';
 
-// Configuration de l'API backend
 const API_BASE_URL = 'http://localhost:8080/api';
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL, // Utiliser directement l'URL du backend
-  timeout: 10000
+  timeout: 10000,
+  withCredentials: true // Important pour envoyer les cookies
 });
 
-// Intercepteur pour ajouter le token d'authentification
 apiClient.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('token');
+    const token = getCookie('auth_token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -22,21 +22,16 @@ apiClient.interceptors.request.use(
   }
 );
 
-// Intercepteur pour gérer les erreurs
 apiClient.interceptors.response.use(
   (response) => {
     return response;
   },
   (error) => {
-    // Ne pas rediriger automatiquement pour les erreurs 401 de login
-    // Laisser les pages de connexion gérer les erreurs elles-mêmes
     if (error.response?.status === 401) {
-      // Vérifier si c'est une requête de login/register
       const isAuthRequest = error.config?.url?.includes('/auth/login') || 
                            error.config?.url?.includes('/auth/register');
       
       if (!isAuthRequest) {
-        // Vérifier si l'erreur est due à un utilisateur supprimé
         const errorMessage = error.response?.data?.error || error.message || '';
         const isUserDeleted = errorMessage.includes('User not found') || 
                               errorMessage.includes('not found with email');
@@ -48,24 +43,57 @@ apiClient.interceptors.response.use(
           errorMessage
         });
         
-        // Nettoyer le localStorage dans tous les cas de 401 non-auth
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
+        // Nettoyage complet des cookies
+        clearAuthCookies();
         
-        // Rediriger vers la page d'accueil
-        window.location.href = '/';
+        // Afficher un message à l'utilisateur
+        const reason = isUserDeleted ? 'Compte utilisateur supprimé' : 'Session expirée';
+        console.warn(`🔐 ${reason}, redirection vers la page de connexion`);
+        
+        // Tenter d'afficher un toast si disponible
+        try {
+          // Import dynamique pour éviter les erreurs d'import circulaire
+          import('sonner').then(({ toast }) => {
+            if (isUserDeleted) {
+              toast.error('Votre compte a été supprimé');
+            } else {
+              toast.info('Session expirée, veuillez vous reconnecter');
+            }
+          }).catch(() => {
+            // Le toast n'est pas disponible, mais on continue
+          });
+        } catch (e) {
+          // Ignorer les erreurs de toast
+        }
+        
+        // Redirection après un court délai pour permettre l'affichage du message
+        setTimeout(() => {
+          window.location.href = '/';
+        }, 1500);
       }
     } else if (error.response?.status === 500) {
-      // Vérifier si l'erreur 500 est due à un utilisateur supprimé
       const errorMessage = error.response?.data?.error || error.message || '';
       const isUserDeleted = errorMessage.includes('User not found') || 
                             errorMessage.includes('not found with email');
       
       if (isUserDeleted) {
-        console.warn('Erreur 500 due à utilisateur supprimé, nettoyage du localStorage');
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        window.location.href = '/';
+        console.warn('Erreur 500 due à utilisateur supprimé, nettoyage des cookies');
+        clearAuthCookies();
+        
+        // Afficher un message d'erreur
+        try {
+          import('sonner').then(({ toast }) => {
+            toast.error('Votre compte a été supprimé');
+          }).catch(() => {
+            // Le toast n'est pas disponible
+          });
+        } catch (e) {
+          // Ignorer les erreurs de toast
+        }
+        
+        setTimeout(() => {
+          window.location.href = '/';
+        }, 1500);
       }
     }
     return Promise.reject(error);

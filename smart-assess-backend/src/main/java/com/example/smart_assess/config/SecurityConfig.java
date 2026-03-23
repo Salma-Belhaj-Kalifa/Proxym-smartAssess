@@ -2,6 +2,7 @@ package com.example.smart_assess.config;
 
 import com.example.smart_assess.security.JwtAuthenticationFilter;
 import com.example.smart_assess.security.UserDetailsServiceImpl;
+import com.example.smart_assess.security.CookieValidationFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -27,6 +28,7 @@ public class SecurityConfig {
 
     private final UserDetailsServiceImpl userDetailsService;
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    private final CookieValidationFilter cookieValidationFilter;
 
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -111,6 +113,7 @@ public class SecurityConfig {
                 .anyRequest().authenticated()
             )
             .authenticationProvider(authenticationProvider())
+            .addFilterBefore(cookieValidationFilter, UsernamePasswordAuthenticationFilter.class)
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();

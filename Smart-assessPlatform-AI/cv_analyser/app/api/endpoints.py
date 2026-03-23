@@ -42,6 +42,7 @@ class Project(BaseModel):
 
 class CandidateProfile(BaseModel):
     basic_information: Dict[str, str]
+    summary: Dict[str, str]
     technical_information: TechnicalInfo
     certifications: List[Certification] = []
     soft_skills: SoftSkills

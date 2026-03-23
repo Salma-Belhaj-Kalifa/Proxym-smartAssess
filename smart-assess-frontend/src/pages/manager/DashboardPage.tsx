@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Briefcase, Users, FileText, Plus, AlertCircle, Eye, Clock, TrendingUp, CheckCircle, MoreHorizontal, Award } from 'lucide-react';
+import { Briefcase, Users, FileText, Plus, AlertCircle, Eye, Clock, TrendingUp, CheckCircle, MoreHorizontal, Award, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -15,6 +15,14 @@ const DashboardPage = () => {
   const [tests, setTests] = useState<any[]>([]);
   const [recentTests, setRecentTests] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  
+  // États de pagination pour Tests récents
+  const [testsCurrentPage, setTestsCurrentPage] = useState(1);
+  const testsPerPage = 10;
+  
+  // États de pagination pour Activités récentes
+  const [activitiesCurrentPage, setActivitiesCurrentPage] = useState(1);
+  const activitiesPerPage = 10;
 
   useEffect(() => {
     loadData();
@@ -129,24 +137,23 @@ const DashboardPage = () => {
       else if (test.score) score = test.score;
       else if (test.evaluationResult?.finalScore) score = test.evaluationResult.finalScore;
       
-      const scoreText = score !== 'N/A' ? ` - Score: <strong>${score}%</strong>` : '';
+      const scoreText = score !== 'N/A' ? ` • Score: ${score}%` : '';
       
       return {
-        text: <>Test <strong>{test.candidate?.firstName} {test.candidate?.lastName}</strong> {test.status === 'SUBMITTED' ? 'soumis' : 'généré'}{<span dangerouslySetInnerHTML={{ __html: scoreText }} />}</>,
+        text: <>Test <strong>{test.candidate?.firstName} {test.candidate?.lastName}</strong> soumis{scoreText}</>,
         time: `Il y a ${Math.floor((Date.now() - new Date(test.createdAt).getTime()) / (1000 * 60 * 60))}h`,
-        type: 'test',
-        status: test.status
+        type: 'test'
       };
     }) || []),
     // Nouveaux candidats
-    ...(candidates.slice(-2).map(candidate => ({
+    ...(candidates.slice(-3).map(candidate => ({
       text: <>Nouveau candidat <strong>{candidate.firstName} {candidate.lastName}</strong> inscrit</>,
       time: `Il y a ${Math.floor((Date.now() - new Date(candidate.createdAt).getTime()) / (1000 * 60 * 60))}h`,
       type: 'candidate'
     })) || []),
     // Candidatures en attente
-    ...(candidatures.filter(c => c.status === 'PENDING').slice(-2).map(candidature => {
-      const candidatureDate = candidature.appliedAt || candidature.createdAt || candidature.submittedAt;
+    ...(candidatures.slice(-3).filter(c => c.status === 'PENDING').map(candidature => {
+      const candidatureDate = candidature.createdAt || candidature.appliedAt;
       const timeAgo = candidatureDate ? 
         `Il y a ${Math.floor((Date.now() - new Date(candidatureDate).getTime()) / (1000 * 60 * 60))}h` :
         'Date inconnue';
@@ -168,6 +175,17 @@ const DashboardPage = () => {
     const timeB = parseInt(b.time.match(/\d+/)?.[0] || '0');
     return timeA - timeB;
   }).slice(0, 6);
+
+  // Variables de pagination calculées
+  const testsTotalPages = Math.ceil(recentTests.length / testsPerPage);
+  const testsStartIndex = (testsCurrentPage - 1) * testsPerPage;
+  const testsEndIndex = testsStartIndex + testsPerPage;
+  const paginatedRecentTests = recentTests.slice(testsStartIndex, testsEndIndex);
+  
+  const activitiesTotalPages = Math.ceil(activities.length / activitiesPerPage);
+  const activitiesStartIndex = (activitiesCurrentPage - 1) * activitiesPerPage;
+  const activitiesEndIndex = activitiesStartIndex + activitiesPerPage;
+  const paginatedActivities = activities.slice(activitiesStartIndex, activitiesEndIndex);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100">
@@ -284,8 +302,8 @@ const DashboardPage = () => {
             </div>
 
             {/* Tests récents */}
-            <div className="glass-card">
-              <div className="flex items-center justify-between mb-4">
+            <div className="glass-card p-6">
+              <div className="flex items-center justify-between mb-6">
                 <h2 className="text-lg font-semibold flex items-center gap-2">
                   <FileText className="w-5 h-5" />
                   Tests récents
@@ -297,11 +315,11 @@ const DashboardPage = () => {
                   </Link>
                 </Button>
               </div>
-              <div className="space-y-3">
-                {recentTests.length === 0 ? (
-                  <p className="text-muted-foreground text-sm">Aucun test récent</p>
+              <div className="space-y-4">
+                {paginatedRecentTests.length === 0 ? (
+                  <p className="text-muted-foreground text-sm py-4">Aucun test récent</p>
                 ) : (
-                  recentTests.slice(0, 4).map((test, index) => {
+                  paginatedRecentTests.map((test, index) => {
                     let score = 'N/A';
                     if (test.finalScore) score = test.finalScore;
                     else if (test.score) score = test.score;
@@ -310,7 +328,7 @@ const DashboardPage = () => {
                     const scoreText = score !== 'N/A' ? ` • Score: ${score}%` : '';
                     
                     return (
-                      <div key={index} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                      <div key={index} className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
                         <div className="flex-1">
                           <div className="flex items-center gap-2">
                             <span className="font-medium text-sm">
@@ -320,7 +338,7 @@ const DashboardPage = () => {
                               {test.status === 'SUBMITTED' ? 'Soumis' : 'En cours'}
                             </Badge>
                           </div>
-                          <div className="text-xs text-muted-foreground mt-1">
+                          <div className="text-xs text-muted-foreground mt-2">
                             {test.internshipPosition?.title}{scoreText}
                           </div>
                         </div>
@@ -332,28 +350,88 @@ const DashboardPage = () => {
                   })
                 )}
               </div>
+              
+              {/* Pagination pour Tests récents */}
+              {testsTotalPages > 1 && (
+                <div className="flex items-center justify-between mt-4 pt-4 border-t">
+                  <div className="text-sm text-muted-foreground">
+                    Page {testsCurrentPage} sur {testsTotalPages} ({recentTests.length} tests)
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setTestsCurrentPage(prev => Math.max(prev - 1, 1))}
+                      disabled={testsCurrentPage === 1}
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                    </Button>
+                    <span className="text-sm font-medium px-3">
+                      {testsCurrentPage}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setTestsCurrentPage(prev => Math.min(prev + 1, testsTotalPages))}
+                      disabled={testsCurrentPage === testsTotalPages}
+                    >
+                      <ChevronRight className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Activités récentes */}
-            <div className="glass-card">
-              <div className="flex items-center justify-between mb-4">
+            <div className="glass-card p-6">
+              <div className="flex items-center justify-between mb-6">
                 <h2 className="text-lg font-semibold flex items-center gap-2">
                   <Clock className="w-5 h-5" />
                   Activités récentes
                 </h2>
               </div>
-              <div className="space-y-3">
-                {activities.length === 0 ? (
-                  <p className="text-muted-foreground text-sm">Aucune activité récente</p>
+              <div className="space-y-4">
+                {paginatedActivities.length === 0 ? (
+                  <p className="text-muted-foreground text-sm py-4">Aucune activité récente</p>
                 ) : (
-                  activities.map((activity, index) => (
-                    <div key={index} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                  paginatedActivities.map((activity, index) => (
+                    <div key={index} className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
                       <div className="text-sm flex-1">{activity.text}</div>
-                      <div className="text-xs text-muted-foreground ml-2">{activity.time}</div>
+                      <div className="text-xs text-muted-foreground ml-3">{activity.time}</div>
                     </div>
                   ))
                 )}
               </div>
+              
+              {/* Pagination pour Activités récentes */}
+              {activitiesTotalPages > 1 && (
+                <div className="flex items-center justify-between mt-4 pt-4 border-t">
+                  <div className="text-sm text-muted-foreground">
+                    Page {activitiesCurrentPage} sur {activitiesTotalPages} ({activities.length} activités)
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setActivitiesCurrentPage(prev => Math.max(prev - 1, 1))}
+                      disabled={activitiesCurrentPage === 1}
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                    </Button>
+                    <span className="text-sm font-medium px-3">
+                      {activitiesCurrentPage}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setActivitiesCurrentPage(prev => Math.min(prev + 1, activitiesTotalPages))}
+                      disabled={activitiesCurrentPage === activitiesTotalPages}
+                    >
+                      <ChevronRight className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
           </>
         )}

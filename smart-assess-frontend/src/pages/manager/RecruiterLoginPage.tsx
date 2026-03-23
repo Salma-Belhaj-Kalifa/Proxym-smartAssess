@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useAuth } from '@/hooks/useApiHooks';
+import { useAuth } from '@/features/auth/authMutations';
 
 export default function RecruiterLoginPage() {
   const navigate = useNavigate();
@@ -83,6 +83,11 @@ export default function RecruiterLoginPage() {
 
     if (password !== confirmPassword) {
       setErrorMessage("Les mots de passe ne correspondent pas");
+      return;
+    }
+
+    if (!phone.trim()) {
+      setErrorMessage("Le numéro de téléphone est obligatoire");
       return;
     }
 
@@ -246,12 +251,13 @@ export default function RecruiterLoginPage() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label>Téléphone</Label>
+                    <Label>Téléphone *</Label>
                     <Input
                       type="tel"
                       placeholder="+216 12 345 678"
                       value={phone}
                       onChange={(e) => setPhone(e.target.value)}
+                      required
                     />
                   </div>
 

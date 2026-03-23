@@ -1,8 +1,10 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient as useTanStackQueryClient } from '@tanstack/react-query';
 import apiClient from '@/lib/api';
 import { API_ENDPOINTS } from '@/config/apiEndpoints';
 import { toast } from 'sonner';
 import { authService } from '@/services/apiService';
+import { setCookie, deleteCookie, getJsonCookie, setJsonCookie, clearAuthCookies } from '@/utils/cookies';
+import { useQueryClient } from '@/hooks/useQueryClient';
 
 export interface User {
   id: number;
@@ -42,40 +44,48 @@ export const useAuth = () => {
   const loginMutation = useMutation({
     mutationFn: authService.login,
     onSuccess: (data) => {
-      localStorage.setItem('token', data.token);
-      localStorage.setItem('user', JSON.stringify(data));
+      setCookie('auth_token', data.token);
+      setJsonCookie('user_data', data);
       queryClient.invalidateQueries();
     },
-    onError: (error) => {
+    onError: (error: any) => {
       console.error('Login error:', error);
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
+      // Nettoyage complet en cas d'erreur
+      clearAuthCookies();
+      queryClient.clear();
     }
   });
 
   const registerMutation = useMutation({
     mutationFn: authService.register,
     onSuccess: (data) => {
-      localStorage.setItem('token', data.token);
-      localStorage.setItem('user', JSON.stringify(data));
+      setCookie('auth_token', data.token);
+      setJsonCookie('user_data', data);
       queryClient.invalidateQueries();
     },
-    onError: (error) => {
+    onError: (error: any) => {
       console.error('Register error:', error);
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
+      // Nettoyage complet en cas d'erreur
+      clearAuthCookies();
+      queryClient.clear();
     }
   });
 
   const logoutMutation = useMutation({
     mutationFn: authService.logout,
     onSuccess: () => {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      queryClient.invalidateQueries();
+      // Nettoyage complet des cookies
+      clearAuthCookies();
+      queryClient.clear();
       window.location.href = '/';
     },
-    onError: (error) => console.error('Logout error:', error),
+    onError: (error: any) => {
+      console.error('Logout error:', error);
+      // Forcer le nettoyage même en cas d'erreur
+      clearAuthCookies();
+      queryClient.clear();
+      window.location.href = '/';
+    },
   });
 
   return {
@@ -84,14 +94,7 @@ export const useAuth = () => {
     logout: logoutMutation.mutateAsync,
     isLoading: loginMutation.isPending || registerMutation.isPending,
     error: loginMutation.error || registerMutation.error,
-    user: (() => {
-      try {
-        const userStr = localStorage.getItem('user');
-        return userStr ? JSON.parse(userStr) : null;
-      } catch {
-        return null;
-      }
-    })(),
+    user: getJsonCookie<User>('user_data'),
   };
 };
 

@@ -49,8 +49,8 @@ const GenerateTestPage = () => {
   const [isCheckingExistingTest, setIsCheckingExistingTest] = useState(false);
   const [testConfig, setTestConfig] = useState({
     level: "junior",
-    questionCount: 20,
-    duration: 60,
+    questionCount: 10,
+    duration: 30,
     deadline: "",
     note: ""
   });
@@ -103,8 +103,52 @@ const GenerateTestPage = () => {
           try {
             const profileResponse = await apiService.technicalProfileService.getByCandidateId(candidature.candidateId);
             
-            const profileData = profileResponse;
-            if (profileData) {
+            console.log('Technical profile response:', profileResponse);
+            
+            // Gérer différentes structures de données possibles
+            let profileData = profileResponse;
+            
+            // Si la réponse contient directement les données parsées
+            if (profileResponse && typeof profileResponse === 'object') {
+              // Si les données sont déjà parsées (nouvelle structure)
+              if (profileResponse.parsedData) {
+                profileData = profileResponse;
+              }
+              // Si les données sont directement dans l'objet (ancienne structure)
+              else if (profileResponse.domain || profileResponse.technologies || profileResponse.projects) {
+                profileData = {
+                  parsedData: {
+                    "Basic Information": {
+                      full_name: `${candidature.candidateFirstName || ''} ${candidature.candidateLastName || ''}`.trim(),
+                      email: candidature.candidateEmail || '',
+                      phone: candidature.candidatePhone || ''
+                    },
+                    "Technical Information": {
+                      domain: profileResponse.domain,
+                      technologies: profileResponse.technologies || {}
+                    },
+                    "Projects": profileResponse.projects || [],
+                    "Certifications": profileResponse.certifications || [],
+                    "Education": profileResponse.education || [],
+                    "Work Experience": profileResponse.experience || [],
+                    "Languages": profileResponse.languages || [],
+                    "Summary": profileResponse.summary || {}
+                  }
+                };
+              }
+              // Si les données sont dans un champ 'data'
+              else if (profileResponse.data) {
+                profileData = {
+                  parsedData: profileResponse.data
+                };
+              }
+            }
+            
+            if (profileData && !technicalProfile) {
+              console.log('Setting technical profile:', profileData);
+              console.log('profileData.parsedData exists:', !!profileData.parsedData);
+              console.log('profileData.id exists:', !!profileData.id);
+              
               setTechnicalProfile(profileData);
               
               if (profileData.cvId && !candidateData.cvUrl) {
@@ -113,6 +157,10 @@ const GenerateTestPage = () => {
                   cvUrl: `/api/candidates/download/${profileData.cvId}`
                 }));
               }
+            } else if (profileData) {
+              console.log('Technical profile already set, skipping...');
+            } else {
+              console.log('No technical profile found - profileData:', profileData);
             }
           } catch (profileError) {
             console.log('No technical profile found for this candidate - this is normal if no CV has been uploaded/analyzed yet');
@@ -318,139 +366,56 @@ const GenerateTestPage = () => {
   };
 
   const extractAnalysisFromProfile = () => {
-    if (!technicalProfile?.parsedData) return "Analyse non disponible";
+    console.log('extractAnalysisFromProfile called, technicalProfile:', technicalProfile);
+    
+    if (!technicalProfile?.parsedData) {
+      console.log('No parsedData in technicalProfile');
+      return null;
+    }
     
     const data = technicalProfile.parsedData;
-    let analysis = [];
+    console.log('parsedData keys:', Object.keys(data));
+    console.log('Summary data:', data["Summary"]);
     
-    if (data["Basic Information"]?.["full_name"]) {
-      analysis.push(`**${data["Basic Information"]["full_name"]}`);
-    }
-    
-    if (data["Basic Information"]?.["email"]) {
-      analysis.push(`${data["Basic Information"]["email"]}`);
-    }
-    
-    if (data["Basic Information"]?.["phone"]) {
-      analysis.push(`${data["Basic Information"]["phone"]}`);
-    }
-    
-    if (data["Technical Information"]?.["domain"]) {
-      analysis.push(`**Domaine d'expertise :** ${data["Technical Information"]["domain"]}`);
-    }
-    
-    if (data["Work Experience"] && data["Work Experience"].length > 0) {
-      const expCount = data["Work Experience"].length;
-      const latestJob = data["Work Experience"][0];
-      const expText = expCount === 1 ? "1 expérience professionnelle" : `${expCount} expériences professionnelles`;
+    // Retourner une structure riche pour une meilleure UI
+    const profileData = {
+      // Informations personnelles
+      personalInfo: {
+        fullName: data["Basic Information"]?.["full_name"] || "",
+        email: data["Basic Information"]?.["email"] || "",
+        phone: data["Basic Information"]?.["phone"] || ""
+      },
       
-      if (latestJob?.position && latestJob?.company) {
-        analysis.push(`**${expText}** - Dernier poste : ${latestJob.position} chez ${latestJob.company}`);
-        if (latestJob.duration) {
-          analysis.push(`Durée : ${latestJob.duration}`);
-        }
-      } else {
-        analysis.push(`**${expText}** détectées`);
-      }
-    }
-    
-    if (data["Projects"] && data["Projects"].length > 0) {
-      const projectCount = data["Projects"].length;
-      analysis.push(`**${projectCount} projet(s) réalisé(s)**`);
+      // Domaine et expertise
+      expertise: {
+        domain: data["Technical Information"]?.["domain"] || "",
+        level: data["Summary"]?.["career_level"] || "Débutant",
+        specializations: data["Summary"]?.["specializations"] || []
+      },
       
-      data["Projects"].forEach((project, index) => {
-        if (project.name) {
-          const techStack = project.technologies && project.technologies.length > 0 
-            ? ` (${project.technologies.slice(0, 3).join(', ')})` 
-            : '';
-          analysis.push(`• ${project.name}${techStack}`);
-        }
-      });
-    }
-    
-    const allSkills = [];
-    if (data["Technical Information"]?.["technologies"]) {
-      Object.values(data["Technical Information"]["technologies"]).forEach(categorySkills => {
-        if (Array.isArray(categorySkills)) {
-          categorySkills.forEach(skill => {
-            if (typeof skill === 'string') {
-              allSkills.push(skill);
-            } else if (skill && skill.name) {
-              allSkills.push(skill.name);
-            }
-          });
-        }
-      });
-    }
-    
-    if (allSkills.length > 0) {
-      const topSkills = allSkills.slice(0, 8);
-      analysis.push(`**Compétences principales :** ${topSkills.join(', ')}`);
-    }
-    
-    if (data["Certifications"] && data["Certifications"].length > 0) {
-      const certCount = data["Certifications"].length;
-      analysis.push(`**${certCount} certification(s) obtenue(s)**`);
+      // Statistiques
+      stats: {
+        certifications: data["Certifications"]?.length || 0,
+        projects: data["Projects"]?.length || 0,
+        education: data["Education"]?.length || 0
+      },
       
-      data["Certifications"].forEach(cert => {
-        if (cert.name) {
-          const issuer = cert.issuer ? ` - ${cert.issuer}` : '';
-          const date = cert.date ? ` (${cert.date})` : '';
-          analysis.push(`• ${cert.name}${issuer}${date}`);
-        }
-      });
-    }
+      // Formation principale
+      education: data["Education"]?.[0] ? {
+        degree: data["Education"][0].degree || "",
+        field: data["Education"][0].field || "",
+        institution: data["Education"][0].institution || ""
+      } : null,
+      
+      // Résumé du profil
+      summary: data["Summary"]?.["summary"] || "",
+      
+      // Compétences principales (si disponibles)
+      keySkills: data["Summary"]?.["key_skills"]?.slice(0, 6) || []
+    };
     
-    if (data["Education"] && data["Education"].length > 0) {
-      const education = data["Education"][0];
-      if (education.degree && education.institution) {
-        analysis.push(`**Formation :** ${education.degree} - ${education.institution}`);
-      }
-    }
-    
-    if (data["Languages"] && data["Languages"].length > 0) {
-      const languages = data["Languages"].slice(0, 3).map(lang => 
-        typeof lang === 'string' ? lang : lang.name || lang
-      ).join(', ');
-      if (languages) {
-        analysis.push(`**Langues :** ${languages}`);
-      }
-    }
-   
-    const hasValidData = data["Work Experience"]?.length > 0 || 
-                       data["Projects"]?.length > 0 || 
-                       Object.keys(data["Technical Information"]?.["technologies"] || {}).length > 0;
-
-    const location = data["Basic Information"]?.["location"];
-    const linkedin = data["Basic Information"]?.["linkedin"];
-    const github = data["Basic Information"]?.["github"];
-    const availability = data["Basic Information"]?.["availability"];
-    const salary = data["Basic Information"]?.["salary_expectation"];
-    
-    if (location) analysis.push(`**Localisation :** ${location}`);
-    if (linkedin) analysis.push(`**LinkedIn :** ${linkedin}`);
-    if (github) analysis.push(`**GitHub :** ${github}`);
-    if (availability) analysis.push(`**Disponibilité :** ${availability}`);
-    if (salary) analysis.push(`**Prétentions salariales :** ${salary}`);
-    
-    const strengths = data["Technical Information"]?.["strengths"];
-    const improvements = data["Technical Information"]?.["areas_for_improvement"];
-    
-    if (strengths) {
-      const strengthText = Array.isArray(strengths) 
-        ? strengths.slice(0, 3).join(', ')
-        : strengths;
-      analysis.push(`**Points forts :** ${strengthText}`);
-    }
-    
-    if (improvements) {
-      const improvementText = Array.isArray(improvements) 
-        ? improvements.slice(0, 2).join(', ')
-        : improvements;
-      analysis.push(`**Axes d'amélioration :** ${improvementText}`);
-    }
-   
-    return analysis.length > 0 ? analysis.join('\n') : "Analyse IA du CV en cours de traitement...";
+    console.log('Profile data for UI:', profileData);
+    return profileData;
   };
 
   const determineExperienceLevel = () => {
@@ -482,32 +447,36 @@ const GenerateTestPage = () => {
     const candidateDomain = data?.["Technical Information"]?.["domain"];
     const acceptedDomains = candidateData?.position?.acceptedDomains || [];
     
-    
-    const normalizeDomain = (domain: string) => {
-      return domain.toLowerCase()
-        .trim()
-        .replace(/[^\w\s]/g, '') 
-        .replace(/\s+/g, ' '); 
-    };
-    
-    const domainEquivalences: { [key: string]: string[] } = {
-      'software engineering': ['software engineering', 'ingénierie logicielle', 'développement logiciel', 'informatique', 'software development', 'programmation', 'coding'],
-      'data science': ['data science', 'science des données', 'analyse de données', 'data analysis', 'big data', 'machine learning', 'ia', 'intelligence artificielle'],
-      'web development': ['web development', 'développement web', 'web', 'site web', 'web design'],
-      'mobile development': ['mobile development', 'développement mobile', 'mobile', 'android', 'ios', 'application mobile'],
-      'cybersecurity': ['cybersecurity', 'cyber sécurité', 'sécurité informatique', 'sécurité', 'security'],
-      'devops': ['devops', 'développement opérations', 'operations', 'infrastructure', 'cloud'],
-      'ui/ux': ['ui/ux', 'design', 'design interface', 'design expérience utilisateur', 'user interface', 'user experience'],
-      'networking': ['networking', 'réseau', 'réseaux', 'network', 'administration réseau'],
-      'database': ['database', 'base de données', 'bdd', 'data', 'données'],
-      'project management': ['project management', 'gestion de projet', 'management', 'chef de projet']
-    };
-    
+    // Fonction pour vérifier l'éligibilité du domaine
     const isDomainEligible = candidateDomain && (
       acceptedDomains.length === 0 || 
       acceptedDomains.some(acceptedDomain => {
+        const normalizeDomain = (domain: string) => {
+          return domain.toLowerCase()
+            .trim()
+            .replace(/[^\w\s]/g, '') 
+            .replace(/\s+/g, ' '); 
+        };
+        
         const normalizedAccepted = normalizeDomain(acceptedDomain);
         const normalizedCandidate = normalizeDomain(candidateDomain);
+        
+        // Vérification directe
+        if (normalizedAccepted === normalizedCandidate) return true;
+        
+        // Équivalences de domaines
+        const domainEquivalences: { [key: string]: string[] } = {
+          'software engineering': ['software engineering', 'ingénierie logicielle', 'développement logiciel', 'informatique', 'software development', 'programmation', 'coding'],
+          'data science': ['data science', 'science des données', 'analyse de données', 'data analysis', 'big data', 'machine learning', 'ia', 'intelligence artificielle'],
+          'web development': ['web development', 'développement web', 'web', 'site web', 'web design'],
+          'mobile development': ['mobile development', 'développement mobile', 'mobile', 'android', 'ios', 'application mobile'],
+          'cybersecurity': ['cybersecurity', 'cyber sécurité', 'sécurité informatique', 'sécurité', 'security'],
+          'devops': ['devops', 'développement opérations', 'operations', 'infrastructure', 'cloud'],
+          'ui/ux': ['ui/ux', 'design', 'design interface', 'design expérience utilisateur', 'user interface', 'user experience'],
+          'networking': ['networking', 'réseau', 'réseaux', 'network', 'administration réseau'],
+          'database': ['database', 'base de données', 'bdd', 'data', 'données'],
+          'project management': ['project management', 'gestion de projet', 'management', 'chef de projet']
+        };
         
         for (const [canonicalDomain, equivalents] of Object.entries(domainEquivalences)) {
           const normalizedCanonical = normalizeDomain(canonicalDomain);
@@ -515,7 +484,6 @@ const GenerateTestPage = () => {
           if (equivalents.some(eq => normalizeDomain(eq) === normalizedAccepted)) {
             const candidateMatches = equivalents.some(eq => normalizeDomain(eq) === normalizedCandidate);
             if (candidateMatches) {
-              console.log(`✅ Semantic match found: ${canonicalDomain}`);
               return true;
             }
           }
@@ -525,38 +493,46 @@ const GenerateTestPage = () => {
       })
     );
     
+    // Informations du poste
     if (candidateData?.position.title) {
       checks.push({ 
-        label: `Poste : ${candidateData.position.title}`, 
+        label: ` Poste : ${candidateData.position.title}`, 
         ok: true 
       });
     }
     
-    if (data) {
+    if (candidateData?.position.company) {
       checks.push({ 
-        label: 'CV analysé par IA — données extraites avec succès', 
+        label: ` Entreprise : ${candidateData.position.company}`, 
         ok: true 
       });
+    }
+    
+    // Analyse du CV
+    if (data) {
+     
       
+      // Domaine technique
       if (candidateDomain) {
         if (isDomainEligible) {
           checks.push({ 
-            label: `Domaine : ${candidateDomain} — compatible avec le poste`, 
+            label: ` Domaine : ${candidateDomain} — compatible avec le poste`, 
             ok: true 
           });
         } else {
           checks.push({ 
-            label: `Domaine : ${candidateDomain} — non compatible avec les domaines requis (${acceptedDomains.join(', ') || 'Non spécifié'})`, 
+            label: ` Domaine : ${candidateDomain} — non compatible avec les domaines requis (${acceptedDomains.join(', ') || 'Non spécifié'})`, 
             ok: false 
           });
         }
       } else {
         checks.push({ 
-          label: 'Domaine non détecté dans le CV', 
+          label: '⚠️ Domaine technique non détecté dans le CV', 
           ok: false 
         });
       }
       
+      // Compétences techniques
       if (data["Technical Information"]?.["technologies"]) {
         const allSkills = [];
         Object.values(data["Technical Information"]["technologies"]).forEach(categorySkills => {
@@ -573,16 +549,52 @@ const GenerateTestPage = () => {
         
         if (allSkills.length > 0) {
           checks.push({ 
-            label: `${allSkills.length} compétence(s) technique(s) détectée(s)`, 
+            label: ` ${allSkills.length} compétence(s) technique(s) détectée(s) : ${allSkills.slice(0, 3).join(', ')}${allSkills.length > 3 ? '...' : ''}`, 
             ok: true 
           });
         }
       }
+      
+      // Expérience
+      const experience = data["Professional Experience"]?.["experience"];
+      if (experience && experience.length > 0) {
+        const totalYears = experience.reduce((sum, exp) => {
+          const years = parseFloat(exp.duration?.split(' ')[0]) || 0;
+          return sum + years;
+        }, 0);
+        
+        checks.push({ 
+          label: `📈 ${experience.length} expérience(s) professionnelle(s) détectée(s)`, 
+          ok: totalYears >= 1 
+        });
+      }
+      
+      // Formation
+      const education = data["Education"]?.["education"];
+      if (education && education.length > 0) {
+        const highestDegree = education.reduce((highest, edu) => {
+          const degreeOrder = { 'bac': 1, 'licence': 2, 'master': 3, 'doctorat': 4 };
+          const eduLevel = degreeOrder[edu.degree?.toLowerCase()] || 0;
+          const highestLevel = degreeOrder[highest.degree?.toLowerCase()] || 0;
+          return eduLevel > highestLevel ? edu : highest;
+        }, education[0]);
+        
+        checks.push({ 
+          label: ` Formation : ${highestDegree.degree} en ${highestDegree.field || 'spécialité non spécifiée'}`, 
+          ok: true 
+        });
+      }
+    } else {
+      checks.push({ 
+        label: '❌ CV non analysé ou données non disponibles', 
+        ok: false 
+      });
     }
     
+    // Éligibilité finale
     const isEligible = isDomainEligible && data && candidateDomain;
     checks.push({ 
-      label: isEligible ? 'Candidature éligible pour génération de test' : 'Candidature non éligible — domaine incompatible', 
+      label: isEligible ? ' Candidature éligible pour génération de test' : ' Candidature non éligible — domaine incompatible ou données manquantes', 
       ok: isEligible 
     });
     
@@ -847,6 +859,150 @@ const GenerateTestPage = () => {
   const analysis = extractAnalysisFromProfile();
   const eligibility = getEligibilityChecks();
 
+  // Fonction pour gérer l'affichage de l'analyse (ancien format ou nouveau)
+  const renderAnalysis = () => {
+    if (!analysis) return null;
+    
+    // Si c'est une chaîne (ancien format), utiliser l'ancien rendu
+    if (typeof analysis === 'string') {
+      return (
+        <div className="text-sm text-muted-foreground whitespace-pre-line">
+          {analysis.split('\n').map((line, index) => {
+            if (line.startsWith('**') && line.endsWith('**')) {
+              return (
+                <div key={index} className="font-semibold text-foreground mt-2">
+                  {line.replace(/\*\*/g, '')}
+                </div>
+              );
+            } else if (line.startsWith('**')) {
+              return (
+                <div key={index} className="font-semibold text-foreground">
+                  {line.replace(/\*\*/g, '')}
+                </div>
+              );
+            } else if (line.startsWith('•')) {
+              return (
+                <div key={index} className="ml-4 text-muted-foreground">
+                  {line}
+                </div>
+              );
+            } else if (line.trim() === '') {
+              return <div key={index} className="h-2" />;
+            } else {
+              return (
+                <div key={index} className="text-muted-foreground">
+                  {line}
+                </div>
+              );
+            }
+          })}
+        </div>
+      );
+    }
+    
+    // Nouveau format structuré
+    return (
+      <div className="space-y-4">
+        {/* Informations personnelles */}
+        <div className="flex items-start gap-3">
+          <User className="w-4 h-4 text-muted-foreground mt-0.5" />
+          <div className="flex-1">
+            <div className="font-medium text-foreground">{analysis.personalInfo.fullName}</div>
+            <div className="text-sm text-muted-foreground">{analysis.personalInfo.email}</div>
+            {analysis.personalInfo.phone && (
+              <div className="text-sm text-muted-foreground">{analysis.personalInfo.phone}</div>
+            )}
+          </div>
+        </div>
+
+        {/* Domaine et expertise */}
+        {analysis.expertise.domain && (
+          <div className="flex items-center gap-2">
+            <div className="w-2 h-2 bg-primary rounded-full"></div>
+            <span className="text-sm font-medium">{analysis.expertise.domain}</span>
+            <Badge variant="outline" className="text-xs">
+              {analysis.expertise.level}
+            </Badge>
+          </div>
+        )}
+
+        {/* Statistiques */}
+        <div className="grid grid-cols-3 gap-3">
+          {analysis.stats.certifications > 0 && (
+            <div className="text-center p-2 bg-muted/30 rounded-lg">
+              <div className="text-lg font-bold text-primary">{analysis.stats.certifications}</div>
+              <div className="text-xs text-muted-foreground">Certification(s)</div>
+            </div>
+          )}
+          {analysis.stats.projects > 0 && (
+            <div className="text-center p-2 bg-muted/30 rounded-lg">
+              <div className="text-lg font-bold text-primary">{analysis.stats.projects}</div>
+              <div className="text-xs text-muted-foreground">Projet(s)</div>
+            </div>
+          )}
+          {analysis.stats.education > 0 && (
+            <div className="text-center p-2 bg-muted/30 rounded-lg">
+              <div className="text-lg font-bold text-primary">{analysis.stats.education}</div>
+              <div className="text-xs text-muted-foreground">Formation(s)</div>
+            </div>
+          )}
+        </div>
+
+        {/* Formation */}
+        {analysis.education && (
+          <div className="flex items-start gap-3">
+            <FileText className="w-4 h-4 text-muted-foreground mt-0.5" />
+            <div className="flex-1">
+              <div className="text-sm font-medium text-foreground">
+                {analysis.education.degree}
+                {analysis.education.field && ` en ${analysis.education.field}`}
+              </div>
+              <div className="text-xs text-muted-foreground">{analysis.education.institution}</div>
+            </div>
+          </div>
+        )}
+
+        {/* Spécialisations */}
+        {analysis.expertise.specializations.length > 0 && (
+          <div className="space-y-2">
+            <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Spécialisations</div>
+            <div className="flex flex-wrap gap-1">
+              {analysis.expertise.specializations.map((spec, index) => (
+                <Badge key={index} variant="secondary" className="text-xs">
+                  {spec}
+                </Badge>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Résumé du profil */}
+        {analysis.summary && (
+          <div className="space-y-2">
+            <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Résumé du profil</div>
+            <div className="text-sm text-muted-foreground leading-relaxed">
+              {analysis.summary}
+            </div>
+          </div>
+        )}
+
+        {/* Compétences clés */}
+        {analysis.keySkills.length > 0 && (
+          <div className="space-y-2">
+            <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Compétences clés</div>
+            <div className="flex flex-wrap gap-1">
+              {analysis.keySkills.map((skill, index) => (
+                <Badge key={index} variant="outline" className="text-xs">
+                  {skill}
+                </Badge>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="p-6 lg:p-8 max-w-5xl mx-auto space-y-8">
       <div className="flex items-center justify-between">
@@ -910,41 +1066,18 @@ const GenerateTestPage = () => {
             </div>
 
             <div className="glass-card p-4 mb-4">
-              <div className="flex items-center gap-2 mb-2">
+              <div className="flex items-center gap-2 mb-4">
                 <Sparkles className="w-4 h-4 text-primary" />
                 <h3 className="text-sm font-semibold text-foreground">Analyse IA du CV</h3>
               </div>
-              <div className="text-sm text-muted-foreground whitespace-pre-line">
-                {analysis.split('\n').map((line, index) => {
-                  if (line.startsWith('**') && line.endsWith('**')) {
-                    return (
-                      <div key={index} className="font-semibold text-foreground mt-2">
-                        {line.replace(/\*\*/g, '')}
-                      </div>
-                    );
-                  } else if (line.startsWith('**')) {
-                    return (
-                      <div key={index} className="font-semibold text-foreground">
-                        {line.replace(/\*\*/g, '')}
-                      </div>
-                    );
-                  } else if (line.startsWith('•')) {
-                    return (
-                      <div key={index} className="ml-4 text-muted-foreground">
-                        {line}
-                      </div>
-                    );
-                  } else if (line.trim() === '') {
-                    return <div key={index} className="h-2" />;
-                  } else {
-                    return (
-                      <div key={index} className="text-muted-foreground">
-                        {line}
-                      </div>
-                    );
-                  }
-                })}
-              </div>
+              
+              {analysis ? (
+                renderAnalysis()
+              ) : (
+                <div className="text-sm text-muted-foreground">
+                  Analyse IA du CV en cours de traitement...
+                </div>
+              )}
             </div>
 
             {/* Section CV */}
@@ -980,7 +1113,6 @@ const GenerateTestPage = () => {
                         <span className="font-medium text-blue-600">CV analysé par l'IA</span>
                       </div>
                       <p>L'analyse a été effectuée sur ce fichier le {new Date(technicalProfile.createdAt).toLocaleDateString('fr-FR')}</p>
-                      <p className="text-xs text-gray-500 mt-1">CV ID: {technicalProfile.cvId}</p>
                     </div>
                   )}
                 </div>
@@ -1004,19 +1136,6 @@ const GenerateTestPage = () => {
                 </div>
               )}
             </div>
-
-            {skills.length > 0 && (
-              <div className="mb-4">
-                <h3 className="text-sm font-semibold text-foreground mb-2">Compétences détectées</h3>
-                <div className="flex flex-wrap gap-2">
-                  {skills.map((s) => (
-                    <Badge key={s.name} variant="secondary" className="text-xs">
-                      {s.name} · {s.level}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
 
           <div className="glass-card p-6">
@@ -1047,12 +1166,6 @@ const GenerateTestPage = () => {
               }`}>
                 {isCandidateEligible() ? "Candidat ÉLIGIBLE" : "Candidat NON ÉLIGIBLE"}
               </Badge>
-              <p className="text-xs text-muted-foreground">
-                {isCandidateEligible() 
-                  ? "Prêt pour la génération de test" 
-                  : "Non éligible — domaine incompatible ou non détecté"
-                }
-              </p>
             </div>
           </div>
         </div>
@@ -1176,17 +1289,6 @@ const GenerateTestPage = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {existingTest ? (
                 <>
-                  {existingTest.existingTestStatus !== 'SUBMITTED' && (
-                    <Button 
-                      variant="default"
-                      onClick={() => navigate(`/manager/test-review/${existingTest.existingTestId}`)}
-                      className="flex items-center gap-2"
-                    >
-                      <Check className="w-4 h-4" />
-                      Voir le test existant
-                    </Button>
-                  )}
-                  
                   {existingTest.existingTestStatus === 'SUBMITTED' && (
                     <Button 
                       variant="default"
@@ -1198,15 +1300,17 @@ const GenerateTestPage = () => {
                     </Button>
                   )}
                   
-                  <Button 
-                    variant="destructive"
-                    onClick={handleReject}
-                    disabled={updateCandidatureMutation.isPending}
-                    className="bg-red-600 hover:bg-red-700 text-white border-red-600 hover:border-red-700 flex items-center gap-2"
-                  >
-                    <X className="w-4 h-4" />
-                    {updateCandidatureMutation.isPending ? 'Refus...' : 'Refuser'}
-                  </Button>
+                  {existingTest.existingTestStatus === 'SUBMITTED' && (
+                    <Button 
+                      variant="destructive"
+                      onClick={handleReject}
+                      disabled={updateCandidatureMutation.isPending}
+                      className="bg-red-600 hover:bg-red-700 text-white border-red-600 hover:border-red-700 flex items-center gap-2"
+                    >
+                      <X className="w-4 h-4" />
+                      {updateCandidatureMutation.isPending ? 'Refus...' : 'Refuser'}
+                    </Button>
+                  )}
                 </>
               ) : (
                 <>
@@ -1239,7 +1343,11 @@ const GenerateTestPage = () => {
                   {existingTest 
                     ? existingTest.existingTestStatus === 'SUBMITTED' 
                       ? "Le test a été soumis par le candidat. Vous pouvez consulter les résultats."
-                      : "Le test existant sera envoyé au candidat par email. Vous pouvez le consulter à tout moment."
+                      : existingTest.existingTestStatus === 'READY'
+                      ? "Le test est prêt et a été envoyé au candidat. En attente de sa réponse."
+                      : existingTest.existingTestStatus === 'SENT' || existingTest.existingTestStatus === 'IN_PROGRESS'
+                      ? "Le test a été envoyé au candidat. En attente de sa réponse."
+                      : "Le test est en cours de traitement."
                     : `Le test sera généré automatiquement par notre service IA. Un lien d'accès unique sera envoyé à <strong>${candidateData?.email}</strong>.`
                   }
                 </span>

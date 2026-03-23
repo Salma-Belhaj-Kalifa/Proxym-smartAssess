@@ -1,6 +1,4 @@
-// Configuration complète des endpoints du backend SmartAssess (sans /api car le proxy l'ajoute déjà)
 export const API_ENDPOINTS = {
-  // Authentification
   AUTH: {
     LOGIN: '/auth/login',
     REGISTER: '/auth/register',
@@ -8,7 +6,6 @@ export const API_ENDPOINTS = {
     ME: '/auth/me'
   },
   
-  // Positions (offres de stage)
   POSITIONS: {
     BASE: '/positions',
     GET_ALL: '/positions',
@@ -20,7 +17,6 @@ export const API_ENDPOINTS = {
     TOGGLE_STATUS: (id: number) => `/positions/${id}/status`
   },
   
-  // Candidats
   CANDIDATES: {
     BASE: '/candidates',
     GET_ALL: '/candidates',
@@ -33,7 +29,6 @@ export const API_ENDPOINTS = {
     CV_UPLOAD: '/candidates/cv'
   },
 
-  // Candidatures
   CANDIDATURES: {
     BASE: '/candidatures',
     GET_ALL: '/candidatures',
@@ -46,7 +41,6 @@ export const API_ENDPOINTS = {
     UPDATE_STATUS: (id: number) => `/candidatures/${id}/status`
   },
   
-  // Utilisateurs
   USERS: {
     BASE: '/users',
     GET_BY_ID: (id: number) => `/users/${id}`,
@@ -57,7 +51,6 @@ export const API_ENDPOINTS = {
     DELETE: (id: number) => `/users/${id}`
   },
   
-  // Managers
   MANAGERS: {
     BASE: '/managers',
     GET_ALL: '/managers',
@@ -68,7 +61,6 @@ export const API_ENDPOINTS = {
     DELETE_ME: '/managers/me'
   },
   
-  // HR
   HR: {
     BASE: '/hr',
     GET_ALL: '/hr',
@@ -78,7 +70,6 @@ export const API_ENDPOINTS = {
     DELETE: (id: number) => `/hr/${id}`
   },
   
-  // Tests
   TESTS: {
     BASE: '/tests',
     GET_ALL: '/tests',
@@ -90,14 +81,12 @@ export const API_ENDPOINTS = {
     GENERATE: '/tests/generate'
   },
   
-  // CV Upload
   CV: {
     UPLOAD: '/candidates/cv',
     ANALYZE: '/cv/analyse',
     DOWNLOAD: (id: number) => `/cv/${id}`
   },
   
-  // Health
   HEALTH: {
     CHECK: '/health'
   }

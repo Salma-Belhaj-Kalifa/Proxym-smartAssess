@@ -1,8 +1,9 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { queryClient } from "./lib/queryClient";
 import HomePage from "./pages/common/HomePage";
 import RecruiterLoginPage from "./pages/manager/RecruiterLoginPage";
 import CandidateLoginPage from "./pages/candidate/CandidateLoginPage";
@@ -30,8 +31,6 @@ import QuestionValidationPage from "./pages/manager/QuestionValidationPage";
 import PositionApplicationsPage from "./pages/manager/PositionApplicationsPage";
 import PositionDetailPage from "./pages/manager/PositionDetailPage";
 import NotFound from "./pages/common/NotFound";
-
-const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>

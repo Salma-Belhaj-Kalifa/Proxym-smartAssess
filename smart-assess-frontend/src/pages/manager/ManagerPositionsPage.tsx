@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
-import { usePositions, useCandidatures, useCreatePosition, useUpdatePosition, useDeletePosition, useTogglePositionStatus } from '@/hooks/useApiHooks';
+import { usePositions, useCandidatures, useCreatePosition, useUpdatePosition, useDeletePosition, useTogglePositionStatus } from '@/features';
 import { PositionStatusBadge } from '@/components/PositionStatusBadge';
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -39,7 +39,7 @@ const ManagerPositionsPage: React.FC = () => {
   // Obtenir le nombre de candidats pour une position
   const getApplicantsCount = (positionId: number) => {
     return candidatures.filter(candidature => 
-      candidature.internshipPositionId === positionId
+      candidature.positionId === positionId
     ).length;
   };
 

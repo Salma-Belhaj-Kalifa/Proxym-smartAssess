@@ -8,6 +8,7 @@ import requests
 import asyncio
 from app.utils.helpers import extract_json_from_response
 from app.utils.cv_validator import validate_cv_text
+
 PROMPT_TEMPLATE = """
 You are an expert CV analyzer for automated MCQ generation. Your goal is to extract a candidate's complete technical profile and relevant information.
 
@@ -16,41 +17,61 @@ Return a STRICT JSON with the following sections:
 1) Basic Information
 - full_name, email, phone
 
-2) Technical Information
-- domain: Identify the candidate's PRIMARY professional domain (e.g., Software Engineering, Data Science, DevOps, etc.)
-- technologies: Group ALL mentioned technologies and skills into logical categories inferred from the CV. Use categories dynamically based on context.
+2) Summary
+- summary: Create a concise, professional summary in THIRD PERSON (2-3 sentences maximum) that captures the candidate's essence. Include:
+  * Core expertise and specialization
+  * Career level and experience highlight
+  * Key strengths or notable achievements
+  * DO NOT use first-person pronouns (I, my, me). Use third-person (the candidate, they, he/she) or objective descriptions
+  * Keep it brief and impactful - maximum 2-3 sentences
+- career_level: Determine based on experience and projects (e.g., Junior, Intermediate, Senior)
+- years_of_experience: Total years of experience extracted from CV
+- key_skills: Top 5 most relevant technical and soft skills
+- strengths: Top 3 professional strengths
+- specializations: 2-3 key areas of expertise (e.g., "Full-Stack Development", "Cloud Architecture", "AI/ML Integration")
+
+3) Technical Information
+- domain: Identify candidate's PRIMARY professional domain (e.g., Software Engineering, Data Science, DevOps, etc.)
+- technologies: Group ALL mentioned technologies and skills into logical categories inferred from CV. Use categories dynamically based on context.
 - Capture every technology mentioned anywhere in the CV.
 - If a technology appears multiple times, include it once with the highest skill level observed.
 - skill_level: Assign beginner/intermediate/advanced based on contextual proficiency.
 - Consider context from all sections (projects, experience, education, certifications).
 
-3) Certifications
+4) Certifications
 - Extract ONLY explicitly mentioned certifications.
 - Include certification_name, issuing_organization (if mentioned, or empty string if not found), issue_date (if mentioned, or empty string if not found), if any info missing, leave it empty.
 - Do NOT include diplomas, degrees, or job titles.
 
-4) Soft Skills
+5) Soft Skills
 - Extract ONLY explicitly mentioned complete soft skills.
 - Dynamically group into categories: communication_skills, leadership_skills, problem_solving, teamwork, time_management, adaptability.
 - If none mentioned, leave arrays empty.
 
-5) Projects
-- For each project in the CV, extract the following JSON fields:
-
+6) Projects
+- For each project in CV, extract following JSON fields:
 - name: exact project name
 - tech_stack: list of technologies used
-- role: very Short, realistic description of the candidate's contribution. 
-        Infer dynamically from the technologies and context mentioned in the CV. 
+- role: very Short, realistic description of candidate's contribution. 
+        Infer dynamically from technologies and context mentioned in the CV. 
         Do NOT describe the whole project here; only what the candidate did.
+- impact: Brief description of project impact or results achieved
+
+7) Education
+- Extract education information with degree, institution, field, start_date, end_date
+
+8) Languages
+- Extract all mentioned languages with proficiency levels
 
 CRITICAL RULES:
 - Do NOT include project description in the "role" field.
 - Keep "role" concise and contribution-focused.
 - Extract only information explicitly mentioned in the CV.
-- Include every technology at least once in the tech_stack.
+- Include every technology at least once in tech_stack.
 - Use conservative skill levels if unsure.
 - Avoid overfitting; do not use pre-defined role labels.
 
+IMPORTANT: ALWAYS include a comprehensive Summary section with career_level, years_of_experience, key_skills, strengths, and specializations. The summary should be unique, compelling, and highlight the candidate's professional value and potential.
 
 CV TEXT:
 {cv_text}
