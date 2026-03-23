@@ -1,9 +1,8 @@
 import { useQuery, useMutation, useQueryClient as useTanStackQueryClient } from '@tanstack/react-query';
-import apiClient from '@/lib/api';
+import apiClient, { getAuthToken, setAuthToken, removeAuthToken, getAuthUserData, setAuthUserData, removeAuthUserData } from '@/lib/api';
 import { API_ENDPOINTS } from '@/config/apiEndpoints';
 import { toast } from 'sonner';
 import { authService } from '@/services/apiService';
-import { setCookie, deleteCookie, getJsonCookie, setJsonCookie, clearAuthCookies } from '@/utils/cookies';
 import { useQueryClient } from '@/hooks/useQueryClient';
 
 export interface User {
@@ -44,14 +43,15 @@ export const useAuth = () => {
   const loginMutation = useMutation({
     mutationFn: authService.login,
     onSuccess: (data) => {
-      setCookie('auth_token', data.token);
-      setJsonCookie('user_data', data);
+      setAuthToken(data.token);
+      setAuthUserData(data);
       queryClient.invalidateQueries();
     },
     onError: (error: any) => {
       console.error('Login error:', error);
       // Nettoyage complet en cas d'erreur
-      clearAuthCookies();
+      removeAuthToken();
+      removeAuthUserData();
       queryClient.clear();
     }
   });
@@ -59,14 +59,15 @@ export const useAuth = () => {
   const registerMutation = useMutation({
     mutationFn: authService.register,
     onSuccess: (data) => {
-      setCookie('auth_token', data.token);
-      setJsonCookie('user_data', data);
+      setAuthToken(data.token);
+      setAuthUserData(data);
       queryClient.invalidateQueries();
     },
     onError: (error: any) => {
       console.error('Register error:', error);
       // Nettoyage complet en cas d'erreur
-      clearAuthCookies();
+      removeAuthToken();
+      removeAuthUserData();
       queryClient.clear();
     }
   });
@@ -74,15 +75,17 @@ export const useAuth = () => {
   const logoutMutation = useMutation({
     mutationFn: authService.logout,
     onSuccess: () => {
-      // Nettoyage complet des cookies
-      clearAuthCookies();
+      // Nettoyage complet des données d'authentification
+      removeAuthToken();
+      removeAuthUserData();
       queryClient.clear();
       window.location.href = '/';
     },
     onError: (error: any) => {
       console.error('Logout error:', error);
       // Forcer le nettoyage même en cas d'erreur
-      clearAuthCookies();
+      removeAuthToken();
+      removeAuthUserData();
       queryClient.clear();
       window.location.href = '/';
     },
@@ -94,7 +97,7 @@ export const useAuth = () => {
     logout: logoutMutation.mutateAsync,
     isLoading: loginMutation.isPending || registerMutation.isPending,
     error: loginMutation.error || registerMutation.error,
-    user: getJsonCookie<User>('user_data'),
+    user: getAuthUserData(),
   };
 };
 

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Briefcase, Users, FileText, Plus, AlertCircle, Eye, Clock, TrendingUp, CheckCircle, MoreHorizontal, Award, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Briefcase, Users, FileText, Plus, AlertCircle, Eye, Clock, TrendingUp, CheckCircle, MoreHorizontal, Award, ChevronLeft, ChevronRight, Building, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -38,20 +38,39 @@ const DashboardPage = () => {
       setPositions(positionsData);
       setCandidates(candidatesData);
       
+      // Créer une map des candidats pour un accès rapide
+      const candidateMap = new Map(candidatesData.map(c => [c.id, c]));
+      const positionMap = new Map(positionsData.map(p => [p.id, p]));
+      
       // Charger les candidatures individuellement pour chaque candidat
       const allCandidatures = [];
       for (const candidate of candidatesData) {
         try {
           const candidateCandidatures = await candidatureService.getByCandidate(candidate.id);
-          allCandidatures.push(...candidateCandidatures);
+          
+          // Joindre les données du candidat et du poste avec chaque candidature
+          const enrichedCandidatures = candidateCandidatures.map(candidature => ({
+            ...candidature,
+            candidate: candidateMap.get(candidature.candidateId) || {
+              id: candidature.candidateId,
+              firstName: 'Candidat',
+              lastName: `#${candidature.candidateId}`,
+              email: 'email@inconnu'
+            },
+            position: positionMap.get(candidature.internshipPositionId) || {
+              id: candidature.internshipPositionId,
+              title: `Poste #${candidature.internshipPositionId}`
+            }
+          }));
+          
+          allCandidatures.push(...enrichedCandidatures);
         } catch (error) {
           // Ignorer les erreurs pour les candidats sans candidatures
         }
       }
       setCandidatures(allCandidatures);
       
-      // Stratégie optimisée : essayer uniquement les tests qui ont une forte probabilité d'exister
-      // Basé sur les logs du backend, seul le test 38 existe réellement
+      // Charger les tests avec les données des candidats
       const probableTestIds = [38]; // Uniquement les tests qui existent vraiment
       
       const validTests = [];
@@ -59,8 +78,42 @@ const DashboardPage = () => {
       for (const testId of probableTestIds) {
         try {
           const testDetails = await testService.getTestForReview(testId);
-         
-          validTests.push({ id: testId, ...testDetails });
+          
+          // Débogage pour voir la structure exacte des données
+          console.log(`Test ${testId} details:`, {
+            candidateId: testDetails.candidateId,
+            internshipPositionId: testDetails.internshipPositionId,
+            allKeys: Object.keys(testDetails),
+            testDetails
+          });
+          
+          // Gérer les IDs undefined avec fallback sur l'ID du test
+          const actualCandidateId = testDetails.candidateId || testDetails.candidate?.id || testId;
+          const actualPositionId = testDetails.internshipPositionId || 
+                                testDetails.position?.id || 
+                                testDetails.positionId ||
+                                testId;
+          
+          // Joindre les données du candidat avec le test
+          const enrichedTest = {
+            id: testId,
+            ...testDetails,
+            candidate: candidateMap.get(actualCandidateId) || {
+              id: actualCandidateId,
+              firstName: 'Candidat',
+              lastName: `#${actualCandidateId}`,
+              email: 'email@inconnu'
+            },
+            // Ajouter les données du poste si disponible
+            internshipPosition: positionMap.get(actualPositionId) || {
+              id: actualPositionId,
+              title: `Poste #${actualPositionId}`
+            }
+          };
+          
+          console.log(`Test ${testId} enriched:`, enrichedTest);
+          
+          validTests.push(enrichedTest);
         } catch (error) {
           if (error.response?.status !== 500) {
             console.log(`Test ${testId} non disponible:`, error.message);
@@ -138,19 +191,29 @@ const DashboardPage = () => {
       else if (test.evaluationResult?.finalScore) score = test.evaluationResult.finalScore;
       
       const scoreText = score !== 'N/A' ? ` • Score: ${score}%` : '';
+      const candidateName = test.candidate?.firstName && test.candidate?.lastName 
+        ? `${test.candidate.firstName} ${test.candidate.lastName}` 
+        : `Candidat #${test.candidateId || 'Inconnu'}`;
       
       return {
-        text: <>Test <strong>{test.candidate?.firstName} {test.candidate?.lastName}</strong> soumis{scoreText}</>,
+        text: <>Test <strong>{candidateName}</strong> soumis{scoreText}</>,
         time: `Il y a ${Math.floor((Date.now() - new Date(test.createdAt).getTime()) / (1000 * 60 * 60))}h`,
         type: 'test'
       };
     }) || []),
     // Nouveaux candidats
-    ...(candidates.slice(-3).map(candidate => ({
-      text: <>Nouveau candidat <strong>{candidate.firstName} {candidate.lastName}</strong> inscrit</>,
-      time: `Il y a ${Math.floor((Date.now() - new Date(candidate.createdAt).getTime()) / (1000 * 60 * 60))}h`,
-      type: 'candidate'
-    })) || []),
+    ...(candidates.slice(-3).map(candidate => {
+      const candidateName = candidate.firstName && candidate.lastName 
+        ? `${candidate.firstName} ${candidate.lastName}` 
+        : `Candidat #${candidate.id || 'Inconnu'}`;
+      const email = candidate.email ? ` (${candidate.email})` : '';
+      
+      return {
+        text: <>Nouveau candidat <strong>{candidateName}</strong>{email} inscrit</>,
+        time: `Il y a ${Math.floor((Date.now() - new Date(candidate.createdAt).getTime()) / (1000 * 60 * 60))}h`,
+        type: 'candidate'
+      };
+    }) || []),
     // Candidatures en attente
     ...(candidatures.slice(-3).filter(c => c.status === 'PENDING').map(candidature => {
       const candidatureDate = candidature.createdAt || candidature.appliedAt;
@@ -158,18 +221,33 @@ const DashboardPage = () => {
         `Il y a ${Math.floor((Date.now() - new Date(candidatureDate).getTime()) / (1000 * 60 * 60))}h` :
         'Date inconnue';
       
+      const candidateName = candidature.candidate?.firstName && candidature.candidate?.lastName 
+        ? `${candidature.candidate.firstName} ${candidature.candidate.lastName}` 
+        : `Candidat #${candidature.candidateId || 'Inconnu'}`;
+      
+      const positionName = candidature.position?.title 
+        ? ` pour ${candidature.position.title}` 
+        : candidature.internshipPositionId 
+          ? ` pour Poste #${candidature.internshipPositionId}` 
+          : '';
+      
       return {
-        text: <>Candidature de <strong>{candidature.candidate?.firstName} {candidature.candidate?.lastName}</strong> en attente de review</>,
+        text: <>Candidature de <strong>{candidateName}</strong>{positionName} en attente de review</>,
         time: timeAgo,
         type: 'candidature'
       };
     }) || []),
     // Nouveaux postes
-    ...(positions.slice(-1).map(position => ({
-      text: <>Nouveau poste <strong>{position.title}</strong> publié</>,
-      time: `Hier, ${new Date(position.createdAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`,
-      type: 'position'
-    })) || [])
+    ...(positions.slice(-1).map(position => {
+      const positionTitle = position.title || `Poste #${position.id || 'Inconnu'}`;
+      const createdBy = position.createdByEmail || `Manager #${position.createdBy || 'Inconnu'}`;
+      
+      return {
+        text: <>Nouveau poste <strong>{positionTitle}</strong> publié par {createdBy}</>,
+        time: `Hier, ${new Date(position.createdAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`,
+        type: 'position'
+      };
+    }) || [])
   ].sort((a, b) => {
     const timeA = parseInt(a.time.match(/\d+/)?.[0] || '0');
     const timeB = parseInt(b.time.match(/\d+/)?.[0] || '0');
@@ -327,19 +405,44 @@ const DashboardPage = () => {
                     
                     const scoreText = score !== 'N/A' ? ` • Score: ${score}%` : '';
                     
+                    // Gérer les données manquantes du candidat avec fallback robuste
+                    const candidateName = test.candidate?.firstName && test.candidate?.lastName 
+                      ? `${test.candidate.firstName} ${test.candidate.lastName}`
+                      : test.candidate?.firstName 
+                        ? test.candidate.firstName
+                        : test.candidate?.id && !isNaN(test.candidate.id)
+                          ? `Candidat #${test.candidate.id}`
+                          : test.candidateId && !isNaN(test.candidateId)
+                            ? `Candidat #${test.candidateId}`
+                            : test.id && !isNaN(test.id)
+                              ? `Candidat #${test.id}`
+                              : 'Candidat inconnu';
+                    
+                    // Gérer les données manquantes du poste avec fallback robuste
+                    const positionTitle = test.internshipPosition?.title || 
+                                       test.position?.title || 
+                                       test.positionTitle ||
+                                       (test.internshipPosition?.id && !isNaN(test.internshipPosition.id))
+                                         ? `Poste #${test.internshipPosition.id}`
+                                         : (test.internshipPositionId && !isNaN(test.internshipPositionId))
+                                           ? `Poste #${test.internshipPositionId}`
+                                           : (test.positionId && !isNaN(test.positionId))
+                                             ? `Poste #${test.positionId}`
+                                             : 'Poste non spécifié';
+                    
                     return (
                       <div key={index} className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
                         <div className="flex-1">
                           <div className="flex items-center gap-2">
                             <span className="font-medium text-sm">
-                              {test.candidate?.firstName} {test.candidate?.lastName}
+                              {candidateName}
                             </span>
                             <Badge variant={test.status === 'SUBMITTED' ? 'default' : 'secondary'}>
                               {test.status === 'SUBMITTED' ? 'Soumis' : 'En cours'}
                             </Badge>
                           </div>
                           <div className="text-xs text-muted-foreground mt-2">
-                            {test.internshipPosition?.title}{scoreText}
+                            {positionTitle}{scoreText}
                           </div>
                         </div>
                         <div className="text-xs text-muted-foreground">
@@ -394,12 +497,47 @@ const DashboardPage = () => {
                 {paginatedActivities.length === 0 ? (
                   <p className="text-muted-foreground text-sm py-4">Aucune activité récente</p>
                 ) : (
-                  paginatedActivities.map((activity, index) => (
-                    <div key={index} className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
-                      <div className="text-sm flex-1">{activity.text}</div>
-                      <div className="text-xs text-muted-foreground ml-3">{activity.time}</div>
-                    </div>
-                  ))
+                  paginatedActivities.map((activity, index) => {
+                    const getActivityIcon = () => {
+                      switch (activity.type) {
+                        case 'test':
+                          return <FileText className="w-4 h-4 text-blue-500" />;
+                        case 'candidate':
+                          return <User className="w-4 h-4 text-green-500" />;
+                        case 'candidature':
+                          return <Briefcase className="w-4 h-4 text-orange-500" />;
+                        case 'position':
+                          return <Building className="w-4 h-4 text-purple-500" />;
+                        default:
+                          return <Clock className="w-4 h-4 text-gray-500" />;
+                      }
+                    };
+
+                    const getActivityBgColor = () => {
+                      switch (activity.type) {
+                        case 'test':
+                          return 'bg-blue-50 border-blue-200';
+                        case 'candidate':
+                          return 'bg-green-50 border-green-200';
+                        case 'candidature':
+                          return 'bg-orange-50 border-orange-200';
+                        case 'position':
+                          return 'bg-purple-50 border-purple-200';
+                        default:
+                          return 'bg-gray-50 border-gray-200';
+                      }
+                    };
+
+                    return (
+                      <div key={index} className={`flex items-center justify-between p-4 rounded-lg border ${getActivityBgColor()}`}>
+                        <div className="flex items-center gap-3 flex-1">
+                          {getActivityIcon()}
+                          <div className="text-sm">{activity.text}</div>
+                        </div>
+                        <div className="text-xs text-muted-foreground ml-3 whitespace-nowrap">{activity.time}</div>
+                      </div>
+                    );
+                  })
                 )}
               </div>
               

@@ -1,4 +1,4 @@
-import apiClient from '@/lib/api';
+import apiClient, { removeAuthToken, removeAuthUserData } from '@/lib/api';
 import API_ENDPOINTS from '@/config/apiEndpoints';
 
 // Types pour les réponses du backend
@@ -108,8 +108,9 @@ export const authService = {
     } catch (error) {
       console.error('Erreur lors du logout API:', error);
     } finally {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
+      // Utiliser les nouvelles fonctions unifiées
+      removeAuthToken();
+      removeAuthUserData();
     }
   },
   
@@ -118,9 +119,9 @@ export const authService = {
         error?.message?.includes('User not found') ||
         error?.response?.data?.error?.includes('User not found')) {
       console.warn('Utilisateur non trouvé, nettoyage du localStorage');
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      window.location.href = '/login';
+      // Utiliser les nouvelles fonctions unifiées
+      removeAuthToken();
+      removeAuthUserData();
       return true;
     }
     return false;

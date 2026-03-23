@@ -11,7 +11,7 @@ import { authService, candidateService } from '@/services/apiService';
 
 export default function CandidateProfilePage() {
   const { user } = useAuth();
-  const { data: profile, isLoading, error } = useProfile(user?.id || 0);
+  const { data: profile, isLoading, error } = useProfile(user?.id && user?.id > 0 ? user.id : null);
   const updateProfileMutation = useUpdateProfile();
   const [isEditing, setIsEditing] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -37,6 +37,13 @@ export default function CandidateProfilePage() {
       });
     }
   }, [profileData?.firstName, profileData?.lastName, profileData?.email, profileData?.phone]);
+
+  // Rediriger si l'utilisateur n'est pas connecté
+  useEffect(() => {
+    if (!user) {
+      window.location.href = '/candidat/login';
+    }
+  }, [user]);
 
   const handleCancel = () => {
     // Remettre les données originales du profil
@@ -93,15 +100,12 @@ export default function CandidateProfilePage() {
 
   const handleDeleteAccount = async () => {
     try {
-      // Appeler l'API de suppression du profil
       await candidateService.deleteMyProfile();
       
-      // Si la suppression réussit, déconnecter et rediriger
       await authService.logout();
       window.location.href = '/';
     } catch (error) {
       console.error('Erreur lors de la suppression du compte:', error);
-      // Afficher un message d'erreur à l'utilisateur
       alert('Erreur lors de la suppression du compte. Veuillez réessayer.');
     } finally {
       setShowDeleteModal(false);

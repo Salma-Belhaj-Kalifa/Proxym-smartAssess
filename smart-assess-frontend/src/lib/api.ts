@@ -1,23 +1,70 @@
 import axios from 'axios';
-import { getCookie, deleteCookie, clearAuthCookies } from '@/utils/cookies';
 
 const API_BASE_URL = 'http://localhost:8080/api';
+
+// Fonctions pour gérer l'authentification avec localStorage
+const getAuthToken = () => {
+  return localStorage.getItem('auth_token');
+};
+
+const setAuthToken = (token: string) => {
+  localStorage.setItem('auth_token', token);
+};
+
+const removeAuthToken = () => {
+  localStorage.removeItem('auth_token');
+};
+
+const getAuthUserData = () => {
+  const userData = localStorage.getItem('user_data');
+  return userData ? JSON.parse(userData) : null;
+};
+
+const setAuthUserData = (userData: any) => {
+  localStorage.setItem('user_data', JSON.stringify(userData));
+};
+
+const removeAuthUserData = () => {
+  localStorage.removeItem('user_data');
+};
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL, // Utiliser directement l'URL du backend
   timeout: 10000,
-  withCredentials: true // Important pour envoyer les cookies
+  withCredentials: false // Désactiver les cookies pour utiliser localStorage
 });
 
 apiClient.interceptors.request.use(
   (config) => {
-    const token = getCookie('auth_token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+    const token = getAuthToken(); // Utiliser localStorage au lieu des cookies
+    
+    // Ne pas ajouter de token pour les requêtes d'authentification
+    const isAuthRequest = config.url?.includes('/auth/login') || 
+                        config.url?.includes('/auth/register') ||
+                        config.url?.includes('/auth/refresh');
+    
+    if (!isAuthRequest) {
+      // Logging pour diagnostiquer les problèmes d'authentification
+      if (config.url?.includes('/users/') && config.url?.includes('/profile')) {
+        console.log('🔍 Requête de profil utilisateur:', {
+          url: config.url,
+          hasToken: !!token,
+          tokenLength: token?.length || 0,
+          headers: config.headers
+        });
+      }
+      
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+      } else {
+        console.warn('⚠️ Aucun token disponible pour la requête:', config.url);
+      }
     }
+    
     return config;
   },
   (error) => {
+    console.error('❌ Erreur dans l\'intercepteur de requête:', error);
     return Promise.reject(error);
   }
 );
@@ -43,8 +90,9 @@ apiClient.interceptors.response.use(
           errorMessage
         });
         
-        // Nettoyage complet des cookies
-        clearAuthCookies();
+        // Nettoyage complet des données d'authentification (localStorage + cookies)
+        removeAuthToken();
+        removeAuthUserData();
         
         // Afficher un message à l'utilisateur
         const reason = isUserDeleted ? 'Compte utilisateur supprimé' : 'Session expirée';
@@ -77,8 +125,9 @@ apiClient.interceptors.response.use(
                             errorMessage.includes('not found with email');
       
       if (isUserDeleted) {
-        console.warn('Erreur 500 due à utilisateur supprimé, nettoyage des cookies');
-        clearAuthCookies();
+        console.warn('Erreur 500 due à utilisateur supprimé, nettoyage des données d\'authentification');
+        removeAuthToken();
+        removeAuthUserData();
         
         // Afficher un message d'erreur
         try {
@@ -101,3 +150,13 @@ apiClient.interceptors.response.use(
 );
 
 export default apiClient;
+
+// Exporter les fonctions d'authentification pour les utiliser dans d'autres composants
+export { 
+  getAuthToken, 
+  setAuthToken, 
+  removeAuthToken, 
+  getAuthUserData, 
+  setAuthUserData, 
+  removeAuthUserData 
+};

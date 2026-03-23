@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from 'sonner';
+import { useAuth } from '@/hooks/useApiHooks';
 
 const CandidateLoginPage: React.FC = () => {
   const [formData, setFormData] = useState({
@@ -16,26 +17,19 @@ const CandidateLoginPage: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
+  
+  const { login, user } = useAuth();
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setIsLoading(true);
-
-    try {
-      setTimeout(() => {
-        localStorage.setItem('userType', 'candidate');
-        localStorage.setItem('isAuthenticated', 'true');
-        toast.success('Connexion réussie !');
+  // Vérification si déjà connecté
+  React.useEffect(() => {
+    if (user) {
+      if (user.role === 'CANDIDATE') {
         navigate('/candidat/dashboard');
-        setIsLoading(false);
-      }, 1000);
-      
-    } catch (error) {
-      console.error('Erreur de connexion:', error);
-      toast.error('Échec de la connexion. Vérifiez vos identifiants.');
-      setIsLoading(false);
+      } else {
+        navigate('/');
+      }
     }
-  };
+  }, [user, navigate]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = e.target;
@@ -43,6 +37,29 @@ const CandidateLoginPage: React.FC = () => {
       ...prev,
       [name]: type === 'checkbox' ? checked : value
     }));
+  };
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setIsLoading(true);
+
+    try {
+      const result = await login({ email: formData.email, password: formData.password });
+      
+      if (!result || !result.user) {
+        toast.error('Email ou mot de passe incorrect');
+        return;
+      }
+
+      toast.success('Connexion réussie !');
+      navigate('/candidat/dashboard');
+      
+    } catch (error: any) {
+      console.error('Erreur de connexion:', error);
+      toast.error('Échec de la connexion. Vérifiez vos identifiants.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (

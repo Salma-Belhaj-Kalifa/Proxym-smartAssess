@@ -60,6 +60,7 @@ const App = () => (
           
           {/* Manager Routes */}
           <Route path="/manager" element={<ManagerLayout />}>
+            <Route index element={<DashboardPage />} /> {/* Route par défaut */}
             <Route path="dashboard" element={<DashboardPage />} />
             <Route path="postes" element={<ManagerPositionsPage />} />
             <Route path="postes/:id" element={<PositionDetailPage />} />
