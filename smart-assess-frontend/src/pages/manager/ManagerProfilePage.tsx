@@ -9,11 +9,14 @@ import { Badge } from '@/components/ui/badge';
 import { useAuth, useProfile, useUpdateProfile } from '@/hooks/useApiHooks';
 import { authService } from '@/services/apiService';
 import apiService from '@/services/apiService';
+import { removeAuthToken, removeAuthUserData } from '@/lib/api';
+import { useQueryClient } from '@/hooks/useQueryClient';
 
 export default function ManagerProfilePage() {
   const { user } = useAuth();
   const { data: profile, isLoading, error } = useProfile(user?.id || 0);
   const updateProfileMutation = useUpdateProfile();
+  const queryClient = useQueryClient();
   const [isEditing, setIsEditing] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   
@@ -74,9 +77,13 @@ export default function ManagerProfilePage() {
       // Appeler l'API de suppression du profil manager
       await apiService.managerService.deleteMyProfile();
       
-      // Si la suppression réussit, déconnecter et rediriger
-      await authService.logout();
-      window.location.href = '/';
+      // Nettoyage manuel pour éviter les redirections automatiques
+      removeAuthToken();
+      removeAuthUserData();
+      queryClient.clear();
+      
+      // Redirection directe vers la page de connexion manager
+      window.location.href = '/recruteur/connexion';
     } catch (error) {
       console.error('Erreur lors de la suppression du compte:', error);
       // Afficher un message d'erreur à l'utilisateur

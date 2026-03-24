@@ -2,18 +2,20 @@ import { useQuery } from '@tanstack/react-query';
 import { hrService } from './hrService';
 import { hrKeys } from './hrKeys';
 import type { HR, HRReport, HRMetrics } from './types';
+import { queryOptions } from '@/lib/queryClient';
 
 export const useHRList = () =>
   useQuery<HR[]>({
     queryKey: hrKeys.all,
     queryFn: hrService.getAll,
-    staleTime: 5 * 60 * 1000,
+    ...queryOptions.stable, 
   });
 
 export const useHR = (id: number) =>
   useQuery<HR>({
     queryKey: hrKeys.details(id),
     queryFn: () => hrService.getById(id),
+    ...queryOptions.stable, 
     enabled: !!id,
   });
 
@@ -21,19 +23,19 @@ export const useHRReports = () =>
   useQuery<HRReport[]>({
     queryKey: hrKeys.reports(),
     queryFn: hrService.getReports,
-    staleTime: 2 * 60 * 1000,
+    ...queryOptions.fresh, 
   });
 
 export const useHRMetrics = () =>
   useQuery<HRMetrics>({
     queryKey: [hrKeys.all, 'metrics'],
     queryFn: hrService.getMetrics,
-    staleTime: 1 * 60 * 1000,
+    ...queryOptions.realtime, 
   });
 
 export const useHRDashboard = () =>
   useQuery({
     queryKey: [hrKeys.all, 'dashboard'],
     queryFn: hrService.getDashboardData,
-    staleTime: 30 * 1000,
+    ...queryOptions.fresh, 
   });

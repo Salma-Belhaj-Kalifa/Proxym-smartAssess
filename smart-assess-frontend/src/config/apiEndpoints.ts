@@ -78,7 +78,10 @@ export const API_ENDPOINTS = {
     UPDATE: (id: number) => `/tests/${id}`,
     DELETE: (id: number) => `/tests/${id}`,
     QUESTIONS: (id: number) => `/tests/${id}/questions`,
-    GENERATE: '/tests/generate'
+    GENERATE: '/tests/generate',
+    SEND_EMAIL: (id: number) => `/tests/${id}/send-email`,
+    SUBMIT: (id: number) => `/tests/${id}/submit`,
+    START_TEST: (token: string) => `/tests/public/${token}/start`
   },
   
   CV: {

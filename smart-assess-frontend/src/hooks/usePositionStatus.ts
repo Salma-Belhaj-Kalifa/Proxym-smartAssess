@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import apiClient from '@/lib/api';
 import { API_ENDPOINTS } from '@/config/apiEndpoints';
+import { queryOptions } from '@/lib/queryClient';
 
 export const usePositionStatus = (positionId: number) => {
   return useQuery({
@@ -13,7 +14,7 @@ export const usePositionStatus = (positionId: number) => {
         throw error;
       }
     },
+    ...queryOptions.fresh, 
     enabled: !!positionId,
-    staleTime: 30 * 1000, // 30 secondes
   });
 };

@@ -46,7 +46,7 @@ apiClient.interceptors.request.use(
     if (!isAuthRequest) {
       // Logging pour diagnostiquer les problèmes d'authentification
       if (config.url?.includes('/users/') && config.url?.includes('/profile')) {
-        console.log('🔍 Requête de profil utilisateur:', {
+        console.log('Requête de profil utilisateur:', {
           url: config.url,
           hasToken: !!token,
           tokenLength: token?.length || 0,
@@ -57,7 +57,7 @@ apiClient.interceptors.request.use(
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
       } else {
-        console.warn('⚠️ Aucun token disponible pour la requête:', config.url);
+        console.warn('Aucun token disponible pour la requête:', config.url);
       }
     }
     

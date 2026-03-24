@@ -30,6 +30,7 @@ public class GeneratedTestController {
     private final CandidatureRepository candidatureRepository;
     private final TestQuestionRepository testQuestionRepository;
     private final TestSessionRepository testSessionRepository;
+    private final AnswerRepository answerRepository;
     private final TechnicalProfileService technicalProfileService;
     private final EmailService emailService;
     private final WebClient.Builder webClientBuilder;
@@ -37,6 +38,68 @@ public class GeneratedTestController {
 
     @Value("${app.frontend.url}")
     private String frontendUrl;
+
+    // =========================
+    // GET ALL TESTS
+    // =========================
+    @GetMapping
+    @PreAuthorize("hasRole('MANAGER')")
+    public ResponseEntity<Map<String, Object>> getAllTests() {
+        log.info("=== GET ALL TESTS CALLED ===");
+        
+        try {
+            List<GeneratedTest> allTests = generatedTestRepository.findAll();
+            log.info("Found {} tests in database", allTests.size());
+            
+            List<Map<String, Object>> testList = allTests.stream()
+                    .map(test -> {
+                        Map<String, Object> testMap = new HashMap<>();
+                        testMap.put("id", test.getId());
+                        testMap.put("token", test.getToken());
+                        testMap.put("status", test.getStatus().toString());
+                        testMap.put("createdAt", test.getCreatedAt());
+                        testMap.put("deadline", test.getDeadline());
+                        testMap.put("timeLimitMinutes", test.getTimeLimitMinutes());
+                        testMap.put("candidatureId", test.getCandidature() != null ? test.getCandidature().getId() : null);
+                        testMap.put("internshipPositionId", test.getInternshipPosition() != null ? test.getInternshipPosition().getId() : null);
+                        
+                        // Ajouter les informations du candidat si disponibles
+                        if (test.getCandidature() != null && test.getCandidature().getCandidate() != null) {
+                            Map<String, Object> candidateMap = new HashMap<>();
+                            candidateMap.put("id", test.getCandidature().getCandidate().getId());
+                            candidateMap.put("firstName", test.getCandidature().getCandidate().getFirstName());
+                            candidateMap.put("lastName", test.getCandidature().getCandidate().getLastName());
+                            candidateMap.put("email", test.getCandidature().getCandidate().getEmail());
+                            testMap.put("candidate", candidateMap);
+                        }
+                        
+                        // Ajouter les informations de la position si disponibles
+                        if (test.getInternshipPosition() != null) {
+                            Map<String, Object> positionMap = new HashMap<>();
+                            positionMap.put("id", test.getInternshipPosition().getId());
+                            positionMap.put("title", test.getInternshipPosition().getTitle());
+                            positionMap.put("company", test.getInternshipPosition().getCompany());
+                            testMap.put("internshipPosition", positionMap);
+                        }
+                        
+                        return testMap;
+                    })
+                    .collect(Collectors.toList());
+            
+            return ResponseEntity.ok(Map.of(
+                    "success", true,
+                    "tests", testList,
+                    "count", testList.size()
+            ));
+            
+        } catch (Exception e) {
+            log.error("Get all tests error", e);
+            return ResponseEntity.status(500).body(Map.of(
+                    "success", false,
+                    "error", e.getMessage()
+            ));
+        }
+    }
 
     // =========================
     // CHECK EXISTING TEST
@@ -98,39 +161,95 @@ public class GeneratedTestController {
             
             log.info("Test found: {} with status: {}", test.getId(), test.getStatus());
             
-            // Récupérer les questions du test
+            // Récupérer les questions du test avec les réponses du candidat
             List<Map<String, Object>> questions = test.getQuestions().stream()
-                    .map(q -> Map.of(
-                            "id", q.getId(),
-                            "questionText", q.getQuestionText(),
-                            "questionType", q.getQuestionType().toString(),
-                            "options", q.getOptions(),
-                            "correctAnswer", q.getCorrectAnswer(),
-                            "skillTag", q.getSkillTag(),
-                            "maxScore", q.getMaxScore(),
-                            "orderIndex", q.getOrderIndex()
-                    ))
+                    .map(q -> {
+                        // Récupérer la réponse du candidat pour cette question
+                        List<Answer> answers = answerRepository.findByQuestion_Id(q.getId());
+                        String candidateAnswer = null;
+                        Boolean isCorrect = false;
+                        Double scoreObtained = 0.0;
+                        
+                        if (!answers.isEmpty()) {
+                            Answer answer = answers.get(0); // Prendre la première réponse
+                            candidateAnswer = answer.getAnswerText();
+                            isCorrect = answer.getIsCorrect();
+                            scoreObtained = answer.getScoreObtained();
+                        }
+                        
+                        return Map.ofEntries(
+                        Map.entry("id", q.getId()),
+                        Map.entry("questionText", q.getQuestionText()),
+                        Map.entry("questionType", q.getQuestionType().toString()),
+                        Map.entry("options", q.getOptions()),
+                        Map.entry("correctAnswer", q.getCorrectAnswer()),
+                        Map.entry("skillTag", q.getSkillTag()),
+                        Map.entry("maxScore", q.getMaxScore()),
+                        Map.entry("orderIndex", q.getOrderIndex()),
+                        Map.entry("candidateAnswer", candidateAnswer), // Réponse du candidat
+                        Map.entry("isCorrect", isCorrect), // Si la réponse est correcte
+                        Map.entry("scoreObtained", scoreObtained) // Score obtenu
+                );
+                    })
                     .collect(Collectors.toList());
             
-            return ResponseEntity.ok(Map.of(
-                    "id", test.getId(),
-                    "token", test.getToken(),
-                    "status", test.getStatus().toString(),
-                    "createdAt", test.getCreatedAt(),
-                    "deadline", test.getDeadline(),
-                    "timeLimitMinutes", test.getTimeLimitMinutes(),
-                    "questions", questions,
-                    "internshipPosition", Map.of(
-                            "id", test.getInternshipPosition().getId(),
-                            "title", test.getInternshipPosition().getTitle()
-                    ),
-                    "candidate", Map.of(
-                            "id", test.getCandidature().getCandidate().getId(),
-                            "firstName", test.getCandidature().getCandidate().getFirstName(),
-                            "lastName", test.getCandidature().getCandidate().getLastName(),
-                            "email", test.getCandidature().getCandidate().getEmail()
-                    )
+            // Récupérer la session de test pour les informations temporelles
+            TestSession session = testSessionRepository.findFirstByTestIdOrderByStartedAtDesc(test.getId())
+                    .orElse(null);
+            
+            // Calculer les scores globaux
+            double totalScore = 0.0;
+            double maxScore = 0.0;
+            int correctAnswers = 0;
+            
+            for (Map<String, Object> question : questions) {
+                maxScore += ((Number) question.get("maxScore")).doubleValue();
+                if (question.get("scoreObtained") != null) {
+                    totalScore += ((Number) question.get("scoreObtained")).doubleValue();
+                }
+                if (Boolean.TRUE.equals(question.get("isCorrect"))) {
+                    correctAnswers++;
+                }
+            }
+            
+            double finalScore = maxScore > 0 ? (totalScore / maxScore) * 100 : 0;
+            
+            log.info("Test {} - Total: {}/{} ({}%), Correct: {}/{}", 
+                    id, totalScore, maxScore, finalScore, correctAnswers, questions.size());
+            
+            // Construire la réponse Map avec un builder pour éviter la limite de paramètres de Map.of()
+            Map<String, Object> response = new HashMap<>();
+            response.put("id", test.getId());
+            response.put("token", test.getToken());
+            response.put("status", test.getStatus().toString());
+            response.put("createdAt", test.getCreatedAt());
+            response.put("deadline", test.getDeadline());
+            response.put("timeLimitMinutes", test.getTimeLimitMinutes());
+            response.put("questions", questions);
+            response.put("internshipPosition", Map.of(
+                    "id", test.getInternshipPosition().getId(),
+                    "title", test.getInternshipPosition().getTitle()
             ));
+            response.put("candidate", Map.of(
+                    "id", test.getCandidature().getCandidate().getId(),
+                    "firstName", test.getCandidature().getCandidate().getFirstName(),
+                    "lastName", test.getCandidature().getCandidate().getLastName(),
+                    "email", test.getCandidature().getCandidate().getEmail()
+            ));
+            response.put("session", session != null ? Map.of(
+                    "startedAt", session.getStartedAt(),
+                    "submittedAt", session.getSubmittedAt(),
+                    "timeSpentMinutes", session.getTimeSpentMinutes()
+            ) : null);
+            response.put("scores", Map.of(
+                    "totalScore", totalScore,
+                    "maxScore", maxScore,
+                    "finalScore", finalScore,
+                    "correctAnswers", correctAnswers,
+                    "totalQuestions", questions.size()
+            ));
+            
+            return ResponseEntity.ok(response);
             
         } catch (Exception e) {
             log.error("Get test for review error for test {}: {}", id, e.getMessage(), e);
@@ -381,23 +500,45 @@ public class GeneratedTestController {
     @PostMapping("/public/{token}/start")
     public ResponseEntity<Map<String, Object>> startTest(@PathVariable String token) {
         try {
+            log.info("=== START TEST CALLED ===");
+            log.info("Token: {}", token);
+            
             GeneratedTest test = generatedTestRepository.findByToken(token)
                     .orElseThrow(() -> new RuntimeException("Test invalid"));
+            
+            log.info("Test found: {} with status: {}", test.getId(), test.getStatus());
+            log.info("Test questions count: {}", test.getQuestions() != null ? test.getQuestions().size() : 0);
+            log.info("Test candidature: {}", test.getCandidature() != null ? test.getCandidature().getId() : null);
+            
+            // Vérifier si le test a des questions
+            if (test.getQuestions() == null || test.getQuestions().isEmpty()) {
+                log.error("Test {} has no questions", test.getId());
+                return ResponseEntity.status(400).body(Map.of(
+                        "error", "Ce test n'a pas de questions. Veuillez contacter l'administrateur."
+                ));
+            }
+            
+            // Vérifier si le test n'est pas déjà démarré
+            if (test.getStatus() != TestStatus.READY) {
+                log.warn("Test {} is not ready for starting. Current status: {}", test.getId(), test.getStatus());
+                // Permettre quand même le démarrage mais avec un avertissement
+            }
 
             TestSession session = TestSession.builder()
                     .test(test)
                     .startedAt(LocalDateTime.now())
                     .build();
 
-            testSessionRepository.save(session);
+            TestSession savedSession = testSessionRepository.save(session);
+            log.info("Session created with ID: {}", savedSession.getId());
 
             return ResponseEntity.ok(Map.of(
                     "success", true,
-                    "sessionId", session.getId()
+                    "sessionId", savedSession.getId()
             ));
 
         } catch (Exception e) {
-            log.error("Start test error", e);
+            log.error("Start test error for token {}: {}", token, e.getMessage(), e);
             return ResponseEntity.status(500).body(Map.of("error", e.getMessage()));
         }
     }
@@ -424,7 +565,7 @@ public class GeneratedTestController {
             }
             
             @SuppressWarnings("unchecked")
-            Map<Integer, String> answers = (Map<Integer, String>) submissionData.get("answers");
+            Map<String, String> answers = (Map<String, String>) submissionData.get("answers");
             Integer timeSpent = (Integer) submissionData.get("timeSpent");
             
             // Find existing session or create new one
@@ -444,6 +585,45 @@ public class GeneratedTestController {
             
             testSessionRepository.save(session);
             
+            // ✅ SAUVEGARDER LES RÉPONSES DANS LA TABLE ANSWERS
+            log.info("Saving {} answers for test session {}", answers.size(), session.getId());
+            
+            List<Answer> savedAnswers = new ArrayList<>();
+            for (Map.Entry<String, String> answerEntry : answers.entrySet()) {
+                String questionIdStr = answerEntry.getKey();
+                String answerText = answerEntry.getValue();
+                
+                try {
+                    // Convertir l'ID de question en Integer puis en Long
+                    Integer questionId = Integer.parseInt(questionIdStr);
+                    
+                    // Récupérer la question correspondante
+                    TestQuestion question = testQuestionRepository.findById(questionId.longValue())
+                            .orElseThrow(() -> new RuntimeException("Question not found: " + questionId));
+                    
+                    // Créer l'objet Answer
+                    Answer answer = Answer.builder()
+                            .testSession(session)
+                            .question(question)
+                            .answerText(answerText)
+                            .selectedOption(answerText) // Pour les QCM
+                            .isCorrect(answerText.equals(question.getCorrectAnswer()))
+                            .scoreObtained(answerText.equals(question.getCorrectAnswer()) ? question.getMaxScore() : 0.0)
+                            .build();
+                    
+                    Answer savedAnswer = answerRepository.save(answer);
+                    savedAnswers.add(savedAnswer);
+                    
+                    log.info("Answer saved for question {}: '{}' -> Correct: {}", 
+                            questionId, answerText, answerText.equals(question.getCorrectAnswer()));
+                    
+                } catch (Exception e) {
+                    log.error("Error saving answer for question {}: {}", questionIdStr, e.getMessage());
+                }
+            }
+            
+            log.info("Successfully saved {} answers out of {}", savedAnswers.size(), answers.size());
+            
             // Update test status
             test.setStatus(TestStatus.SUBMITTED);
             generatedTestRepository.save(test);
@@ -459,11 +639,27 @@ public class GeneratedTestController {
             log.info("Candidature status updated to COMPLETED: {}", candidature.getId());
             
             log.info("Test submitted successfully: {}", id);
+            log.info("Answers saved in database: {}", savedAnswers.size());
+            
+            // Calculer et afficher le score
+            double totalScore = savedAnswers.stream()
+                    .mapToDouble(answer -> answer.getScoreObtained())
+                    .sum();
+            double maxScore = test.getQuestions().stream()
+                    .mapToDouble(TestQuestion::getMaxScore)
+                    .sum();
+            double finalScore = maxScore > 0 ? (totalScore / maxScore) * 100 : 0;
+            
+            log.info("Test score: {}/{} ({}%)", totalScore, maxScore, finalScore);
             
             return ResponseEntity.ok(Map.of(
                     "success", true,
                     "message", "Test soumis avec succès",
-                    "sessionId", session.getId()
+                    "sessionId", session.getId(),
+                    "totalScore", totalScore,
+                    "maxScore", maxScore,
+                    "finalScore", finalScore,
+                    "answersCount", savedAnswers.size()
             ));
             
         } catch (Exception e) {

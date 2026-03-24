@@ -26,29 +26,41 @@ interface TestResult {
   finalScore?: number;
   testScore?: number;
   timeSpentMinutes?: number;
+  timeSpentSeconds?: number;
+  timeSpentFormatted?: string;
 }
 
-const TestResultsListPage = () => {
+const TestResultsListPage: React.FC = () => {
   const navigate = useNavigate();
   const [tests, setTests] = useState<TestResult[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [failedTestIds] = useState<Set<number>>(new Set()); // Cache des tests en erreur
 
   useEffect(() => {
-    loadTestResults();
+    loadTests();
   }, []);
 
-  const loadTestResults = async () => {
+  const loadTests = async () => {
     try {
       setIsLoading(true);
       setError(null);
       
-      const testResults = await getAllTestsWithResults();
+      // Utiliser la nouvelle fonction pour trouver les tests existants
+      const results = await getAllTestsWithResults();
       
-      setTests(testResults);
-    } catch (error) {
+      setTests(results);
+      
+      if (results.length === 0) {
+        console.log('Aucun test complété trouvé');
+        setError('Aucun test complété trouvé. Les candidats n\'ont pas encore soumis de tests.');
+      } else {
+        console.log(`${results.length} tests trouvés et chargés`);
+      }
+      
+    } catch (error: any) {
       console.error('Erreur lors du chargement des résultats:', error);
-      setError('Impossible de charger les résultats des tests');
+      setError('Impossible de charger les résultats des tests. Veuillez réessayer plus tard.');
     } finally {
       setIsLoading(false);
     }
@@ -57,66 +69,109 @@ const TestResultsListPage = () => {
   const getAllTestsWithResults = async (): Promise<TestResult[]> => {
     const results: TestResult[] = [];
 
-    console.log('Utilisation directe des IDs de tests connus pour éviter les erreurs 500');
-    const knownTestIds = [38];
+    console.log('Recherche dynamique des tests existants pour éviter les erreurs 500');
     
-    for (const testId of knownTestIds) {
-      try {
-        const testDetails = await testService.getTestForReview(testId);
-        console.log('TestDetails récupérés:', testDetails);
-        
-        if (testDetails) {
-          const testResult: TestResult = {
-            id: testId,
-            candidate: testDetails.candidate || {
-              id: 0,
-              firstName: 'Salma',
-              lastName: 'Belhaj',
-              email: 'bhksalma0@gmail.com'
-            },
-            internshipPosition: testDetails.internshipPosition || {
-              id: 1,
-              title: 'Développeur Backend Java',
-              company: 'SmartAssess'
-            },
-            status: testDetails.status || 'SUBMITTED',
-            createdAt: testDetails.createdAt || new Date().toISOString(),
-            submittedAt: testDetails.submittedAt,
-            timeLimitMinutes: testDetails.timeLimitMinutes || 24,
-            finalScore: testDetails.finalScore,
-            testScore: testDetails.testScore,
-            timeSpentMinutes: 18
-          };
-          results.push(testResult);
-        }
-      } catch (error) {
-
-        const simulatedTestResult: TestResult = {
-          id: testId,
-          candidate: {
-            id: 1,
-            firstName: 'Salma',
-            lastName: 'Belhaj',
-            email: 'bhksalma0@gmail.com'
-          },
-          internshipPosition: {
-            id: 1,
-            title: 'Développeur Backend Java',
-            company: 'SmartAssess'
-          },
-          status: 'SUBMITTED',
-          createdAt: '2026-03-18T15:30:00Z',
-          submittedAt: '2026-03-18T15:48:00Z',
-          timeLimitMinutes: 24,
-          finalScore: 85,
-          testScore: 85,
-          timeSpentMinutes: 18
-        };
-        results.push(simulatedTestResult);
-        console.log('TestResult simulé ajouté:', simulatedTestResult);
+    try {
+      // Essayer de récupérer la liste de tous les tests disponibles
+      const response = await testService.getAll();
+      console.log('Tests trouvés:', response);
+      
+      // Extraire le tableau de tests depuis la réponse du backend
+      const allTests = (response as any).tests || (response as any).data || response || [];
+      console.log('Tests extraits:', allTests);
+      
+      // Filtrer uniquement les tests qui ont des résultats (status SUBMITTED)
+      const completedTests = allTests.filter((test: any) => 
+        test.status === 'SUBMITTED' || test.status === 'COMPLETED'
+      );
+      
+      console.log('Tests complétés trouvés:', completedTests.length);
+      
+      if (completedTests.length === 0) {
+        console.log('Aucun test complété trouvé dans la base de données');
+        return results; // Retourner tableau vide
       }
+      
+      for (const test of completedTests) {
+        try {
+          // Vérifier si le test existe réellement en essayant de le récupérer
+          const testDetails = await testService.getTestForReview(test.id);
+          console.log('TestDetails récupérés pour test', test.id, ':', testDetails);
+          
+          if (testDetails) {
+            // Calculer le temps exact depuis les dates de session
+            let exactTimeSpentMinutes = 0;
+            let exactTimeSpentSeconds = 0;
+            let timeSpentFormatted = '';
+            if (testDetails.session?.startedAt && testDetails.session?.submittedAt) {
+              const startedAt = new Date(testDetails.session.startedAt);
+              const submittedAt = new Date(testDetails.session.submittedAt);
+              const timeDiffMs = submittedAt.getTime() - startedAt.getTime();
+              exactTimeSpentMinutes = Math.floor(timeDiffMs / (1000 * 60));
+              exactTimeSpentSeconds = Math.floor((timeDiffMs % (1000 * 60)) / 1000);
+              timeSpentFormatted = `${exactTimeSpentMinutes} min ${exactTimeSpentSeconds}s`;
+              console.log('Temps exact calculé:', exactTimeSpentMinutes, 'minutes', exactTimeSpentSeconds, 'secondes');
+            }
+            
+            const testResult: TestResult = {
+              id: test.id,
+              candidate: testDetails.candidate || test.candidate || {
+                id: 0,
+                firstName: testDetails.candidate?.firstName || test.candidate?.firstName || 'Candidat',
+                lastName: testDetails.candidate?.lastName || test.candidate?.lastName || 'Inconnu',
+                email: testDetails.candidate?.email || test.candidate?.email || 'email@example.com'
+              },
+              internshipPosition: testDetails.internshipPosition || test.internshipPosition || {
+                id: test.internshipPosition?.id || 1,
+                title: testDetails.internshipPosition?.title || test.internshipPosition?.title || 'Poste inconnu',
+                company: testDetails.internshipPosition?.company || test.internshipPosition?.company || 'SmartAssess'
+              },
+              status: testDetails.status || test.status || 'SUBMITTED',
+              createdAt: testDetails.createdAt || test.createdAt || new Date().toISOString(),
+              submittedAt: testDetails.submittedAt,
+              timeLimitMinutes: testDetails.timeLimitMinutes || test.timeLimitMinutes || 24,
+              finalScore: testDetails.finalScore,
+              testScore: testDetails.testScore,
+              timeSpentMinutes: exactTimeSpentMinutes || testDetails.session?.timeSpentMinutes || testDetails.timeSpentMinutes || test.timeSpentMinutes || 0,
+              timeSpentSeconds: exactTimeSpentSeconds || 0,
+              timeSpentFormatted: timeSpentFormatted || `${testDetails.session?.timeSpentMinutes || 0} min`
+            };
+            results.push(testResult);
+          }
+        } catch (error: any) {
+          console.error(`Erreur lors du chargement du test ${test.id}:`, error);
+          failedTestIds.add(test.id);
+          
+          // Vérifier si c'est une erreur "Test not found" déguisée en 500
+          if (error.response?.status === 500) {
+            const errorData = error.response?.data;
+            if (errorData?.message?.includes('Test not found') || 
+                errorData?.error?.includes('Test not found') ||
+                error.message?.includes('Test not found')) {
+              console.warn(`Le test ${test.id} n'existe pas (Test not found) - ignoré dans la liste`);
+            } else {
+              console.warn(`Le test ${test.id} n'est pas disponible (erreur 500) - ignoré dans la liste`);
+            }
+          } else if (error.response?.status === 404) {
+            console.warn(`Le test ${test.id} n'existe pas (erreur 404) - ignoré dans la liste`);
+          } else {
+            console.warn(`Erreur inattendue pour le test ${test.id}:`, error.message);
+          }
+          // Ne pas ajouter ce test à la liste des résultats
+          continue;
+        }
+      }
+      
+    } catch (error: any) {
+      console.error('Erreur lors de la récupération de la liste des tests:', error);
+      console.error('Aucun fallback utilisé - uniquement les vrais tests de la base de données');
+      
+      setTests([]); // Tableau vide si erreur
+    } finally {
+      setIsLoading(false);
     }
 
+    console.log(`Résultats finaux: ${results.length} tests valides trouvés`);
     return results;
   };
 
@@ -140,14 +195,14 @@ const TestResultsListPage = () => {
       id: item.id || item.testId || 0,
       candidate: item.candidate || item.user || {
         id: 0,
-        firstName: 'Candidat',
-        lastName: 'Inconnu',
-        email: 'unknown@example.com'
+        firstName: item.candidate?.firstName || item.user?.firstName || 'Candidat',
+        lastName: item.candidate?.lastName || item.user?.lastName || 'Inconnu',
+        email: item.candidate?.email || item.user?.email || 'unknown@example.com'
       },
       internshipPosition: item.internshipPosition || item.position || {
         id: 0,
-        title: 'Poste non spécifié',
-        company: 'Entreprise'
+        title: item.internshipPosition?.title || item.position?.title || 'Poste non spécifié',
+        company: item.internshipPosition?.company || item.position?.company || 'Entreprise'
       },
       status: item.status || 'SUBMITTED',
       createdAt: item.createdAt || item.created_at || new Date().toISOString(),
@@ -209,7 +264,7 @@ const TestResultsListPage = () => {
             <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
             <h2 className="text-xl font-semibold text-gray-900 mb-2">Erreur de chargement</h2>
             <p className="text-gray-600 mb-4">{error}</p>
-            <Button onClick={loadTestResults}>Réessayer</Button>
+            <Button onClick={loadTests}>Réessayer</Button>
           </div>
         </div>
       </div>
@@ -291,7 +346,7 @@ const TestResultsListPage = () => {
                   <div className="flex items-center justify-between text-sm">
                     <div className="flex items-center gap-1 text-gray-600">
                       <Clock className="w-4 h-4" />
-                      <span>{test.timeSpentMinutes || 'N/A'} min</span>
+                      <span>{test.timeSpentFormatted || `${test.timeSpentMinutes || 'N/A'} min`}</span>
                     </div>
                     <span className="text-gray-500">
                       / {test.timeLimitMinutes} min

@@ -16,7 +16,8 @@ import {
   CheckCircle, 
   AlertCircle,
   Copy,
-  ExternalLink
+  ExternalLink,
+  Mail
 } from 'lucide-react';
 
 interface Question {
@@ -59,6 +60,7 @@ const TestReviewPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isGeneratingLink, setIsGeneratingLink] = useState(false);
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
   const [testLink, setTestLink] = useState<string>('');
   const [showLinkModal, setShowLinkModal] = useState(false);
   const [editingQuestion, setEditingQuestion] = useState<number | null>(null);
@@ -248,9 +250,14 @@ const TestReviewPage: React.FC = () => {
         await saveQuestions();
       }
       
+      // Informer l'utilisateur que la génération peut prendre du temps
+      toast.info('Génération du lien du test en cours... Cette opération peut prendre quelques secondes.');
+      
       // Générer le lien du test
       console.log('GenerateTestLink - Using testId for generate-link API:', testData.id);
-      const response = await apiClient.post(`/tests/${testData.id}/generate-link`);
+      const response = await apiClient.post(`/tests/${testData.id}/generate-link`, {}, {
+        timeout: 30000 // 30 secondes au lieu de 10 secondes
+      });
       const data = response.data;
       
       const link = `${window.location.origin}/candidate/test/${testData.token}`;
@@ -261,7 +268,19 @@ const TestReviewPage: React.FC = () => {
       toast.success('Lien du test généré avec succès');
     } catch (error: any) {
       console.error('Error generating test link:', error);
-      const errorMessage = error.response?.data?.message || error.message || 'Erreur inconnue';
+      
+      let errorMessage = 'Erreur inconnue';
+      
+      if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
+        errorMessage = 'La génération du lien prend trop de temps. Veuillez réessayer. Le serveur est peut-être surchargé.';
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.response?.data?.error) {
+        errorMessage = error.response.data.error;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
       toast.error(`Erreur lors de la génération du lien: ${errorMessage}`);
     } finally {
       setIsGeneratingLink(false);
@@ -271,6 +290,46 @@ const TestReviewPage: React.FC = () => {
   const copyToClipboard = () => {
     navigator.clipboard.writeText(testLink);
     toast.success('Lien copié dans le presse-papiers');
+  };
+
+  const sendTestEmail = async () => {
+    if (!testData) return;
+    
+    try {
+      setIsSendingEmail(true);
+      
+      // Importer le service d'email
+      const { testService } = await import('@/services/apiService');
+      
+      toast.info('Envoi de l\'email en cours...');
+      
+      const emailData = {
+        recipientEmail: testData.candidate?.email,
+        customMessage: `Bonjour ${testData.candidate?.firstName} ${testData.candidate?.lastName},\n\nVous êtes invité à passer un test technique pour le poste de ${testData.internshipPosition?.title}.\n\nVoici votre lien personnel : ${testLink}\n\nCordialement,\nL'équipe de recrutement`
+      };
+      
+      const response = await testService.sendTestEmail(testData.id, emailData);
+      
+      toast.success('Email envoyé avec succès au candidat !');
+      console.log('Email sent successfully:', response);
+      
+    } catch (error: any) {
+      console.error('Error sending email:', error);
+      
+      let errorMessage = 'Erreur lors de l\'envoi de l\'email';
+      
+      if (error.response?.status === 500) {
+        errorMessage = 'Erreur serveur lors de l\'envoi de l\'email. Veuillez vérifier la configuration du serveur d\'email.';
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      toast.error(errorMessage);
+    } finally {
+      setIsSendingEmail(false);
+    }
   };
 
   const previewTest = () => {
@@ -457,11 +516,17 @@ const TestReviewPage: React.FC = () => {
                           onChange={(e) => updateQuestion(index, 'correctAnswer', e.target.value)}
                           className="w-full p-2 border rounded"
                         >
-                          {question.options.map((option, optionIndex) => (
-                            <option key={optionIndex} value={option}>
-                              Option {optionIndex + 1}: {option || '(vide)'}
-                            </option>
-                          ))}
+                          {question.options.map((option, optionIndex) => {
+                            // Vérifier si l'option contient déjà un préfixe
+                            const hasPrefix = /^[A-D]\)|^[A-D]\./.test(option.trim());
+                            const displayText = hasPrefix ? option : `${String.fromCharCode(65 + optionIndex)}. ${option}`;
+                            
+                            return (
+                              <option key={optionIndex} value={option}>
+                                {displayText || `(Option ${optionIndex + 1} - vide)`}
+                              </option>
+                            );
+                          })}
                         </select>
                       </div>
                       
@@ -486,21 +551,27 @@ const TestReviewPage: React.FC = () => {
                     <div>
                       <h3 className="font-medium mb-2">Options de réponse:</h3>
                       <div className="space-y-2">
-                        {question.options.map((option, optionIndex) => (
-                          <div
-                            key={optionIndex}
-                            className={`p-3 rounded border ${
-                              option === question.correctAnswer
-                                ? 'bg-green-50 border-green-300'
-                                : 'bg-gray-50 border-gray-200'
-                            }`}
-                          >
-                            <span className="font-medium">{String.fromCharCode(65 + optionIndex)}.</span> {option}
-                            {option === question.correctAnswer && (
-                              <Badge className="ml-2" variant="default">Correcte</Badge>
-                            )}
-                          </div>
-                        ))}
+                        {question.options.map((option, optionIndex) => {
+                          // Vérifier si l'option contient déjà un préfixe (A), B), C), etc. ou A., B., C., etc.
+                          const hasPrefix = /^[A-D]\)|^[A-D]\./.test(option.trim());
+                          const prefix = hasPrefix ? '' : `${String.fromCharCode(65 + optionIndex)}.`;
+                          
+                          return (
+                            <div
+                              key={optionIndex}
+                              className={`p-3 rounded border ${
+                                option === question.correctAnswer
+                                  ? 'bg-green-50 border-green-300'
+                                  : 'bg-gray-50 border-gray-200'
+                              }`}
+                            >
+                              <span className="font-medium">{prefix}</span> {option}
+                              {option === question.correctAnswer && (
+                                <Badge className="ml-2" variant="default">Correcte</Badge>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   </div>
@@ -542,22 +613,33 @@ const TestReviewPage: React.FC = () => {
                 <p>• Les résultats seront disponibles dans votre tableau de bord</p>
               </div>
               
-              <div className="flex gap-2 pt-4">
+              <div className="grid grid-cols-1 gap-2 pt-4">
                 <Button
-                  variant="outline"
-                  onClick={() => setShowLinkModal(false)}
-                  className="flex-1"
+                  onClick={sendTestEmail}
+                  disabled={isSendingEmail || !testData?.candidate?.email}
+                  className="w-full flex items-center gap-2"
                 >
-                  Fermer
+                  <Mail className="w-4 h-4" />
+                  {isSendingEmail ? 'Envoi en cours...' : 'Envoyer par email'}
                 </Button>
                 
-                <Button
-                  onClick={() => window.open(testLink, '_blank')}
-                  className="flex-1 flex items-center gap-2"
-                >
-                  <ExternalLink className="w-4 h-4" />
-                  Voir le test
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowLinkModal(false)}
+                    className="flex-1"
+                  >
+                    Fermer
+                  </Button>
+                  
+                  <Button
+                    onClick={() => window.open(testLink, '_blank')}
+                    className="flex-1 flex items-center gap-2"
+                  >
+                    <ExternalLink className="w-4 h-4" />
+                    Voir le test
+                  </Button>
+                </div>
               </div>
             </CardContent>
           </Card>

@@ -230,10 +230,32 @@ export const candidateService = {
 }): Promise<any> => {
 
   try {
+    console.log('Creating candidature with data:', candidatureData);
     const response = await apiClient.post('/candidatures', candidatureData);
-
+    console.log('Candidature created successfully:', response.data);
     return response.data;
   } catch (error: any) {
+    console.error('Error creating candidature:', error);
+    console.error('Error response data:', error.response?.data);
+    console.error('Error response status:', error.response?.status);
+    console.error('Error response headers:', error.response?.headers);
+    
+    // Gérer les erreurs spécifiques
+    if (error.response?.status === 500) {
+      const errorData = error.response?.data;
+      let errorMessage = 'Erreur serveur lors de la création de la candidature';
+      
+      if (errorData?.message) {
+        errorMessage = `Erreur serveur: ${errorData.message}`;
+      } else if (errorData?.error) {
+        errorMessage = `Erreur serveur: ${errorData.error}`;
+      } else if (errorData?.details) {
+        errorMessage = `Erreur serveur: ${errorData.details}`;
+      }
+      
+      throw new Error(errorMessage);
+    }
+    
     throw error;
   }
 },
@@ -350,13 +372,34 @@ export const testService = {
     return response.data;
   },
   
+  getPublicTest: async (token: string): Promise<any> => {
+    const response = await apiClient.get(`/tests/public/${token}`);
+    return response.data;
+  },
+  
   startTest: async (token: string): Promise<any> => {
     const response = await apiClient.post(`/tests/public/${token}/start`);
     return response.data;
   },
   
+  submitTest: async (testId: number, submissionData: any): Promise<any> => {
+    console.log('=== SOUMISSION DU TEST ===');
+    console.log('Test ID:', testId);
+    console.log('Submission data:', submissionData);
+    
+    const response = await apiClient.post(API_ENDPOINTS.TESTS.SUBMIT(testId), submissionData);
+    console.log('Response from submission:', response.data);
+    
+    return response.data;
+  },
+  
   getTestForReview: async (testId: number): Promise<any> => {
     const response = await apiClient.get(`/tests/${testId}/review`);
+    return response.data;
+  },
+  
+  sendTestEmail: async (testId: number, emailData?: { recipientEmail?: string; customMessage?: string }): Promise<any> => {
+    const response = await apiClient.post(API_ENDPOINTS.TESTS.SEND_EMAIL(testId), emailData || {});
     return response.data;
   }
 };

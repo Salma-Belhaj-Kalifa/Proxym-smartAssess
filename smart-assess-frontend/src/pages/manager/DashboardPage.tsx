@@ -71,58 +71,76 @@ const DashboardPage = () => {
       setCandidatures(allCandidatures);
       
       // Charger les tests avec les données des candidats
-      const probableTestIds = [38]; // Uniquement les tests qui existent vraiment
+      console.log('Recherche des tests existants pour le dashboard...');
       
-      const validTests = [];
-      
-      for (const testId of probableTestIds) {
-        try {
-          const testDetails = await testService.getTestForReview(testId);
-          
-          // Débogage pour voir la structure exacte des données
-          console.log(`Test ${testId} details:`, {
-            candidateId: testDetails.candidateId,
-            internshipPositionId: testDetails.internshipPositionId,
-            allKeys: Object.keys(testDetails),
-            testDetails
-          });
-          
-          // Gérer les IDs undefined avec fallback sur l'ID du test
-          const actualCandidateId = testDetails.candidateId || testDetails.candidate?.id || testId;
-          const actualPositionId = testDetails.internshipPositionId || 
-                                testDetails.position?.id || 
-                                testDetails.positionId ||
-                                testId;
-          
-          // Joindre les données du candidat avec le test
-          const enrichedTest = {
-            id: testId,
-            ...testDetails,
-            candidate: candidateMap.get(actualCandidateId) || {
-              id: actualCandidateId,
-              firstName: 'Candidat',
-              lastName: `#${actualCandidateId}`,
-              email: 'email@inconnu'
-            },
-            // Ajouter les données du poste si disponible
-            internshipPosition: positionMap.get(actualPositionId) || {
-              id: actualPositionId,
-              title: `Poste #${actualPositionId}`
+      try {
+        // D'abord, essayer de récupérer tous les tests disponibles
+        const response = await testService.getAll();
+        console.log('Tests trouvés pour dashboard:', response);
+        
+        // Extraire le tableau de tests depuis la réponse du backend
+        const allTests = (response as any).tests || (response as any).data || response || [];
+        console.log('Tests extraits:', allTests);
+        
+        // Filtrer uniquement les tests qui ont des résultats
+        const completedTests = allTests.filter((test: any) => 
+          test.status === 'SUBMITTED' || test.status === 'COMPLETED' || test.status === 'EVALUATED'
+        );
+        
+        console.log('Tests complétés trouvés pour dashboard:', completedTests.length);
+        
+        const validTests = [];
+        
+        for (const test of completedTests) {
+          try {
+            // Vérifier si le test existe réellement
+            const testDetails = await testService.getTestForReview(test.id);
+            console.log(`Test ${test.id} vérifié et valide:`, testDetails ? 'OUI' : 'NON');
+            
+            if (testDetails) {
+              // Enrichir les données du test avec les informations du candidat et de la position
+              const candidate = candidateMap.get((test as any).candidateId) || testDetails.candidate;
+              const position = positionMap.get((test as any).internshipPositionId) || testDetails.internshipPosition;
+              
+              const enrichedTest = {
+                ...testDetails,
+                candidate: candidate || {
+                  id: (test as any).candidateId,
+                  firstName: 'Candidat',
+                  lastName: 'Inconnu',
+                  email: 'email@example.com'
+                },
+                position: position || {
+                  id: (test as any).internshipPositionId,
+                  title: 'Poste inconnu',
+                  company: 'SmartAssess'
+                }
+              };
+              
+              // Débogage pour voir la structure exacte des données
+              console.log(`Test ${test.id} details:`, {
+                hasCandidate: !!candidate,
+                hasPosition: !!position,
+                candidateName: candidate?.firstName + ' ' + candidate?.lastName,
+                positionTitle: position?.title
+              });
+              
+              validTests.push(enrichedTest);
             }
-          };
-          
-          console.log(`Test ${testId} enriched:`, enrichedTest);
-          
-          validTests.push(enrichedTest);
-        } catch (error) {
-          if (error.response?.status !== 500) {
-            console.log(`Test ${testId} non disponible:`, error.message);
+          } catch (error) {
+            console.warn(`Test ${test.id} ignoré dans le dashboard:`, error.message);
+            // Ne pas ajouter les tests supprimés ou invalides
           }
         }
+        
+        setTests(validTests);
+        setRecentTests(validTests);
+        console.log(`Dashboard: ${validTests.length} tests valides chargés`);
+        
+      } catch (error) {
+        console.error('Erreur lors du chargement des tests pour le dashboard:', error);
+        console.error('Aucun fallback utilisé - uniquement les vrais tests de la base de données');
       }
-      
-      setTests(validTests);
-      setRecentTests(validTests);
       
     } catch (error) {
       console.error('Erreur lors du chargement:', error);
@@ -252,7 +270,7 @@ const DashboardPage = () => {
     const timeA = parseInt(a.time.match(/\d+/)?.[0] || '0');
     const timeB = parseInt(b.time.match(/\d+/)?.[0] || '0');
     return timeA - timeB;
-  }).slice(0, 6);
+  }).slice(0, 10);
 
   // Variables de pagination calculées
   const testsTotalPages = Math.ceil(recentTests.length / testsPerPage);
@@ -422,16 +440,10 @@ const DashboardPage = () => {
                     const positionTitle = test.internshipPosition?.title || 
                                        test.position?.title || 
                                        test.positionTitle ||
-                                       (test.internshipPosition?.id && !isNaN(test.internshipPosition.id))
-                                         ? `Poste #${test.internshipPosition.id}`
-                                         : (test.internshipPositionId && !isNaN(test.internshipPositionId))
-                                           ? `Poste #${test.internshipPositionId}`
-                                           : (test.positionId && !isNaN(test.positionId))
-                                             ? `Poste #${test.positionId}`
-                                             : 'Poste non spécifié';
+                                       'Poste non spécifié';
                     
                     return (
-                      <div key={index} className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
+                      <div key={`test-${test.id}-${positionTitle}`} className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
                         <div className="flex-1">
                           <div className="flex items-center gap-2">
                             <span className="font-medium text-sm">
@@ -442,7 +454,7 @@ const DashboardPage = () => {
                             </Badge>
                           </div>
                           <div className="text-xs text-muted-foreground mt-2">
-                            {positionTitle}{scoreText}
+                            <span className="font-medium">{positionTitle}</span>{scoreText}
                           </div>
                         </div>
                         <div className="text-xs text-muted-foreground">

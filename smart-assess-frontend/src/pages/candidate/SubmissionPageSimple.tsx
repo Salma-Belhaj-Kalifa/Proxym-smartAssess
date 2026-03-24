@@ -96,13 +96,32 @@ const SubmissionPageSimple: React.FC = () => {
 
       if (user?.id) {
       
-        for (const positionId of selectedPositions) {
-          await candidateService.createCandidature({
-            candidateId: user.id,
-            internshipPositionId: positionId,
-            status: 'PENDING'
-          });
-        }        
+      // Validation des données avant l'envoi
+      if (!user.id || isNaN(user.id)) {
+        throw new Error('ID utilisateur invalide');
+      }
+      
+      if (!selectedPositions || selectedPositions.length === 0) {
+        throw new Error('Aucune position sélectionnée');
+      }
+      
+      console.log('Creating candidatures for user:', user.id, 'positions:', selectedPositions);
+      
+      for (const positionId of selectedPositions) {
+        if (!positionId || isNaN(positionId)) {
+          console.error('Invalid position ID:', positionId);
+          throw new Error(`ID de position invalide: ${positionId}`);
+        }
+        
+        const candidatureData = {
+          candidateId: user.id,
+          internshipPositionId: positionId,
+          status: 'PENDING'
+        };
+        
+        console.log('Creating candidature with data:', candidatureData);
+        await candidateService.createCandidature(candidatureData);
+      }        
         queryClient.invalidateQueries({ queryKey: ['candidatures', 'candidate', user.id] });
         
         if (file) {
@@ -166,11 +185,29 @@ const SubmissionPageSimple: React.FC = () => {
         navigate('/candidat/candidatures');
       }, 3000);
 
-    } catch (err) {
+    } catch (err: any) {
       console.error('Erreur lors de la soumission:', err);
-      setError('Erreur lors de la soumission de la candidature');
+      
+      let errorMessage = 'Erreur lors de la soumission de la candidature';
+      
+      if (err.response?.status === 500) {
+        const errorData = err.response?.data;
+        if (errorData?.message) {
+          errorMessage = `Erreur serveur: ${errorData.message}`;
+        } else if (errorData?.error) {
+          errorMessage = `Erreur serveur: ${errorData.error}`;
+        } else if (errorData?.details) {
+          errorMessage = `Erreur serveur: ${errorData.details}`;
+        } else {
+          errorMessage = 'Erreur serveur: Veuillez réessayer plus tard ou contacter le support';
+        }
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+      
+      setError(errorMessage);
       setSubmitStatus('error');
-      toast.error('Erreur lors de la soumission');
+      toast.error(errorMessage);
     } finally {
       setIsUploading(false);
     }

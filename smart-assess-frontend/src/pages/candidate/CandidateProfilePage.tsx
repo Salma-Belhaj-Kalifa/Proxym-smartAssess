@@ -8,11 +8,14 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useAuth, useProfile, useUpdateProfile } from '@/hooks/useApiHooks';
 import { authService, candidateService } from '@/services/apiService';
+import { removeAuthToken, removeAuthUserData } from '@/lib/api';
+import { useQueryClient } from '@/hooks/useQueryClient';
 
 export default function CandidateProfilePage() {
   const { user } = useAuth();
   const { data: profile, isLoading, error } = useProfile(user?.id && user?.id > 0 ? user.id : null);
   const updateProfileMutation = useUpdateProfile();
+  const queryClient = useQueryClient();
   const [isEditing, setIsEditing] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   
@@ -41,7 +44,7 @@ export default function CandidateProfilePage() {
   // Rediriger si l'utilisateur n'est pas connecté
   useEffect(() => {
     if (!user) {
-      window.location.href = '/candidat/login';
+      window.location.href = '/candidat/connexion';
     }
   }, [user]);
 
@@ -102,8 +105,13 @@ export default function CandidateProfilePage() {
     try {
       await candidateService.deleteMyProfile();
       
-      await authService.logout();
-      window.location.href = '/';
+      // Nettoyage manuel pour éviter les redirections automatiques
+      removeAuthToken();
+      removeAuthUserData();
+      queryClient.clear();
+      
+      // Redirection directe vers la page de connexion candidat
+      window.location.href = '/candidat/connexion';
     } catch (error) {
       console.error('Erreur lors de la suppression du compte:', error);
       alert('Erreur lors de la suppression du compte. Veuillez réessayer.');

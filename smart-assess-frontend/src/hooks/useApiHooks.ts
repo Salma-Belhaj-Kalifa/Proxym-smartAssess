@@ -4,6 +4,7 @@ import { API_ENDPOINTS } from '@/config/apiEndpoints';
 import { toast } from 'sonner';
 import { authService } from '@/services/apiService';
 import { useQueryClient } from '@/hooks/useQueryClient';
+import { queryOptions } from '@/lib/queryClient';
 
 export interface User {
   id: number;
@@ -49,7 +50,6 @@ export const useAuth = () => {
     },
     onError: (error: any) => {
       console.error('Login error:', error);
-      // Nettoyage complet en cas d'erreur
       removeAuthToken();
       removeAuthUserData();
       queryClient.clear();
@@ -65,7 +65,6 @@ export const useAuth = () => {
     },
     onError: (error: any) => {
       console.error('Register error:', error);
-      // Nettoyage complet en cas d'erreur
       removeAuthToken();
       removeAuthUserData();
       queryClient.clear();
@@ -75,7 +74,6 @@ export const useAuth = () => {
   const logoutMutation = useMutation({
     mutationFn: authService.logout,
     onSuccess: () => {
-      // Nettoyage complet des données d'authentification
       removeAuthToken();
       removeAuthUserData();
       queryClient.clear();
@@ -108,8 +106,7 @@ export const usePositions = () => {
       const response = await apiClient.get(API_ENDPOINTS.POSITIONS.GET_ALL);
       return response.data;
     },
-    staleTime: 30 * 1000,
-    gcTime: 10 * 60 * 1000,
+    ...queryOptions.fresh, 
   });
 };
 
@@ -207,8 +204,7 @@ export const useCandidates = () => {
       const response = await apiClient.get('/candidates');
       return response.data;
     },
-    staleTime: 5 * 60 * 1000,
-    gcTime: 10 * 60 * 1000,
+    ...queryOptions.stable, 
   });
 };
 
@@ -219,8 +215,7 @@ export const useCandidateProfile = (userId: number) => {
       const response = await apiClient.get(`/users/${userId}/profile`);
       return response.data;
     },
-    staleTime: 5 * 60 * 1000,
-    gcTime: 10 * 60 * 1000,
+    ...queryOptions.stable, 
     enabled: !!userId,
   });
 };
@@ -232,6 +227,8 @@ export const useProfile = (userId: number) => {
       const response = await apiClient.get(`/users/${userId}/profile`);
       return response.data;
     },
+    ...queryOptions.stable, 
+    enabled: !!userId,
   });
 };
 
@@ -256,8 +253,7 @@ export const useTests = () => {
       const response = await apiClient.get('/tests');
       return response.data;
     },
-    staleTime: 5 * 60 * 1000,
-    gcTime: 10 * 60 * 1000,
+    ...queryOptions.stable, 
   });
 };
 
@@ -296,8 +292,7 @@ export const useCandidatures = () => {
       const response = await apiClient.get('/candidatures');
       return response.data;
     },
-    staleTime: 5 * 1000,
-    gcTime: 30 * 1000,
+    ...queryOptions.fresh, 
   });
 };
 
@@ -308,9 +303,8 @@ export const useCandidaturesByPosition = (positionId: number) => {
       const response = await apiClient.get(API_ENDPOINTS.CANDIDATURES.BY_POSITION(positionId));
       return response.data;
     },
+    ...queryOptions.stable, 
     enabled: !!positionId,
-    staleTime: 5 * 60 * 1000,
-    gcTime: 10 * 60 * 1000,
   });
 };
 
@@ -321,9 +315,8 @@ export const useCandidaturesByCandidate = (candidateId: number) => {
       const response = await apiClient.get(API_ENDPOINTS.CANDIDATURES.BY_CANDIDATE(candidateId));
       return response.data;
     },
+    ...queryOptions.stable, 
     enabled: !!candidateId,
-    staleTime: 5 * 60 * 1000,
-    gcTime: 10 * 60 * 1000,
   });
 };
 
@@ -377,9 +370,8 @@ export const useTechnicalProfiles = (candidateId?: number) => {
       const response = await apiClient.get(url);
       return response.data;
     },
+    ...queryOptions.stable, 
     enabled: !!candidateId,
-    staleTime: 5 * 60 * 1000,
-    gcTime: 10 * 60 * 1000,
   });
 };
 

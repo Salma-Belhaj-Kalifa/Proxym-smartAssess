@@ -39,7 +39,6 @@ interface TestResult {
   timeLimitMinutes: number;
   questions: Question[];
   candidate?: any;
-  hasRealAnswers?: boolean;
   scores?: {
     totalScore: number;
     maxScore: number;
@@ -51,8 +50,6 @@ interface TestResult {
     startedAt: string;
     submittedAt: string;
     timeSpentMinutes: number;
-    timeSpentSeconds?: number;
-    hasRealTime?: boolean;
   };
 }
 
@@ -64,6 +61,7 @@ const TestResultsPage: React.FC = () => {
   const [lastError, setLastError] = useState<Error | null>(null);
 
   const calculateRealScore = (testData: any) => {
+    console.log('=== CALCUL DU SCORE RÉEL ===');
     console.log('Test data structure:', Object.keys(testData));
     console.log('Test data:', testData);
     
@@ -150,28 +148,23 @@ const TestResultsPage: React.FC = () => {
 
   const calculateResponseTime = (testData: any) => {
     console.log('=== CALCUL DU TEMPS DE RÉPONSE ===');
-    console.log('Session data from backend:', testData.session);
     
     if (testData.session && testData.session.startedAt && testData.session.submittedAt) {
       const startedAt = new Date(testData.session.startedAt);
       const submittedAt = new Date(testData.session.submittedAt);
       const timeDiffMs = submittedAt.getTime() - startedAt.getTime();
-      const timeSpentMinutes = Math.floor(timeDiffMs / (1000 * 60));
-      const timeSpentSeconds = Math.floor((timeDiffMs % (1000 * 60)) / 1000);
+      const timeSpentMinutes = Math.round(timeDiffMs / (1000 * 60));
       
-      console.log('Session time calculation:', {
-        startedAt: startedAt.toISOString(),
-        submittedAt: submittedAt.toISOString(),
-        timeDiffMs: timeDiffMs,
-        timeSpentMinutes: timeSpentMinutes,
-        timeSpentSeconds: timeSpentSeconds
+      console.log('Session time from backend:', {
+        startedAt,
+        submittedAt,
+        timeSpentMinutes
       });
       
       return {
         timeSpentMinutes,
-        timeSpentSeconds,
-        startedAt: startedAt.toISOString(),
-        submittedAt: submittedAt.toISOString(),
+        timeStartedAt: startedAt,
+        timeEndedAt: submittedAt,
         hasRealTime: true
       };
     }
@@ -179,9 +172,8 @@ const TestResultsPage: React.FC = () => {
     console.log('No session data available, using fallback');
     return {
       timeSpentMinutes: testData.timeLimitMinutes || 30,
-      timeSpentSeconds: 0,
-      startedAt: testData.createdAt,
-      submittedAt: new Date(new Date(testData.createdAt).getTime() + (testData.timeLimitMinutes || 30) * 60 * 1000).toISOString(),
+      timeStartedAt: new Date(testData.createdAt),
+      timeEndedAt: new Date(new Date(testData.createdAt).getTime() + (testData.timeLimitMinutes || 30) * 60 * 1000),
       hasRealTime: false
     };
   };
@@ -209,7 +201,7 @@ const TestResultsPage: React.FC = () => {
         timeLimitMinutes: testData.timeLimitMinutes || testData.duration || 30,
         questions: testData.questions || [],
         scores: testData.scores,
-        session: timeData,
+        session: testData.session,
         candidate: testData.candidate,
         ...calculatedScore
       };
@@ -295,11 +287,11 @@ const TestResultsPage: React.FC = () => {
         <div className="mb-8">
           <Button 
             variant="outline" 
-            onClick={() => navigate('/manager/tests-resultats')}
+            onClick={() => navigate('/manager/dashboard')}
             className="mb-4"
           >
             <ArrowLeft className="h-4 w-4 mr-2" />
-            Retour
+            Retour aux candidats
           </Button>
           
           <div className="bg-white rounded-lg shadow p-6">
@@ -358,10 +350,7 @@ const TestResultsPage: React.FC = () => {
                   </div>
                   <div>
                     <p className="text-2xl font-bold text-orange-600">
-                      {testResult.session?.timeSpentMinutes !== undefined ? 
-                        `${testResult.session.timeSpentMinutes} min ${testResult.session.timeSpentSeconds || 0}s` : 
-                        'N/A'
-                      }
+                      {testResult.session?.timeSpentMinutes || 'N/A'}
                     </p>
                     <p className="text-sm text-gray-500">Temps de réponse</p>
                   </div>
