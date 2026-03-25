@@ -5,10 +5,11 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { positionService, candidateService, candidatureService, testService } from '@/services/apiService';
-import { useAuth } from '@/hooks/useApiHooks';
+import { useCurrentUser } from '@/features/auth/authQueries';
+import { getStatusLabel, getStatusColor } from '@/utils/statusMappings';
 
 const DashboardPage = () => {
-  const { user } = useAuth();
+  const { data: user } = useCurrentUser();
   const [positions, setPositions] = useState<any[]>([]);
   const [candidates, setCandidates] = useState<any[]>([]);
   const [candidatures, setCandidatures] = useState<any[]>([]);
@@ -84,7 +85,7 @@ const DashboardPage = () => {
         
         // Filtrer uniquement les tests qui ont des résultats
         const completedTests = allTests.filter((test: any) => 
-          test.status === 'SUBMITTED' || test.status === 'COMPLETED' || test.status === 'EVALUATED'
+          test.status === 'SUBMITTED' || test.status === 'EVALUATED'
         );
         
         console.log('Tests complétés trouvés pour dashboard:', completedTests.length);
@@ -450,7 +451,7 @@ const DashboardPage = () => {
                               {candidateName}
                             </span>
                             <Badge variant={test.status === 'SUBMITTED' ? 'default' : 'secondary'}>
-                              {test.status === 'SUBMITTED' ? 'Soumis' : 'En cours'}
+                              {getStatusLabel(test.status)}
                             </Badge>
                           </div>
                           <div className="text-xs text-muted-foreground mt-2">

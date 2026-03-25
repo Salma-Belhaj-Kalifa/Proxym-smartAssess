@@ -7,7 +7,9 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sparkles, Check, X, AlertCircle, ArrowLeft, User, FileText, Calendar, Mail, Phone } from "lucide-react";
-import { useCandidatures, useTechnicalProfiles, useUpdateCandidature } from "@/hooks/useApiHooks";
+import { useCandidatures, useCandidaturesByCandidate } from '@/features/candidatures/candidaturesQueries';
+import { useUpdateCandidatureStatus } from '@/features/candidatures/candidaturesMutations';
+import { useCurrentUser } from '@/features/auth/authQueries';
 import { toast } from "sonner";
 import apiService from "@/services/apiService";
 import { getStatusLabel, getStatusColor } from "@/utils/statusMappings";
@@ -40,7 +42,7 @@ interface TechnicalProfileData {
 const GenerateTestPage = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const updateCandidatureMutation = useUpdateCandidature();
+  const updateCandidatureStatusMutation = useUpdateCandidatureStatus();
   
   const [candidateData, setCandidateData] = useState<any>(null);
   const [technicalProfile, setTechnicalProfile] = useState<any>(null);
@@ -622,12 +624,6 @@ const GenerateTestPage = () => {
     }
 
     try {
-      // Mettre à jour le statut de la candidature à TEST_SENT (pas ACCEPTED)
-      updateCandidatureMutation.mutate({
-        id: candidateData.id,
-        status: 'TEST_SENT'
-      });
-
       // Appeler l'API pour générer le test directement
       const testResponse = await apiService.testService.generateTest({
         candidatureId: candidateData.id,
@@ -708,12 +704,6 @@ const GenerateTestPage = () => {
     }
 
     try {
-      // Mettre à jour le statut de la candidature à TEST_SENT (pas ACCEPTED)
-      updateCandidatureMutation.mutate({
-        id: candidateData.id,
-        status: 'TEST_SENT'
-      });
-
       // Appeler l'API pour générer le test directement
       const testResponse = await apiService.testService.generateTest({
         candidatureId: candidateData.id,
@@ -814,7 +804,7 @@ const GenerateTestPage = () => {
     if (!candidateData) return;
     
     try {
-      await updateCandidatureMutation.mutateAsync({
+      await updateCandidatureStatusMutation.mutateAsync({
         id: candidateData.id,
         status: 'REJECTED'
       });
@@ -1173,7 +1163,7 @@ const GenerateTestPage = () => {
         {/* Right: Test Config */}
         <div className="space-y-6">
           {/* Configuration du test - Masquer si un test existe déjà */}
-          {!existingTest && (
+          {!existingTest?.existingTestId && (
             <div className="glass-card p-6">
               <h3 className="text-lg font-semibold text-foreground mb-4">Configuration du test à générer</h3>
               
@@ -1258,7 +1248,7 @@ const GenerateTestPage = () => {
                 <h3 className="text-lg font-semibold text-foreground">Décision du Manager</h3>
                 <p className="text-sm text-muted-foreground">
                   {existingTest 
-                    ? "Un test a déjà été généré pour ce candidat. Vous pouvez consulter le test existant ou le refuser."
+                    ? "Un test a déjà été généré pour ce candidat. Vous pouvez consulter les résultats ou refuser la candidature."
                     : "Générez un test technique personnalisé pour évaluer les compétences du candidat."
                   }
                 </p>
@@ -1277,10 +1267,11 @@ const GenerateTestPage = () => {
                   <p><strong>Statut du test :</strong> <span className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium ${
                     existingTest.existingTestStatus === 'READY' ? 'bg-green-100 text-green-800' :
                     existingTest.existingTestStatus === 'IN_PROGRESS' ? 'bg-yellow-100 text-yellow-800' :
-                    existingTest.existingTestStatus === 'COMPLETED' ? 'bg-blue-100 text-blue-800' :
+                    existingTest.existingTestStatus === 'SUBMITTED' ? 'bg-blue-100 text-blue-800' :
+                    existingTest.existingTestStatus === 'EVALUATED' ? 'bg-purple-100 text-purple-800' :
                     'bg-gray-100 text-gray-800'
                   }`}>
-                    {existingTest.existingTestStatus}
+                    {getStatusLabel(existingTest.existingTestStatus)}
                   </span></p>
                 </div>
               </div>
@@ -1304,11 +1295,11 @@ const GenerateTestPage = () => {
                     <Button 
                       variant="destructive"
                       onClick={handleReject}
-                      disabled={updateCandidatureMutation.isPending}
+                      disabled={updateCandidatureStatusMutation.isPending}
                       className="bg-red-600 hover:bg-red-700 text-white border-red-600 hover:border-red-700 flex items-center gap-2"
                     >
                       <X className="w-4 h-4" />
-                      {updateCandidatureMutation.isPending ? 'Refus...' : 'Refuser'}
+                      {updateCandidatureStatusMutation.isPending ? 'Refus...' : 'Refuser'}
                     </Button>
                   )}
                 </>
@@ -1317,20 +1308,20 @@ const GenerateTestPage = () => {
                   <Button 
                     className="flex items-center gap-2" 
                     onClick={handleGenerateTest}
-                    disabled={updateCandidatureMutation.isPending}
+                    disabled={updateCandidatureStatusMutation.isPending}
                   >
                     <Sparkles className="w-4 h-4" />
-                    {updateCandidatureMutation.isPending ? 'Génération en cours...' : 'Générer le test'}
+                    {updateCandidatureStatusMutation.isPending ? 'Génération en cours...' : 'Générer le test'}
                   </Button>
                   
                   <Button 
                     variant="destructive"
                     onClick={handleReject}
-                    disabled={updateCandidatureMutation.isPending}
+                    disabled={updateCandidatureStatusMutation.isPending}
                     className="bg-red-600 hover:bg-red-700 text-white border-red-600 hover:border-red-700 flex items-center gap-2"
                   >
                     <X className="w-4 h-4" />
-                    {updateCandidatureMutation.isPending ? 'Refus...' : 'Refuser'}
+                    {updateCandidatureStatusMutation.isPending ? 'Refus...' : 'Refuser'}
                   </Button>
                 </>
               )}
@@ -1345,18 +1336,19 @@ const GenerateTestPage = () => {
                       ? "Le test a été soumis par le candidat. Vous pouvez consulter les résultats."
                       : existingTest.existingTestStatus === 'READY'
                       ? "Le test est prêt et a été envoyé au candidat. En attente de sa réponse."
-                      : existingTest.existingTestStatus === 'SENT' || existingTest.existingTestStatus === 'IN_PROGRESS'
-                      ? "Le test a été envoyé au candidat. En attente de sa réponse."
+                      : existingTest.existingTestStatus === 'IN_PROGRESS'
+                      ? "Le test est en cours par le candidat."
+                      : existingTest.existingTestStatus === 'EVALUATED'
+                      ? "Le test a été évalué et les résultats sont disponibles."
                       : "Le test est en cours de traitement."
-                    : `Le test sera généré automatiquement par notre service IA. Un lien d'accès unique sera envoyé à <strong>${candidateData?.email}</strong>.`
-                  }
+                    : `Le test sera généré automatiquement par notre service IA. Un lien d'accès unique sera envoyé à <strong>${candidateData?.email}</strong>.`}
                 </span>
               </p>
             </div>
+          </div>
         </div>
       </div>
-    </div>
-  );
-};
+    );
+  };
 
 export default GenerateTestPage;

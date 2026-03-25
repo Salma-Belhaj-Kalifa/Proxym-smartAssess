@@ -3,6 +3,10 @@ package com.example.smart_assess.entity;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
+
 @Entity
 @Table(name = "answers")
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor
@@ -14,8 +18,8 @@ public class Answer {
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "test_session_id", nullable = false)
-    private TestSession testSession;
+    @JoinColumn(name = "test_id", nullable = false)
+    private GeneratedTest test;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "question_id", nullable = false)
@@ -28,9 +32,18 @@ public class Answer {
     private String selectedOption;
 
     @Column(name = "is_correct")
-    private Boolean isCorrect;
+    @Builder.Default
+    private Boolean isCorrect = null;
 
     @Column(name = "score_obtained")
     @Builder.Default
     private Double scoreObtained = 0.0;
+
+    @Column(name = "max_score")
+    @Builder.Default
+    private Double maxScore = 1.0;
+
+    @Column(name = "created_at", updatable = false)
+    @Builder.Default
+    private LocalDateTime createdAt = LocalDateTime.now();
 }

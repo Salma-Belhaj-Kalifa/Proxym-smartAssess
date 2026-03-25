@@ -8,5 +8,5 @@ import java.util.Optional;
 
 @Repository
 public interface EvaluationResultRepository extends JpaRepository<EvaluationResult, Long> {
-    Optional<EvaluationResult> findByTestSession_Id(Long testSessionId);
+    Optional<EvaluationResult> findByTest_Id(Long testId);
 }

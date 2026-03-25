@@ -1,24 +1,40 @@
 import apiClient from '@/lib/api';
+import API_ENDPOINTS from '@/config/apiEndpoints';
 import { Position } from './types';
 
-export const positionsService = {
-  getAll: async (): Promise<Position[]> => {
-    const res = await apiClient.get('/positions');
-    return res.data;
+export const positionService = {
+ getAll: async (): Promise<Position[]> => {
+    const response = await apiClient.get(API_ENDPOINTS.POSITIONS.GET_ALL);
+    return response.data;
   },
+  
   getById: async (id: number): Promise<Position> => {
-    const res = await apiClient.get(`/positions/${id}`);
-    return res.data;
+    const response = await apiClient.get(`/positions/${id}`);
+    return response.data;
   },
-  create: async (data: Partial<Position>) => {
-    const res = await apiClient.post('/positions', data);
-    return res.data;
+  
+  update: async (id: number, data: Partial<Position>): Promise<Position> => {
+    const response = await apiClient.put(`/positions/${id}`, data);
+    return response.data;
   },
-  update: async (id: number, data: Partial<Position>) => {
-    const res = await apiClient.put(`/positions/${id}`, data);
-    return res.data;
+  
+  
+  delete: async (id: number): Promise<void> => {
+    await apiClient.delete(API_ENDPOINTS.POSITIONS.DELETE(id));
   },
-  delete: async (id: number) => {
-    await apiClient.delete(`/positions/${id}`);
+  
+  getPublic: async (): Promise<Position[]> => {
+    const response = await apiClient.get(API_ENDPOINTS.POSITIONS.GET_PUBLIC);
+    return response.data;
   },
+  
+  create: async (positionData: Omit<Position, 'id' | 'createdBy' | 'createdAt' | 'updatedAt'>): Promise<Position> => {
+    
+    try {
+      const response = await apiClient.post(API_ENDPOINTS.POSITIONS.CREATE, positionData);
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  }
 };

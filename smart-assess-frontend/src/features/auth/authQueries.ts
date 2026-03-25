@@ -1,20 +1,12 @@
 import { useQuery } from '@tanstack/react-query';
 import { authService } from './authService';
 import { authKeys } from './authKeys';
-import type { User } from './types';
+import { queryOptions } from '@/lib/queryClient';
 
-export const useAuthQuery = () => {
+export const useCurrentUser = () => {
   return useQuery({
-    queryKey: authKeys.user,
+    queryKey: authKeys.me,
     queryFn: authService.getCurrentUser,
-    enabled: !!localStorage.getItem('token'),
-  });
-};
-
-export const useProfile = (userId: number) => {
-  return useQuery({
-    queryKey: authKeys.profile(userId),
-    queryFn: () => authService.getCurrentUser(),
-    enabled: !!userId,
+    ...queryOptions.stable,
   });
 };

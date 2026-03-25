@@ -1,23 +1,24 @@
 export interface Candidature {
   id: number;
   candidateId: number;
+  positionId: number;
+  status: string;
+  appliedAt: string;
+  cvUrl?: string;
+  aiScore?: number;
+  aiAnalysis?: any;
+  testGenerated?: boolean;
+  testCompleted?: boolean;
   candidate?: {
     id: number;
     firstName: string;
     lastName: string;
     email: string;
+    phone?: string;
   };
-  positionId: number;
   position?: {
     id: number;
     title: string;
     company: string;
   };
-  status: 'PENDING' | 'ACCEPTED' | 'REJECTED';
-  appliedAt: string;
-  createdAt: string;
-  updatedAt: string;
-  cvUrl?: string;
-  coverLetter?: string;
-  motivation?: string;
 }

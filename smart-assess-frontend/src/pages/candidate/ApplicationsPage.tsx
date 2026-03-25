@@ -6,14 +6,16 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { useAuth, useCandidaturesByCandidate } from '@/hooks/useApiHooks';
+import { useCandidaturesByCandidate } from '@/features/candidatures/candidaturesQueries';
 
 export default function CandidateApplicationsPage() {
-  const { user } = useAuth();
-
+const { data: user, isLoading: userLoading } = useCurrentUser();
   
   const { data: candidatures = [], isLoading, error, refetch } = useCandidaturesByCandidate(user?.id || 0);
   const [searchTerm, setSearchTerm] = useState('');
+  if (userLoading) {
+  return null;
+}
   const getStatusText = (status: string) => {
     switch (status) {
       case 'PENDING': return 'En cours';

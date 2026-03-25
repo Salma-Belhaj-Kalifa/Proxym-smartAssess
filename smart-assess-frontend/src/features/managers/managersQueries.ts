@@ -1,28 +1,30 @@
 import { useQuery } from '@tanstack/react-query';
 import { managersService } from './managersService';
 import { managersKeys } from './managersKeys';
-import { Manager } from './types';
 import { queryOptions } from '@/lib/queryClient';
 
-export const useManagers = () =>
-  useQuery<Manager[]>({
+export const useManagers = () => {
+  return useQuery({
     queryKey: managersKeys.all,
     queryFn: managersService.getAll,
-    ...queryOptions.stable, 
+    ...queryOptions.fresh,
   });
+};
 
-export const useManager = (id: number) =>
-  useQuery<Manager>({
+export const useManager = (id: number) => {
+  return useQuery({
     queryKey: managersKeys.details(id),
     queryFn: () => managersService.getById(id),
-    ...queryOptions.stable, 
+    ...queryOptions.stable,
     enabled: !!id,
   });
+};
 
-export const useManagerProfile = (id: number) =>
-  useQuery<Manager>({
-    queryKey: managersKeys.profile(id),
-    queryFn: () => managersService.getById(id),
-    ...queryOptions.stable, 
-    enabled: !!id,
+export const useManagerProfile = (userId: number) => {
+  return useQuery({
+    queryKey: managersKeys.profile(userId),
+    queryFn: () => managersService.getProfile(userId),
+    ...queryOptions.stable,
+    enabled: !!userId,
   });
+};

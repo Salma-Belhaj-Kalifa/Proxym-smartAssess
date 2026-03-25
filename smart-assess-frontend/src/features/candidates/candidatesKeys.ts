@@ -1,5 +1,4 @@
-export const candidatesKeys = {
+export const candidateKeys = {
   all: ['candidates'] as const,
-  details: (id: number) => [...candidatesKeys.all, id] as const,
-  profile: (id: number) => [...candidatesKeys.all, 'profile', id] as const,
+  details: (id: number) => ['candidates', id] as const,
 };

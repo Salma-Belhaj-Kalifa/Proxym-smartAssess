@@ -30,11 +30,11 @@ public class SmartAssessApplication {
 					.department("IT")
 					.build();
 				
-				managerRepository.save(manager);
+				Manager savedManager = managerRepository.save(manager);
 				System.out.println("=== MANAGER PAR DÉFAUT CRÉÉ ===");
 				System.out.println("Email: manager@test.com");
 				System.out.println("Password: password123");
-				System.out.println("ID: " + manager.getId());
+				System.out.println("ID: " + savedManager.getId());
 			} else {
 				System.out.println("=== MANAGER PAR DÉFAUT DÉJÀ EXISTANT ===");
 			}

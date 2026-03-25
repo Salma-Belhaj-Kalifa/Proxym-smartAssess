@@ -1,32 +1,29 @@
-import apiClient from '@/lib/api';
-import { User } from './types';
+import apiClient, { removeAuthToken, removeAuthUserData } from '@/lib/api';
+import API_ENDPOINTS from '@/config/apiEndpoints';
+import { AuthResponse, User } from './types';
 
 export const authService = {
-  login: async (credentials: { email: string; password: string }) => {
-    const response = await apiClient.post('/auth/login', credentials);
+  login: async (credentials: { email: string; password: string }): Promise<AuthResponse> => {
+    const response = await apiClient.post(API_ENDPOINTS.AUTH.LOGIN, credentials);
     return response.data;
   },
 
-  register: async (userData: Partial<User>) => {
-    const response = await apiClient.post('/auth/register', userData);
+  register: async (userData: any): Promise<AuthResponse> => {
+    const response = await apiClient.post(API_ENDPOINTS.AUTH.REGISTER, userData);
     return response.data;
   },
 
-  logout: async () => {
-    await apiClient.post('/auth/logout');
+  logout: async (): Promise<void> => {
+    try {
+      await apiClient.post(API_ENDPOINTS.AUTH.LOGOUT);
+    } finally {
+      removeAuthToken();
+      removeAuthUserData();
+    }
   },
 
   getCurrentUser: async (): Promise<User> => {
-    const response = await apiClient.get('/auth/me');
+    const response = await apiClient.get(API_ENDPOINTS.AUTH.ME);
     return response.data;
-  },
-
-  updateProfile: async (id: number, userData: Partial<User>): Promise<User> => {
-    const response = await apiClient.put(`/users/${id}/profile`, userData);
-    return response.data;
-  },
-
-  deleteAccount: async (userId: number): Promise<void> => {
-    await apiClient.delete(`/users/${userId}`);
   },
 };

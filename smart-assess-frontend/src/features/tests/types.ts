@@ -1,38 +1,94 @@
 export interface Test {
   id: number;
-  title: string;
+  title?: string;
   description?: string;
-  candidateId: number;
+  duration?: number; // en minutes
+  timeLimitMinutes?: number;
+  questions?: Question[];
+  question?: Question[];
+  createdBy?: number;
+  createdAt?: string;
+  updatedAt?: string;
+  isActive?: boolean;
+  status?: string;
+  token?: string;
+  candidateId?: number;
+  positionId?: number;
   candidate?: {
     id: number;
     firstName: string;
     lastName: string;
     email: string;
   };
-  status: string;
-  createdAt: string;
-  updatedAt: string;
-  timeLimitMinutes?: number;
+  position?: {
+    id: number;
+    title: string;
+    company?: string;
+  };
+  score?: number;
   finalScore?: number;
-  testScore?: number;
-  timeSpentMinutes?: number;
-  questions?: any[];
-  evaluationResult?: any;
+  maxScore?: number;
+  correctAnswers?: number;
+  totalQuestions?: number;
+  session?: {
+    startedAt?: string;
+    submittedAt?: string;
+    timeSpentMinutes?: number;
+    timeSpentSeconds?: number;
+    hasRealTime?: boolean;
+  };
 }
 
-export interface TestResult {
+export interface Question {
   id: number;
+  questionText: string;
+  questionType: string;
+  options: string[];
+  correctAnswer: string;
+  skillTag: string;
+  maxScore: number;
+  orderIndex: number;
+}
+
+export interface TestSubmission {
   testId: number;
-  candidateId: number;
-  candidate: {
+  answers: {
+    [questionId: string]: string | string[];
+  };
+  timeSpentMinutes?: number;
+}
+
+export interface TestResults {
+  id: number;
+  token: string;
+  candidate?: {
     id: number;
     firstName: string;
     lastName: string;
     email: string;
   };
-  score: number;
+  position?: {
+    id: number;
+    title: string;
+    company: string;
+  };
   status: string;
-  submittedAt: string;
-  evaluatedAt?: string;
-  feedback?: string;
+  submittedAt?: string;
+  timeLimitMinutes?: number;
+  finalScore?: number;
+  maxScore?: number;
+  correctAnswers?: number;
+  totalQuestions?: number;
+  session?: {
+    startedAt?: string;
+    submittedAt?: string;
+    timeSpentMinutes?: number;
+    timeSpentSeconds?: number;
+  };
+  skillScores?: {
+    [skillName: string]: {
+      correct: number;
+      total: number;
+    };
+  };
 }

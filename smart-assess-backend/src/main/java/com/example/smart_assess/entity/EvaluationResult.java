@@ -1,12 +1,11 @@
 package com.example.smart_assess.entity;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import io.hypersistence.utils.hibernate.type.json.JsonType;
 import jakarta.persistence.*;
 import lombok.*;
-import org.hibernate.annotations.Type;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "evaluation_results")
@@ -19,34 +18,49 @@ public class EvaluationResult {
     private Long id;
 
     @OneToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "test_session_id", nullable = false)
-    private TestSession testSession;
+    @JoinColumn(name = "test_id", nullable = false)
+    private GeneratedTest test;
 
-    @Column(name = "test_score")
-    private Double testScore;
+    @Column(name = "total_score")
+    @Builder.Default
+    private Integer totalScore = 0;
 
-    @Column(name = "cv_matching_score")
-    private Double cvMatchingScore;
+    @Column(name = "max_score")
+    @Builder.Default
+    private Integer maxScore = 0;
 
     @Column(name = "final_score")
-    private Double finalScore;
+    @Builder.Default
+    private Double finalScore = 0.0;
 
-    @Type(JsonType.class)
-    @Column(name = "skill_scores", columnDefinition = "jsonb")
-    private JsonNode skillScores;
+    @Column(name = "total_questions")
+    @Builder.Default
+    private Integer totalQuestions = 0;
 
-    @Column(columnDefinition = "TEXT")
-    private String strengths;
+    @Column(name = "correct_answers")
+    @Builder.Default
+    private Integer correctAnswers = 0;
 
-    @Column(columnDefinition = "TEXT")
-    private String weaknesses;
+    @ElementCollection
+    @CollectionTable(name = "skill_scores", joinColumns = @JoinColumn(name = "evaluation_result_id"))
+    @MapKeyColumn(name = "skill_tag")
+    @Builder.Default
+    private java.util.Map<String, SkillScore> skillScores = new java.util.HashMap<>();
 
-    @Column(name = "ai_feedback", columnDefinition = "TEXT")
-    private String aiFeedback;
+    @Column(name = "created_at", updatable = false)
+    @Builder.Default
+    private LocalDateTime createdAt = LocalDateTime.now();
 
-    @Column(columnDefinition = "TEXT")
-    private String recommendation;
+    @Embeddable
+    @Getter @Setter @NoArgsConstructor @AllArgsConstructor
+    @Builder
+    public static class SkillScore {
+        @Column(name = "correct")
+        @Builder.Default
+        private Integer correct = 0;
 
-    @Column(name = "evaluated_at")
-    private LocalDateTime evaluatedAt;
+        @Column(name = "total")
+        @Builder.Default
+        private Integer total = 0;
+    }
 }

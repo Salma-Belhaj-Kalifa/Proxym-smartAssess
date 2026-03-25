@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { useCandidaturesByPosition } from '@/hooks/useApiHooks';
+import { useCandidaturesByPosition } from '@/features/candidatures/candidaturesQueries';
 import { toast } from 'sonner';
 import apiService from '@/services/apiService';
 
@@ -356,8 +356,8 @@ export default function PositionDetailPage() {
                     <div key={candidature.id} className="flex items-center justify-between p-3 border rounded-lg">
                       <div className="flex items-center gap-3">
                         <div>
-                          <p className="font-medium">{candidature.candidateFirstName} {candidature.candidateLastName}</p>
-                          <p className="text-sm text-gray-500">{candidature.candidateEmail}</p>
+                          <p className="font-medium">{candidature.candidate?.firstName} {candidature.candidate?.lastName}</p>
+                          <p className="text-sm text-gray-500">{candidature.candidate?.email}</p>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
@@ -372,15 +372,9 @@ export default function PositionDetailPage() {
                             const candidatureData = {
                               id: candidature.id,
                               candidateId: candidature.candidateId,
-                              candidateFirstName: candidature.candidateFirstName,
-                              candidateLastName: candidature.candidateLastName,
-                              candidateEmail: candidature.candidateEmail,
-                              internshipPositionId: candidature.internshipPositionId,
-                              positionTitle: candidature.positionTitle,
-                              positionCompany: candidature.positionCompany,
+                              positionId: candidature.positionId,
                               status: candidature.status,
-                              appliedAt: candidature.appliedAt,
-                              updatedAt: candidature.updatedAt
+                              appliedAt: candidature.appliedAt
                             };
                             
                             // Stocker les données du candidat dans sessionStorage pour la page de génération de test

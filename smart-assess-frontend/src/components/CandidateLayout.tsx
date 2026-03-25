@@ -2,8 +2,8 @@ import { Outlet, Link, useLocation, Navigate } from "react-router-dom";
 import { LayoutDashboard, Briefcase, Users, FileText, Settings, LogOut, ChevronLeft, Menu, User, Upload, Search } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
-import { useAuth } from '@/hooks/useApiHooks';
-import { authService } from "@/services/apiService";
+import { useCurrentUser } from '@/features/auth/authQueries';
+import { useLogout } from '@/features/auth/authMutations';
 
 const navItems = [
   { label: "Tableau de bord", icon: LayoutDashboard, path: "/candidat/dashboard" },
@@ -16,10 +16,15 @@ const navItems = [
 const CandidateLayout = () => {
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
-  const { user } = useAuth();
+  const { data: user, isLoading } = useCurrentUser();
+  const logoutMutation = useLogout();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   // Protéger les routes candidat - vérifier si l'utilisateur est authentifié et a le bon rôle
+  if (isLoading) {
+    return null;
+  }
+
   if (!user) {
     return <Navigate to="/candidat/connexion" replace />;
   }
@@ -29,17 +34,15 @@ const CandidateLayout = () => {
   }
 
   const handleLogout = async () => {
-    setIsLoggingOut(true);
-    try {
-      await authService.logout();
-      setTimeout(() => {
-        window.location.href = '/';
-      }, 500);
-    } catch (error) {
-      console.error('Erreur lors de la déconnexion:', error);
-      setIsLoggingOut(false);
-    }
-  };
+  setIsLoggingOut(true);
+
+  try {
+    await logoutMutation.mutateAsync();
+  } catch (error) {
+    console.error('Erreur lors de la déconnexion:', error);
+    setIsLoggingOut(false);
+  }
+};
 
   return (
     <div className="min-h-screen flex bg-background">

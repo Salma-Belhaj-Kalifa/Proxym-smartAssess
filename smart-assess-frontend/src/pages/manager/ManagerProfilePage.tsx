@@ -6,43 +6,39 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { useAuth, useProfile, useUpdateProfile } from '@/hooks/useApiHooks';
+import { useCurrentUser } from '@/features/auth/authQueries';
+import { useUpdateManager } from '@/features/managers/managersMutations';
 import { authService } from '@/services/apiService';
 import apiService from '@/services/apiService';
 import { removeAuthToken, removeAuthUserData } from '@/lib/api';
 import { useQueryClient } from '@/hooks/useQueryClient';
 
 export default function ManagerProfilePage() {
-  const { user } = useAuth();
-  const { data: profile, isLoading, error } = useProfile(user?.id || 0);
-  const updateProfileMutation = useUpdateProfile();
+  const { data: user } = useCurrentUser();
+  const updateProfileMutation = useUpdateManager();
   const queryClient = useQueryClient();
   const [isEditing, setIsEditing] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   
   // Utiliser les données du profil ou fallback vers user
-  const profileData = profile || user;
+  const profileData = user;
   
   const [tempFormData, setTempFormData] = useState({
     firstName: profileData?.firstName || '',
     lastName: profileData?.lastName || '',
     email: profileData?.email || '',
-    phone: profileData?.phone || '',
-    department: profileData?.department || '',
   });
 
   // Synchroniser tempFormData quand les données du profil changent
   useEffect(() => {
-    if (profileData?.firstName || profileData?.lastName || profileData?.email || profileData?.phone || profileData?.department) {
+    if (profileData?.firstName || profileData?.lastName || profileData?.email) {
       setTempFormData({
         firstName: profileData.firstName || '',
         lastName: profileData.lastName || '',
         email: profileData.email || '',
-        phone: profileData.phone || '',
-        department: profileData.department || '',
       });
     }
-  }, [profileData?.firstName, profileData?.lastName, profileData?.email, profileData?.phone, profileData?.department]);
+  }, [profileData]);
 
   const handleCancel = () => {
     // Remettre les données originales du profil
@@ -51,8 +47,6 @@ export default function ManagerProfilePage() {
         firstName: profileData.firstName || '',
         lastName: profileData.lastName || '',
         email: profileData.email || '',
-        phone: profileData.phone || '',
-        department: profileData.department || '',
       });
     }
     setIsEditing(false);
@@ -62,8 +56,8 @@ export default function ManagerProfilePage() {
     try {
       if (user?.id) {
         await updateProfileMutation.mutateAsync({ 
-          userId: user.id, 
-          ...tempFormData 
+          id: user.id, 
+          data: tempFormData
         });
         setIsEditing(false);
       }

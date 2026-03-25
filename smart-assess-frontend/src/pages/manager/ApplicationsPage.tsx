@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { toast } from 'sonner';
-import { useCandidatures, usePositions } from '@/hooks/useApiHooks';
+import { useCandidatures, usePositions } from '@/features';
 import { getStatusLabel, getStatusColor, getStatusVariant, getStatusBadgeClass } from '@/utils/statusMappings';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
 
@@ -25,11 +25,11 @@ interface Application {
     title: string;
     company: string;
   };
-  status: 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'TEST_GENERATED' | 'TEST_COMPLETED';
+  status: string;
   appliedAt: string;
   cvUrl?: string;
   aiScore?: number;
-  aiAnalysis?: string;
+  aiAnalysis?: any;
   testGenerated?: boolean;
   testCompleted?: boolean;
 }
@@ -57,19 +57,19 @@ export default function ApplicationsPage() {
     return {
       id: c.id,
       candidate: {
-        id: c.candidateId || c.id,
-        firstName: c.candidateFirstName || c.firstName || '',
-        lastName: c.candidateLastName || c.lastName || '',
-        email: c.candidateEmail || c.email || '',
-        phone: c.candidatePhone || c.phone || ''
+        id: c.id,
+        firstName: c.firstName || '',
+        lastName: c.lastName || '',
+        email: c.email || '',
+        phone: c.phone || ''
       },
       position: {
-        id: c.internshipPositionId || c.positionId || 0,
-        title: c.positionTitle || 'Poste non spécifié',
-        company: c.positionCompany || 'Entreprise'
+        id: c.positionId || 0,
+        title: c.title || 'Poste non spécifié',
+        company: c.company || 'Entreprise'
       },
-      status: c.status || 'PENDING', // S'assurer que le statut est bien défini
-      appliedAt: c.appliedAt || new Date().toISOString(),
+      status: c.status || 'PENDING',
+      appliedAt: c.createdAt || new Date().toISOString(),
       cvUrl: c.cvUrl,
       aiScore: c.aiScore,
       aiAnalysis: c.aiAnalysis,

@@ -397,6 +397,11 @@ export const testService = {
     const response = await apiClient.get(`/tests/${testId}/review`);
     return response.data;
   },
+
+  getTestResultsByToken: async (token: string): Promise<any> => {
+    const response = await apiClient.get(`/tests/public/${token}/results`);
+    return response.data;
+  },
   
   sendTestEmail: async (testId: number, emailData?: { recipientEmail?: string; customMessage?: string }): Promise<any> => {
     const response = await apiClient.post(API_ENDPOINTS.TESTS.SEND_EMAIL(testId), emailData || {});

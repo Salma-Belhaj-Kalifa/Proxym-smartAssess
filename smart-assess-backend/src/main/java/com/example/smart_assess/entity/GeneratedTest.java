@@ -11,6 +11,7 @@ import java.util.List;
 @Entity
 @Table(name = "generated_tests")
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor
+@Data
 @Builder
 public class GeneratedTest {
 
@@ -45,10 +46,33 @@ public class GeneratedTest {
     @Builder.Default
     private LocalDateTime createdAt = LocalDateTime.now();
 
+    // Champs de l'ancienne table test_sessions fusionnés ici
+    @Column(name = "started_at")
+    private LocalDateTime startedAt;
+
+    @Column(name = "submitted_at")
+    private LocalDateTime submittedAt;
+
+    @Column(name = "time_spent_minutes")
+    @Builder.Default
+    private Integer timeSpentMinutes = 0;
+
+    @Column(name = "tab_switch_count")
+    @Builder.Default
+    private Integer tabSwitchCount = 0;
+
+    @Column(name = "is_auto_submitted")
+    @Builder.Default
+    private boolean isAutoSubmitted = false;
+
     @OneToMany(mappedBy = "test", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     @Builder.Default
     private List<TestQuestion> questions = new ArrayList<>();
 
+    @OneToMany(mappedBy = "test", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @Builder.Default
+    private List<Answer> answers = new ArrayList<>();
+
     @OneToOne(mappedBy = "test", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-    private TestSession testSession;
+    private EvaluationResult evaluationResult;
 }

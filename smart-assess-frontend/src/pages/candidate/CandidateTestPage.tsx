@@ -16,7 +16,8 @@ import {
   Timer
 } from 'lucide-react';
 import apiClient from '@/lib/api';
-import apiService from '@/services/apiService';
+import { useGetPublicTest } from '@/features/tests/testsQueries';
+import { useStartTest, useSubmitTest } from '@/features/tests/testsMutations';
 
 interface Question {
   id: number;
@@ -50,12 +51,234 @@ const CandidateTestPage: React.FC = () => {
   const [timeRemaining, setTimeRemaining] = useState<number>(0);
   const [testStarted, setTestStarted] = useState(false);
   const [testSubmitted, setTestSubmitted] = useState(false);
+  
+  // États de sécurité
+  const [tabSwitchCount, setTabSwitchCount] = useState(0);
+  const [copyAttempts, setCopyAttempts] = useState(0);
+  const [securityWarnings, setSecurityWarnings] = useState<string[]>([]);
 
   useEffect(() => {
     if (token) {
       loadTestData(token);
     }
   }, [token]);
+
+  // Effet de sécurité : détection de changement d'onglet
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden && testStarted && !testSubmitted) {
+        setTabSwitchCount(prev => prev + 1);
+        const warning = `Attention : Changement d'onglet détecté (${tabSwitchCount + 1})`;
+        setSecurityWarnings(prev => [...prev, warning]);
+        toast.warning(warning);
+      }
+    };
+
+    const handleBlur = () => {
+      if (testStarted && !testSubmitted) {
+        setTabSwitchCount(prev => prev + 1);
+        const warning = `Attention : Perte de focus détectée (${tabSwitchCount + 1})`;
+        setSecurityWarnings(prev => [...prev, warning]);
+        toast.warning(warning);
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('blur', handleBlur);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('blur', handleBlur);
+    };
+  }, [testStarted, testSubmitted, tabSwitchCount]);
+
+  // Effet de sécurité : détection de copier-coller
+  useEffect(() => {
+    const handleCopy = (e: ClipboardEvent) => {
+      if (testStarted && !testSubmitted) {
+        e.preventDefault();
+        setCopyAttempts(prev => prev + 1);
+        const warning = `Copier-coller détecté (${copyAttempts + 1})`;
+        setSecurityWarnings(prev => [...prev, warning]);
+        toast.warning('Le copier-coller est désactivé pendant le test');
+      }
+    };
+
+    const handlePaste = (e: ClipboardEvent) => {
+      if (testStarted && !testSubmitted) {
+        e.preventDefault();
+        setCopyAttempts(prev => prev + 1);
+        const warning = `Coller détecté (${copyAttempts + 1})`;
+        setSecurityWarnings(prev => [...prev, warning]);
+        toast.warning('Le coller est désactivé pendant le test');
+      }
+    };
+
+    const handleContextMenu = (e: MouseEvent) => {
+      if (testStarted && !testSubmitted) {
+        e.preventDefault();
+        toast.warning('Le clic droit est désactivé pendant le test');
+      }
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (testStarted && !testSubmitted) {
+        // Bloquer TOUS les raccourcis clavier sans exception
+        if ((e.ctrlKey || e.metaKey) && 
+            (e.key === 'c' || e.key === 'v' || e.key === 'x' || e.key === 'a' || e.key === 'w' || e.key === 'q')) {
+          e.preventDefault();
+          e.stopPropagation();
+          toast.warning('Les raccourcis clavier sont désactivés pendant le test');
+        }
+        
+        // Bloquer TOUTES les touches de fonction et de navigation
+        if (e.key === 'F12' || e.key === 'F11' || e.key === 'F10' || e.key === 'F9' || e.key === 'F5' || e.key === 'F3' || e.key === 'F1') {
+          e.preventDefault();
+          e.stopPropagation();
+          toast.error(`La touche ${e.key} est désactivée pendant le test`);
+        }
+        
+        // Bloquer Ctrl+Shift+I/J/K/L, Alt+F4, etc.
+        if ((e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'J' || e.key === 'K' || e.key === 'L')) ||
+            (e.altKey && (e.key === 'F4' || e.key === 'Tab')) ||
+            (e.ctrlKey && (e.key === 'U' || e.key === 'W' || e.key === 'Q'))) {
+          e.preventDefault();
+          e.stopPropagation();
+          toast.error('Les raccourcis de navigation sont désactivés');
+        }
+        
+        // Bloquer la touche Échap avec une détection plus stricte
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          e.stopPropagation();
+          e.stopImmediatePropagation();
+          toast.error('La touche Échap est complètement désactivée pendant le test');
+          return false;
+        }
+        
+        // Bloquer Alt+Tab, Ctrl+Tab, Windows+Tab
+        if ((e.altKey && e.key === 'Tab') || (e.ctrlKey && e.key === 'Tab')) {
+          e.preventDefault();
+          e.stopPropagation();
+          e.stopImmediatePropagation();
+          return false;
+        }
+        
+        // Bloquer Windows Key, Command Key
+        if (e.key === 'Meta' || e.key === 'OS') {
+          e.preventDefault();
+          e.stopPropagation();
+          return false;
+        }
+      }
+    };
+
+    if (testStarted && !testSubmitted) {
+      document.addEventListener('copy', handleCopy);
+      document.addEventListener('paste', handlePaste);
+      document.addEventListener('contextmenu', handleContextMenu);
+      document.addEventListener('keydown', handleKeyDown);
+      
+      // Ajouter un écouteur au niveau de la fenêtre pour capturer F11
+      const windowKeyDownHandler = (e: KeyboardEvent) => {
+        if (testStarted && !testSubmitted && e.key === 'F11') {
+          e.preventDefault();
+          e.stopPropagation();
+          e.stopImmediatePropagation();
+          toast.error('F11 est désactivé pendant le test');
+          return false;
+        }
+      };
+      
+      window.addEventListener('keydown', windowKeyDownHandler, true);
+      
+      return () => {
+        document.removeEventListener('copy', handleCopy);
+        document.removeEventListener('paste', handlePaste);
+        document.removeEventListener('contextmenu', handleContextMenu);
+        document.removeEventListener('keydown', handleKeyDown);
+        window.removeEventListener('keydown', windowKeyDownHandler, true);
+      };
+    }
+  }, [testStarted, testSubmitted, copyAttempts]);
+
+  // Effet de sécurité : empêcher la sortie du mode plein écran
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      if (!document.fullscreenElement && testStarted && !testSubmitted) {
+        toast.error('Le mode plein écran est OBLIGATOIRE pendant le test');
+        
+        // Forcer immédiatement le retour en plein écran
+        const forceFullscreen = async () => {
+          try {
+            if (document.documentElement.requestFullscreen) {
+              await document.documentElement.requestFullscreen();
+            } else if ((document.documentElement as any).webkitRequestFullscreen) {
+              await (document.documentElement as any).webkitRequestFullscreen();
+            } else if ((document.documentElement as any).msRequestFullscreen) {
+              await (document.documentElement as any).msRequestFullscreen();
+            }
+          } catch (error) {
+            // Continuer d'essayer toutes les secondes
+            console.warn('Tentative de plein écran échouée, nouvel essai...', error);
+          }
+        };
+        
+        // Essayer immédiatement
+        forceFullscreen();
+        
+        // Réessayer toutes les secondes si toujours pas en plein écran
+        const retryInterval = setInterval(() => {
+          if (!document.fullscreenElement && testStarted && !testSubmitted) {
+            forceFullscreen();
+          } else {
+            clearInterval(retryInterval);
+          }
+        }, 1000);
+        
+        // Nettoyer l'intervalle après 10 secondes max
+        setTimeout(() => clearInterval(retryInterval), 10000);
+      }
+    };
+
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (testStarted && !testSubmitted) {
+        e.preventDefault();
+        e.returnValue = 'Le test est en cours. Voulez-vous vraiment quitter ? Toutes vos réponses seront perdues.';
+        return e.returnValue;
+      }
+    };
+
+    const handlePageHide = (e: PageTransitionEvent) => {
+      if (testStarted && !testSubmitted) {
+        e.preventDefault();
+        toast.error('Ne quittez pas la page pendant le test');
+      }
+    };
+
+    // Bloquer le clic droit sur tout le document pendant le test
+    const handleGlobalContextMenu = (e: MouseEvent) => {
+      if (testStarted && !testSubmitted) {
+        e.preventDefault();
+        e.stopPropagation();
+        toast.warning('Le clic droit est désactivé pendant le test');
+      }
+    };
+
+    if (testStarted && !testSubmitted) {
+      document.addEventListener('fullscreenchange', handleFullscreenChange);
+      window.addEventListener('beforeunload', handleBeforeUnload);
+      window.addEventListener('pagehide', handlePageHide);
+      document.addEventListener('contextmenu', handleGlobalContextMenu);
+    }
+
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      window.removeEventListener('pagehide', handlePageHide);
+      document.removeEventListener('contextmenu', handleGlobalContextMenu);
+    };
+  }, [testStarted, testSubmitted]);
 
   useEffect(() => {
     if (testStarted && !testSubmitted && timeRemaining > 0) {
@@ -73,11 +296,11 @@ const CandidateTestPage: React.FC = () => {
       setIsLoading(true);
       console.log('Loading test data for token:', testToken);
       
-      // D'abord récupérer les données du test (questions, durée, etc.)
-      const testDataResponse = await apiService.testService.getPublicTest(testToken);
-      console.log('=== DONNÉES COMPLÈTES DU TEST ===');
-      console.log('Test data response:', JSON.stringify(testDataResponse, null, 2));
-      console.log('Test data type:', typeof testDataResponse);
+      // Utiliser le hook pour récupérer les données du test public
+  const { data: testData, isLoading: testLoading, error: testError } = useGetPublicTest(testToken);
+  
+  console.log('=== DONNÉES COMPLÈTES DU TEST ===');
+  console.log('Test data from hook:', testData);
       console.log('Test data keys:', Object.keys(testDataResponse || {}));
       console.log('Questions:', testDataResponse?.questions);
       console.log('Questions type:', typeof testDataResponse?.questions);
@@ -87,9 +310,9 @@ const CandidateTestPage: React.FC = () => {
       
       // Créer un objet testData compatible avec ce que le frontend attend
       const testData = {
-        testId: testDataResponse.testId,
-        duration: testDataResponse.duration || 24,
-        questions: testDataResponse.questions || [],
+        testId: testDataResponse.test?.id,
+        duration: testDataResponse.test?.timeLimitMinutes || 40,
+        questions: testDataResponse.test?.questions || [],
         positionTitle: 'Poste technique', // À améliorer si nécessaire
         token: testToken,
         candidateName: 'Candidat', // À améliorer si nécessaire
@@ -121,25 +344,57 @@ const CandidateTestPage: React.FC = () => {
       toast.error('Token de test invalide');
       return;
     }
-
+    
     try {
       setIsLoading(true);
       console.log('Starting test with token:', token);
+      
+      // Activer le mode plein écran AVANT tout le reste
+      const enterFullscreen = async () => {
+        try {
+          if (document.documentElement.requestFullscreen) {
+            await document.documentElement.requestFullscreen();
+          } else if ((document.documentElement as any).webkitRequestFullscreen) {
+            await (document.documentElement as any).webkitRequestFullscreen();
+          } else if ((document.documentElement as any).msRequestFullscreen) {
+            await (document.documentElement as any).msRequestFullscreen();
+          }
+        } catch (error) {
+          console.warn('Impossible d\'activer le plein écran automatiquement:', error);
+          toast.error('Le mode plein écran est obligatoire pour commencer le test');
+          return false;
+        }
+        return true;
+      };
+      
+      // Attendre que le plein écran soit activé
+      const fullscreenSuccess = await enterFullscreen();
+      if (!fullscreenSuccess) {
+        setIsLoading(false);
+        return;
+      }
+      
+      // Vérifier que nous sommes bien en plein écran
+      if (!document.fullscreenElement) {
+        toast.error('Le mode plein écran est obligatoire pour commencer le test');
+        setIsLoading(false);
+        return;
+      }
       
       // Appeler l'endpoint de démarrage du test
       const startResponse = await apiService.testService.startTest(token);
       console.log('Test started successfully:', startResponse);
       
-      setTestStarted(true); 
-      toast.success('Test démarré avec succès !');
+      setTestStarted(true);
+      setTimeRemaining(testData!.duration * 60);
+      loadSavedAnswers();
+      
+      toast.success('Test démarré en mode plein écran. Toute tentative de sortie sera bloquée.');
       
     } catch (error: any) {
       console.error('Error starting test:', error);
-      console.error('Error response:', error.response?.data);
-      console.error('Error status:', error.response?.status);
       
       let errorMessage = 'Erreur lors du démarrage du test';
-      
       if (error.response?.status === 400) {
         errorMessage = error.response?.data?.error || 'Test non valide';
       } else if (error.response?.status === 500) {
@@ -149,6 +404,11 @@ const CandidateTestPage: React.FC = () => {
       }
       
       toast.error(errorMessage);
+      
+      // Sortir du plein écran en cas d'erreur
+      if (document.fullscreenElement) {
+        await document.exitFullscreen();
+      }
     } finally {
       setIsLoading(false);
     }
@@ -254,17 +514,19 @@ const CandidateTestPage: React.FC = () => {
       
       console.log('Réponse du backend:', response);
       
-      setTestSubmitted(true);
+      // Sortir du mode plein écran après soumission réussie
+      if (document.fullscreenElement) {
+        await document.exitFullscreen();
+      }
       
-      // Nettoyer les réponses sauvegardées après soumission réussie
+      // Nettoyer les réponses sauvegardées
       clearSavedAnswers();
       
+      setTestSubmitted(true);
       toast.success('Test soumis avec succès !');
       
       setTimeout(() => {
-        navigate('/candidate/test-submitted', { 
-          state: { testResult: response.data } 
-        });
+        navigate(`/test-submitted/${token}`);
       }, 3000);
       
     } catch (error: any) {
@@ -460,6 +722,47 @@ const CandidateTestPage: React.FC = () => {
         </div>
       </div>
 
+      {testStarted && !testSubmitted && (
+        // Panneau d'alerte de sécurité
+        <div className="fixed top-4 right-4 z-50 max-w-sm">
+          {(tabSwitchCount > 0 || copyAttempts > 0 || securityWarnings.length > 0) && (
+            <Card className="bg-red-50 border-red-200 shadow-lg">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <AlertCircle className="w-5 h-5 text-red-600" />
+                  <h3 className="font-bold text-red-800">Alertes de sécurité</h3>
+                </div>
+                <div className="space-y-1 text-sm">
+                  {tabSwitchCount > 0 && (
+                    <div className="text-red-700">
+                      <strong>Changements d'onglet :</strong> {tabSwitchCount}
+                    </div>
+                  )}
+                  {copyAttempts > 0 && (
+                    <div className="text-red-700">
+                      <strong>Tentatives de copier-coller :</strong> {copyAttempts}
+                    </div>
+                  )}
+                  {securityWarnings.length > 0 && (
+                    <div className="text-red-700">
+                      <strong>Derniers avertissements :</strong>
+                      <ul className="mt-1 space-y-1">
+                        {securityWarnings.slice(-3).map((warning, index) => (
+                          <li key={index} className="text-xs">• {warning}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+                <div className="mt-2 text-xs text-red-600">
+                  Toutes les activités sont enregistrées et seront signalées.
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      )}
+
       {!testStarted ? (
         // Page d'accueil du test
         <div className="max-w-4xl mx-auto px-4 py-8">
@@ -495,14 +798,29 @@ const CandidateTestPage: React.FC = () => {
                   </div>
                 </div>
                 
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+                  <h3 className="font-bold text-red-800 mb-2">⚠️ AVERTISSEMENT IMPORTANT - MODE PLEIN ÉCRAN OBLIGATOIRE</h3>
+                  <ul className="text-sm text-red-700 space-y-1 text-left">
+                    <li>• <strong>Le mode plein écran s'activera automatiquement</strong> au début du test</li>
+                    <li>• <strong>IL EST INTERDIT de quitter le mode plein écran</strong> pendant le test</li>
+                    <li>• <strong>La touche Échap est complètement désactivée</strong></li>
+                    <li>• <strong>Les raccourcis clavier (Ctrl+C, Ctrl+V, F12, etc.) sont bloqués</strong></li>
+                    <li>• <strong>Le clic droit est désactivé</strong></li>
+                    <li>• <strong>Toute tentative de sortie du plein écran sera immédiatement corrigée</strong></li>
+                    <li>• <strong>Le changement d'onglet ou la fermeture de la page annulera le test</strong></li>
+                    <li>• <strong>Assurez-vous d'être dans un environnement calme avant de commencer</strong></li>
+                  </ul>
+                  <div className="mt-3 p-2 bg-red-100 rounded text-red-800 text-xs font-bold">
+                    En cliquant sur "Commencer le test", vous acceptez ces conditions de sécurité strictes.
+                  </div>
+                </div>
+                
                 <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
                   <h3 className="font-bold text-yellow-800 mb-2">Instructions importantes :</h3>
                   <ul className="text-sm text-yellow-700 space-y-1 text-left">
                     <li>• Le test est chronométré et ne peut pas être mis en pause</li>
                     <li>• Une fois commencé, vous devez le terminer</li>
-                    <li>• Vous pouvez naviguer entre les questions</li>
                     <li>• Assurez-vous d'avoir une connexion internet stable</li>
-                    <li>• Vos réponses sont sauvegardées automatiquement</li>
                   </ul>
                 </div>
                 

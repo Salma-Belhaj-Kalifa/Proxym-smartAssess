@@ -6,40 +6,39 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { useAuth, useProfile, useUpdateProfile } from '@/hooks/useApiHooks';
-import { authService, candidateService } from '@/services/apiService';
+import { useCurrentUser } from '@/features/auth/authQueries';
+import { useUpdateCandidate, useDeleteMyProfile } from '@/features/candidates/candidatesMutations';
+import { useLogout } from '@/features/auth/authMutations';
 import { removeAuthToken, removeAuthUserData } from '@/lib/api';
 import { useQueryClient } from '@/hooks/useQueryClient';
 
 export default function CandidateProfilePage() {
-  const { user } = useAuth();
-  const { data: profile, isLoading, error } = useProfile(user?.id && user?.id > 0 ? user.id : null);
-  const updateProfileMutation = useUpdateProfile();
+  const { data: user } = useCurrentUser();
+  const updateProfileMutation = useUpdateCandidate(user?.id || 0);
+  const deleteProfileMutation = useDeleteMyProfile();
   const queryClient = useQueryClient();
   const [isEditing, setIsEditing] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   
   // Utiliser les données du profil ou fallback vers user
-  const profileData = profile || user;
+  const profileData = user;
   
   const [tempFormData, setTempFormData] = useState({
     firstName: profileData?.firstName || '',
     lastName: profileData?.lastName || '',
     email: profileData?.email || '',
-    phone: profileData?.phone || '',
   });
 
   // Synchroniser tempFormData quand les données du profil changent
   useEffect(() => {
-    if (profileData?.firstName || profileData?.lastName || profileData?.email || profileData?.phone) {
+    if (profileData?.firstName || profileData?.lastName || profileData?.email) {
       setTempFormData({
         firstName: profileData.firstName || '',
         lastName: profileData.lastName || '',
         email: profileData.email || '',
-        phone: profileData.phone || '',
       });
     }
-  }, [profileData?.firstName, profileData?.lastName, profileData?.email, profileData?.phone]);
+  }, [profileData]);
 
   // Rediriger si l'utilisateur n'est pas connecté
   useEffect(() => {
@@ -55,7 +54,6 @@ export default function CandidateProfilePage() {
         firstName: profileData.firstName || '',
         lastName: profileData.lastName || '',
         email: profileData.email || '',
-        phone: profileData.phone || '',
       });
     }
     setIsEditing(false);
@@ -71,10 +69,7 @@ export default function CandidateProfilePage() {
   const handleSave = async () => {
     try {
       if (user?.id) {
-        await updateProfileMutation.mutateAsync({ 
-          userId: user.id, 
-          ...tempFormData 
-        });
+        await updateProfileMutation.mutateAsync(tempFormData);
         setIsEditing(false);
       }
     } catch (error) {
@@ -82,28 +77,9 @@ export default function CandidateProfilePage() {
     }
   };
 
-  // États de chargement
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-lg">Chargement du profil...</div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-lg text-red-500">
-          Erreur lors du chargement du profil
-        </div>
-      </div>
-    );
-  }
-
   const handleDeleteAccount = async () => {
     try {
-      await candidateService.deleteMyProfile();
+      await deleteProfileMutation.mutateAsync();
       
       // Nettoyage manuel pour éviter les redirections automatiques
       removeAuthToken();
@@ -144,12 +120,6 @@ export default function CandidateProfilePage() {
                   <Mail className="w-4 h-4 text-purple-600" />
                   <span className="text-sm font-medium">{tempFormData.email}</span>
                 </div>
-                {tempFormData.phone && (
-                  <div className="flex items-center gap-2 px-3 py-1 bg-purple-50 rounded-full">
-                    <Phone className="w-4 h-4 text-purple-600" />
-                    <span className="text-sm font-medium">{tempFormData.phone}</span>
-                  </div>
-                )}
               </div>
             </div>
 
@@ -265,21 +235,6 @@ export default function CandidateProfilePage() {
                     className="h-12 text-base border-gray-200 focus:border-purple-500 focus:ring-2 focus:ring-purple-100 transition-all rounded-lg"
                   />
                 </div>
-                <div className="group">
-                  <Label htmlFor="phone" className="text-sm font-bold text-gray-700 mb-2 block flex items-center gap-2">
-                    <Phone className="w-4 h-4 text-purple-600" />
-                    Téléphone
-                  </Label>
-                  <Input
-                    id="phone"
-                    type="tel"
-                    value={tempFormData.phone}
-                    onChange={(e) => handleInputChange('phone', e.target.value)}
-                    disabled={!isEditing}
-                    placeholder="+216 XX XXX XXX"
-                    className="h-12 text-base border-gray-200 focus:border-purple-500 focus:ring-2 focus:ring-purple-100 transition-all rounded-lg"
-                  />
-                </div>
               </div>
             </div>
           </CardContent>
@@ -287,37 +242,32 @@ export default function CandidateProfilePage() {
 
         {/* Modal de suppression */}
         {showDeleteModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 backdrop-blur-sm">
-            <div className="bg-white rounded-2xl p-6 max-w-md mx-4 shadow-2xl border border-gray-100">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
-                  <AlertTriangle className="w-6 h-6 text-red-600" />
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <Card className="w-96 max-w-90vw">
+              <CardHeader>
+                <CardTitle className="text-red-600">Confirmer la suppression</CardTitle>
+              </CardHeader>
+              <CardContent className="p-6">
+                <p className="text-gray-600 mb-6">
+                  Êtes-vous sûr de vouloir supprimer votre compte ? Cette action est irréversible.
+                </p>
+                <div className="flex gap-3 justify-end">
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowDeleteModal(false)}
+                    className="border-gray-300 text-gray-700 hover:bg-gray-50"
+                  >
+                    Annuler
+                  </Button>
+                  <Button
+                    onClick={handleDeleteAccount}
+                    className="bg-red-600 hover:bg-red-700 text-white"
+                  >
+                    Supprimer
+                  </Button>
                 </div>
-                <div>
-                  <h3 className="text-lg font-bold text-gray-900">Supprimer le compte</h3>
-                  <p className="text-sm text-gray-500">Cette action est irréversible</p>
-                </div>
-              </div>
-              <p className="text-gray-600 mb-6 leading-relaxed text-sm">
-                Êtes-vous sûr de vouloir supprimer votre compte ? Toutes vos données seront définitivement perdues.
-              </p>
-              <div className="flex gap-3">
-                <Button 
-                  variant="outline" 
-                  onClick={() => setShowDeleteModal(false)}
-                  className="flex-1 border-purple-300 text-purple-700 hover:bg-purple-50 h-10"
-                >
-                  Annuler
-                </Button>
-                <Button 
-                  variant="destructive" 
-                  onClick={handleDeleteAccount}
-                  className="flex-1 h-10 bg-red-600 hover:bg-red-700"
-                >
-                  Supprimer
-                </Button>
-              </div>
-            </div>
+              </CardContent>
+            </Card>
           </div>
         )}
       </div>

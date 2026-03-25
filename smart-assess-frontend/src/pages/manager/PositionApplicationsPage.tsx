@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { useCandidaturesByPosition, usePositions } from '@/hooks/useApiHooks';
+import { useCandidaturesByPosition, usePositions } from '@/features';
 
 interface Application {
   id: number;

@@ -2,8 +2,8 @@ import { Outlet, Link, useLocation, Navigate } from "react-router-dom";
 import { LayoutDashboard, Briefcase, Users, FileText, Settings, LogOut, ChevronLeft, Menu, User, CheckCircle } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
-import { useAuth } from '@/hooks/useApiHooks';
-import { authService } from "@/services/apiService";
+import { useCurrentUser } from '@/features/auth/authQueries';
+import { useLogout } from '@/features/auth/authMutations';
 
 const navItems = [
   { label: "Tableau de bord", icon: LayoutDashboard, path: "/manager/dashboard" },
@@ -17,7 +17,8 @@ const navItems = [
 const ManagerLayout = () => {
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
-  const { user } = useAuth();
+  const { data: user, isLoading } = useCurrentUser();
+  const logoutMutation = useLogout();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   if (!user) {
@@ -27,14 +28,14 @@ const ManagerLayout = () => {
   if (user.role !== 'MANAGER' && user.role !== 'HR') {
     return <Navigate to="/unauthorized" replace />;
   }
-
+  if (isLoading) {
+    return null;
+  }
   const handleLogout = async () => {
     setIsLoggingOut(true);
+
     try {
-      await authService.logout();
-      setTimeout(() => {
-        window.location.href = '/';
-      }, 500);
+      await logoutMutation.mutateAsync();
     } catch (error) {
       setIsLoggingOut(false);
     }

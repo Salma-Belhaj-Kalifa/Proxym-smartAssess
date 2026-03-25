@@ -1,6 +1,8 @@
-export const testsKeys = {
+export const testKeys = {
   all: ['tests'] as const,
-  details: (id: number) => [...testsKeys.all, id] as const,
-  results: (id: number) => [...testsKeys.all, 'results', id] as const,
-  review: (id: number) => [...testsKeys.all, 'review', id] as const,
+  details: (id: number) => ['tests', id] as const,
+  generate: ['generate-test'] as const,
+  submit: (token: string) => ['test-submit', token] as const,
+  results: (token: string) => ['test-results', token] as const,
+  public: (token: string) => ['public-test', token] as const,
 };

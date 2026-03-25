@@ -1,9 +1,9 @@
 export interface Manager {
   id: number;
-  email: string;
   firstName: string;
   lastName: string;
-  role: 'MANAGER' | 'HR';
+  email: string;
+  role: 'MANAGER';
   phone?: string;
   department?: string;
   bio?: string;

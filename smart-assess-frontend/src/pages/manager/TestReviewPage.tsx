@@ -1,24 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { toast } from 'sonner';
+import { ArrowLeft, Eye, Mail, Send, CheckCircle, AlertCircle, Clock, Calendar, User, Briefcase, Save, Trash2, Plus, Check, Copy, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { toast } from 'sonner';
 import apiClient from '@/lib/api';
-import { 
-  ArrowLeft, 
-  Save, 
-  Trash2, 
-  Plus, 
-  Eye, 
-  CheckCircle, 
-  AlertCircle,
-  Copy,
-  ExternalLink,
-  Mail
-} from 'lucide-react';
+import apiService from '@/services/apiService';
+import { useTests } from '@/features/tests/testsQueries';
+import { useUpdateTest } from '@/features/tests/testsMutations';
 
 interface Question {
   id?: number;
@@ -64,6 +57,10 @@ const TestReviewPage: React.FC = () => {
   const [testLink, setTestLink] = useState<string>('');
   const [showLinkModal, setShowLinkModal] = useState(false);
   const [editingQuestion, setEditingQuestion] = useState<number | null>(null);
+  
+  // Utiliser les hooks de la feature tests
+  const { data: tests, isLoading: testsLoading } = useTests();
+  const updateTestMutation = useUpdateTest(testId ? parseInt(testId) : 0);
 
   useEffect(() => {
     console.log('TestReviewPage - Component mounted with testId:', testId);
@@ -79,49 +76,30 @@ const TestReviewPage: React.FC = () => {
   const loadTestData = async (id: number) => {
     try {
       setIsLoading(true);
-      console.log('TestReviewPage - Loading test data from API for ID:', id);
+      console.log('TestReviewPage - Loading test data for ID:', id);
       
-      // Récupérer les données du test généré avec apiClient
-      const response = await apiClient.get(`/tests/${id}/review`);
-      const data = response.data;
+      // Chercher d'abord dans les tests existants
+      const existingTest = Array.isArray(tests) ? tests.find(test => test.id === id) : undefined;
       
-      console.log('TestReviewPage - API response received:', data);
-      
-      // Essayer de récupérer les questions depuis le localStorage d'abord
-      const localStorageQuestions = localStorage.getItem(`test_questions_${id}`);
-      console.log('TestReviewPage - Questions from localStorage:', localStorageQuestions ? 'Found' : 'Not found');
-      
-      if (localStorageQuestions) {
-        try {
-          const parsedQuestions = JSON.parse(localStorageQuestions);
-          console.log('TestReviewPage - Parsed questions from localStorage:', parsedQuestions);
-          console.log('Number of questions loaded:', parsedQuestions.length);
-          setTestData({
-            ...data,
-            questions: parsedQuestions
-          });
-        } catch (parseError) {
-          console.error('Error parsing stored questions:', parseError);
-          data.questions = [];
-          setTestData(data);
-        }
+      if (existingTest) {
+        console.log('TestReviewPage - Found existing test:', existingTest);
+        setTestData(existingTest as unknown as TestReviewData);
       } else {
-        console.warn('No questions found in localStorage for test ID:', id);
-        console.log('Available localStorage keys:', Object.keys(localStorage));
-        data.questions = [];
-        setTestData(data);
+        // Récupérer les données du test via apiClient
+        const response = await apiClient.get(`/tests/${id}/review`);
+        const data = response.data;
+        
+        console.log('TestReviewPage - API response received:', data);
+        
+        setTestData(data as unknown as TestReviewData);
       }
       
+    } catch (err: any) {
+      console.error('Error loading test data:', err);
+      toast.error('Failed to load test data');
+      setTestData(null);
+    } finally {
       setIsLoading(false);
-      console.log('TestReviewPage - Test data loaded successfully');
-      
-    } catch (error: any) {
-      console.error('TestReviewPage - Error loading test data:', error);
-      console.error('TestReviewPage - Error response:', error.response?.data);
-      console.error('TestReviewPage - Error status:', error.response?.status);
-      
-      setIsLoading(false);
-      toast.error('Erreur lors du chargement des données du test');
     }
   };
 
@@ -245,6 +223,28 @@ const TestReviewPage: React.FC = () => {
         console.log('Questions saved to database and localStorage cleared');
         
         toast.success('Questions sauvegardées en base avec succès');
+        
+        // Mettre à jour le statut de la candidature à TEST_SENT
+        try {
+          // Récupérer l'ID de la candidature depuis les données du test
+          // Le champ candidatureId devrait être disponible dans les données du test
+          const candidatureId = (testData as any).candidatureId || 
+                              (testData as any).candidate?.id || 
+                              (testData as any).candidateId;
+          console.log('Updating candidature status - candidatureId:', candidatureId);
+          console.log('Test data structure:', testData);
+          
+          if (candidatureId) {
+            await apiClient.put(`/candidatures/${candidatureId}/status`, {
+              status: 'TEST_SENT'
+            });
+            console.log('Candidature status updated to TEST_SENT');
+          } else {
+            console.error('Candidature ID not found in test data');
+          }
+        } catch (error) {
+          console.error('Error updating candidature status:', error);
+        }
       } else {
         // Si le test n'est plus en DRAFT, utiliser la sauvegarde normale
         await saveQuestions();
@@ -298,9 +298,6 @@ const TestReviewPage: React.FC = () => {
     try {
       setIsSendingEmail(true);
       
-      // Importer le service d'email
-      const { testService } = await import('@/services/apiService');
-      
       toast.info('Envoi de l\'email en cours...');
       
       const emailData = {
@@ -308,7 +305,8 @@ const TestReviewPage: React.FC = () => {
         customMessage: `Bonjour ${testData.candidate?.firstName} ${testData.candidate?.lastName},\n\nVous êtes invité à passer un test technique pour le poste de ${testData.internshipPosition?.title}.\n\nVoici votre lien personnel : ${testLink}\n\nCordialement,\nL'équipe de recrutement`
       };
       
-      const response = await testService.sendTestEmail(testData.id, emailData);
+      // Utiliser apiClient directement car testService.sendTestEmail n'existe pas
+      const response = await apiClient.post(`/tests/${testData.id}/send-email`, emailData);
       
       toast.success('Email envoyé avec succès au candidat !');
       console.log('Email sent successfully:', response);
@@ -360,227 +358,347 @@ const TestReviewPage: React.FC = () => {
   }
 
   return (
-    <div className="container mx-auto p-6 max-w-6xl">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-4">
-          <Button
-            variant="outline"
-            onClick={() => navigate('/manager/candidats')}
-            className="flex items-center gap-2"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Retour
-          </Button>
-          <div>
-            <h1 className="text-2xl font-bold">Révision du Test</h1>
-            <p className="text-gray-600">
-              {testData.candidateName} - {testData.positionTitle}
-            </p>
+    <div className="min-h-screen bg-gray-50">
+      <div className="container mx-auto p-6 max-w-7xl">
+        {/* Header */}
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
+          <div className="px-6 py-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <Button
+                  variant="outline"
+                  onClick={() => navigate('/manager/candidats')}
+                  className="flex items-center gap-2"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  Retour
+                </Button>
+                <div>
+                  <h1 className="text-2xl font-bold text-gray-900">Révision du Test</h1>
+                  <p className="text-sm text-gray-600 mt-1">
+                    {testData?.candidate?.firstName} {testData?.candidate?.lastName} - {testData?.internshipPosition?.title}
+                  </p>
+                </div>
+              </div>
+              
+              <div className="flex items-center gap-3">
+                <Button
+                  variant="outline"
+                  onClick={previewTest}
+                  className="flex items-center gap-2"
+                  disabled={testData?.questions?.length === 0}
+                >
+                  <Eye className="w-4 h-4" />
+                  Aperçu
+                </Button>
+                
+                <Button
+                  onClick={saveQuestions}
+                  disabled={isSaving || testData?.questions?.length === 0}
+                  className="flex items-center gap-2"
+                >
+                  <Save className="w-4 h-4" />
+                  {isSaving ? 'Sauvegarde...' : 'Sauvegarder'}
+                </Button>
+                
+                <Button
+                  onClick={generateTestLink}
+                  disabled={isGeneratingLink || !testData?.questions || testData.questions.length === 0}
+                  className="flex items-center gap-2 bg-green-600 hover:bg-green-700"
+                >
+                  <CheckCircle className="w-4 h-4" />
+                  {isGeneratingLink ? 'Génération...' : 'Valider et générer le lien'}
+                </Button>
+              </div>
+            </div>
           </div>
         </div>
-        
-        <div className="flex items-center gap-3">
-          <Button
-            variant="outline"
-            onClick={previewTest}
-            className="flex items-center gap-2"
-          >
-            <Eye className="w-4 h-4" />
-            Aperçu
-          </Button>
-          
-          <Button
-            onClick={saveQuestions}
-            disabled={isSaving}
-            className="flex items-center gap-2"
-          >
-            <Save className="w-4 h-4" />
-            {isSaving ? 'Sauvegarde...' : 'Sauvegarder'}
-          </Button>
-          
-          <Button
-            onClick={generateTestLink}
-            disabled={isGeneratingLink || testData.questions.length === 0}
-            className="flex items-center gap-2 bg-green-600 hover:bg-green-700"
-          >
-            <CheckCircle className="w-4 h-4" />
-            {isGeneratingLink ? 'Génération...' : 'Valider et générer le lien'}
-          </Button>
-        </div>
-      </div>
 
-      {/* Questions */}
-      <div className="space-y-6">
-        {testData.questions.length === 0 ? (
-          <Card>
-            <CardContent className="text-center py-12">
-              <AlertCircle className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-              <p className="text-gray-600">Aucune question générée</p>
-              <p className="text-sm text-gray-500 mt-2">
-                Le test a été créé mais aucune question n'a été générée par l'IA.
-              </p>
-            </CardContent>
-          </Card>
-        ) : (
-          testData.questions.map((question, index) => (
-            <Card key={index} className="relative">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="flex items-center gap-3">
-                    <Badge variant="outline">Question {index + 1}</Badge>
-                    <Badge variant="secondary">{question.skillTag}</Badge>
-                    <Badge variant="outline">{question.maxScore} points</Badge>
-                  </CardTitle>
-                  
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setEditingQuestion(editingQuestion === index ? null : index)}
-                    >
-                      {editingQuestion === index ? 'Fermer' : 'Modifier'}
-                    </Button>
-                    
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      onClick={() => deleteQuestion(index)}
-                      className="flex items-center gap-1"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                      Supprimer
-                    </Button>
+        {/* Statistiques du test */}
+        {testData && (
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 bg-blue-100 rounded-lg">
+                    <AlertCircle className="w-5 h-5 text-blue-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Statut</p>
+                    <p className="font-semibold text-gray-900">{testData.status}</p>
                   </div>
                 </div>
-              </CardHeader>
-              
-              <CardContent className="space-y-4">
-                {editingQuestion === index ? (
-                  // Mode édition
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium mb-2">Question</label>
-                      <Textarea
-                        value={question.questionText}
-                        onChange={(e) => updateQuestion(index, 'questionText', e.target.value)}
-                        className="w-full"
-                        rows={3}
-                      />
-                    </div>
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 bg-green-100 rounded-lg">
+                    <CheckCircle className="w-5 h-5 text-green-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Questions</p>
+                    <p className="font-semibold text-gray-900">{testData.questions?.length || 0}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 bg-purple-100 rounded-lg">
+                    <span className="text-purple-600 font-bold">⏱</span>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Durée</p>
+                    <p className="font-semibold text-gray-900">{testData.timeLimitMinutes} min</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 bg-orange-100 rounded-lg">
+                    <span className="text-orange-600 font-bold">👤</span>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Candidat</p>
+                    <p className="font-semibold text-gray-900">
+                      {testData.candidate?.firstName} {testData.candidate?.lastName}
+                    </p>
+                    <p className="text-xs text-gray-500">{testData.candidate?.email}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+      {/* Questions */}
+        <div className="space-y-6">
+          {!testData?.questions || testData.questions.length === 0 ? (
+            <Card>
+              <CardContent className="text-center py-12">
+                <AlertCircle className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                <p className="text-gray-600">Aucune question générée</p>
+                <p className="text-sm text-gray-500 mt-2">
+                  Le test a été créé mais aucune question n'a été générée par l'IA.
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            testData.questions.map((question, index) => (
+              <Card key={index} className="relative hover:shadow-md transition-shadow duration-200">
+                <CardHeader className="bg-gradient-to-r from-gray-50 to-white border-b">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="flex items-center gap-3">
+                      <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                        Question {index + 1}
+                      </Badge>
+                      <Badge variant="secondary" className="bg-purple-50 text-purple-700">
+                        {question.skillTag || 'Non spécifiée'}
+                      </Badge>
+                      <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                        {question.maxScore} points
+                      </Badge>
+                    </CardTitle>
                     
-                    <div>
-                      <label className="block text-sm font-medium mb-2">Options de réponse</label>
-                      <div className="space-y-2">
-                        {question.options.map((option, optionIndex) => (
-                          <div key={optionIndex} className="flex items-center gap-2">
-                            <Input
-                              value={option}
-                              onChange={(e) => updateOption(index, optionIndex, e.target.value)}
-                              placeholder={`Option ${optionIndex + 1}`}
-                              className="flex-1"
-                            />
-                            
-                            {option === question.correctAnswer && (
-                              <Badge variant="default">Correcte</Badge>
-                            )}
-                            
-                            {question.options.length > 2 && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => removeOption(index, optionIndex)}
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
-                            )}
-                          </div>
-                        ))}
-                        
-                        <Button
-                          variant="outline"
-                          onClick={() => addOption(index)}
-                          className="flex items-center gap-2"
-                        >
-                          <Plus className="w-4 h-4" />
-                          Ajouter une option
-                        </Button>
-                      </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setEditingQuestion(editingQuestion === index ? null : index)}
+                        className="hover:bg-blue-50"
+                      >
+                        {editingQuestion === index ? 'Fermer' : 'Modifier'}
+                      </Button>
+                      
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => deleteQuestion(index)}
+                        className="hover:bg-red-600"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        Supprimer
+                      </Button>
                     </div>
-                    
-                    <div className="grid grid-cols-2 gap-4">
+                  </div>
+                </CardHeader>
+                
+                <CardContent className="space-y-4">
+                  {editingQuestion === index ? (
+                    // Mode édition
+                    <div className="space-y-4">
                       <div>
-                        <label className="block text-sm font-medium mb-2">Réponse correcte</label>
-                        <select
-                          value={question.correctAnswer}
-                          onChange={(e) => updateQuestion(index, 'correctAnswer', e.target.value)}
-                          className="w-full p-2 border rounded"
-                        >
-                          {question.options.map((option, optionIndex) => {
-                            // Vérifier si l'option contient déjà un préfixe
-                            const hasPrefix = /^[A-D]\)|^[A-D]\./.test(option.trim());
-                            const displayText = hasPrefix ? option : `${String.fromCharCode(65 + optionIndex)}. ${option}`;
-                            
-                            return (
-                              <option key={optionIndex} value={option}>
-                                {displayText || `(Option ${optionIndex + 1} - vide)`}
-                              </option>
-                            );
-                          })}
-                        </select>
+                        <label className="block text-sm font-medium mb-2 text-gray-700">Question</label>
+                        <Textarea
+                          value={question.questionText}
+                          onChange={(e) => updateQuestion(index, 'questionText', e.target.value)}
+                          className="w-full border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                          rows={3}
+                          placeholder="Entrez votre question ici..."
+                        />
                       </div>
                       
                       <div>
-                        <label className="block text-sm font-medium mb-2">Compétence</label>
-                        <Input
-                          value={question.skillTag}
-                          onChange={(e) => updateQuestion(index, 'skillTag', e.target.value)}
-                          placeholder="ex: React, Node.js, etc."
-                        />
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  // Mode lecture
-                  <div className="space-y-4">
-                    <div>
-                      <h3 className="font-medium mb-2">Question:</h3>
-                      <p className="text-gray-700">{question.questionText}</p>
-                    </div>
-                    
-                    <div>
-                      <h3 className="font-medium mb-2">Options de réponse:</h3>
-                      <div className="space-y-2">
-                        {question.options.map((option, optionIndex) => {
-                          // Vérifier si l'option contient déjà un préfixe (A), B), C), etc. ou A., B., C., etc.
-                          const hasPrefix = /^[A-D]\)|^[A-D]\./.test(option.trim());
-                          const prefix = hasPrefix ? '' : `${String.fromCharCode(65 + optionIndex)}.`;
-                          
-                          return (
-                            <div
-                              key={optionIndex}
-                              className={`p-3 rounded border ${
-                                option === question.correctAnswer
-                                  ? 'bg-green-50 border-green-300'
-                                  : 'bg-gray-50 border-gray-200'
-                              }`}
-                            >
-                              <span className="font-medium">{prefix}</span> {option}
+                        <label className="block text-sm font-medium mb-2 text-gray-700">Options de réponse</label>
+                        <div className="space-y-2">
+                          {question.options.map((option, optionIndex) => (
+                            <div key={optionIndex} className="flex items-center gap-2">
+                              <Input
+                                value={option}
+                                onChange={(e) => updateOption(index, optionIndex, e.target.value)}
+                                placeholder={`Option ${optionIndex + 1}`}
+                                className={`flex-1 ${
+                                  option === question.correctAnswer 
+                                    ? 'border-green-500 bg-green-50 ring-green-500' 
+                                    : 'border-gray-300'
+                                }`}
+                              />
+                              
                               {option === question.correctAnswer && (
-                                <Badge className="ml-2" variant="default">Correcte</Badge>
+                                <div className="flex items-center gap-1">
+                                  <Badge variant="default" className="bg-green-600 text-white">
+                                    <Check className="w-3 h-3" />
+                                    Réponse correcte
+                                  </Badge>
+                                </div>
+                              )}
+                              
+                              {question.options.length > 2 && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => removeOption(index, optionIndex)}
+                                  className="hover:bg-red-50"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
                               )}
                             </div>
-                          );
-                        })}
+                          ))}
+                          
+                          <Button
+                            variant="outline"
+                            onClick={() => addOption(index)}
+                            className="flex items-center gap-2 hover:bg-blue-50"
+                          >
+                            <Plus className="w-4 h-4" />
+                            Ajouter une option
+                          </Button>
+                        </div>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium mb-2 text-gray-700">Réponse correcte</label>
+                          <select
+                            value={question.correctAnswer}
+                            onChange={(e) => updateQuestion(index, 'correctAnswer', e.target.value)}
+                            className="w-full p-2 border border-gray-300 rounded-md focus:border-blue-500 focus:ring-blue-500"
+                          >
+                            {question.options.map((option, optionIndex) => {
+                              const hasPrefix = /^[A-D]\)|^[A-D]\./.test(option.trim());
+                              const displayText = hasPrefix ? option : `${String.fromCharCode(65 + optionIndex)}. ${option}`;
+                              
+                              return (
+                                <option key={optionIndex} value={option}>
+                                  {displayText || `(Option ${optionIndex + 1} - vide)`}
+                                </option>
+                              );
+                            })}
+                          </select>
+                        </div>
+                        
+                        <div>
+                          <label className="block text-sm font-medium mb-2 text-gray-700">Compétence</label>
+                          <Input
+                            value={question.skillTag}
+                            onChange={(e) => updateQuestion(index, 'skillTag', e.target.value)}
+                            placeholder="ex: React, Node.js, etc."
+                            className="border-gray-300"
+                          />
+                        </div>
                       </div>
                     </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          ))
-        )}
-      </div>
+                  ) : (
+                    // Mode lecture
+                    <div className="space-y-4">
+                      <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                        <h3 className="font-medium mb-2 text-blue-900">Question:</h3>
+                        <p className="text-gray-800 font-medium">
+                          {question.questionText || 'Texte de la question non disponible'}
+                        </p>
+                      </div>
+                      
+                      <div>
+                        <h3 className="font-medium mb-3 text-gray-700">Options de réponse:</h3>
+                        <div className="space-y-2">
+                          {(() => {
+                            if (Array.isArray(question.options)) {
+                              return (question.options as string[]).map((option, optionIndex) => {
+                                const hasPrefix = /^[A-D]\)|^[A-D]\./.test(option.trim());
+                                const cleanOption = option.replace(/^[A-D]\)\s*/, '').trim();
+                                const isCorrect = option === question.correctAnswer;
+                                
+                                console.log(`Option ${optionIndex}: "${option}" vs Correct: "${question.correctAnswer}" = ${isCorrect}`);
+                                
+                                return (
+                                  <div 
+                                    key={optionIndex} 
+                                    className={`p-4 rounded-lg border transition-all duration-200 ${
+                                      isCorrect
+                                        ? 'bg-green-50 border-green-300 shadow-sm'
+                                        : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
+                                    }`}
+                                  >
+                                    <div className="flex items-center justify-between">
+                                      <div className="flex items-center gap-3">
+                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
+                                          isCorrect 
+                                            ? 'bg-green-600 text-white' 
+                                            : 'bg-gray-200 text-gray-600'
+                                        }`}>
+                                          {String.fromCharCode(65 + optionIndex)}
+                                        </div>
+                                        <span className="font-medium text-gray-900">{cleanOption}</span>
+                                      </div>
+                                      
+                                      {isCorrect && (
+                                        <Badge variant="default" className="bg-green-600 text-white px-3 py-1">
+                                          <Check className="w-4 h-4" />
+                                          Réponse correcte
+                                        </Badge>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              });
+                            } else if (question.options && typeof question.options === 'object') {
+                              const optionsObj = question.options as any;
+                              return Object.keys(optionsObj).map((key, index) => (
+                                <div key={index} className="p-3 rounded-lg border border-gray-200 bg-gray-50">
+                                  <span className="font-medium">{optionsObj[key]}</span>
+                                </div>
+                              ));
+                            } else {
+                              return <div className="text-gray-500">Pas d'options disponibles</div>;
+                            }
+                          })()}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            ))
+          )}
+        </div>
 
       {/* Modal de lien généré */}
       {showLinkModal && (
@@ -645,6 +763,7 @@ const TestReviewPage: React.FC = () => {
           </Card>
         </div>
       )}
+      </div>
     </div>
   );
 };

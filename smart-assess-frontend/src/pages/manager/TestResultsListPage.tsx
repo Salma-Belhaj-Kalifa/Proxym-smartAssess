@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { Briefcase, Clock, User, CheckCircle, AlertCircle, Eye, Calendar, TrendingUp } from 'lucide-react';
+import React, { useEffect } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { testService } from '@/services/apiService';
+import { toast } from 'sonner';
+import { useTests } from '@/features/tests/testsQueries';
+import { AlertCircle, Eye, User, Briefcase, Clock, Calendar } from 'lucide-react';
 
 interface TestResult {
   id: number;
@@ -200,172 +201,140 @@ const TestResultsListPage: React.FC = () => {
         email: item.candidate?.email || item.user?.email || 'unknown@example.com'
       },
       internshipPosition: item.internshipPosition || item.position || {
-        id: 0,
-        title: item.internshipPosition?.title || item.position?.title || 'Poste non spécifié',
-        company: item.internshipPosition?.company || item.position?.company || 'Entreprise'
-      },
-      status: item.status || 'SUBMITTED',
-      createdAt: item.createdAt || item.created_at || new Date().toISOString(),
-      submittedAt: item.submittedAt || item.submitted_at,
-      timeLimitMinutes: item.timeLimitMinutes || item.time_limit_minutes || 24,
-      finalScore: item.finalScore || item.final_score,
-      testScore: item.testScore || item.test_score,
-      timeSpentMinutes: item.timeSpentMinutes || item.time_spent_minutes
-    };
-  };
-
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'SUBMITTED':
-        return <Badge className="bg-green-100 text-green-800">Soumis</Badge>;
-      case 'IN_PROGRESS':
-        return <Badge className="bg-blue-100 text-blue-800">En cours</Badge>;
-      case 'PENDING':
-        return <Badge className="bg-yellow-100 text-yellow-800">En attente</Badge>;
-      case 'EXPIRED':
-        return <Badge className="bg-red-100 text-red-800">Expiré</Badge>;
-      default:
-        return <Badge className="bg-gray-100 text-gray-800">Inconnu</Badge>;
-    }
-  };
-
-  const getScoreColor = (score?: number) => {
-    if (!score) return 'text-gray-500';
-    if (score >= 80) return 'text-green-600';
-    if (score >= 60) return 'text-yellow-600';
-    return 'text-red-600';
-  };
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('fr-FR', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
-
-  if (isLoading) {
     return (
-      <div className="p-6 lg:p-8 max-w-7xl mx-auto">
-        <div className="flex items-center justify-center min-h-screen">
-          <div className="text-lg">Chargement des résultats...</div>
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-500 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Chargement des résultats...</p>
         </div>
       </div>
     );
   }
 
-  if (error) {
+  if (testsError) {
     return (
-      <div className="p-6 lg:p-8 max-w-7xl mx-auto">
-        <div className="flex items-center justify-center min-h-screen">
-          <div className="text-center">
-            <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
-            <h2 className="text-xl font-semibold text-gray-900 mb-2">Erreur de chargement</h2>
-            <p className="text-gray-600 mb-4">{error}</p>
-            <Button onClick={loadTests}>Réessayer</Button>
-          </div>
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <Card className="w-full max-w-2xl mx-auto m-4">
+          <CardContent className="p-6">
+            <div className="text-center">
+              <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+              <h2 className="text-xl font-semibold text-gray-900 mb-2">Erreur de chargement</h2>
+              <p className="text-gray-600">{testsError.message || 'Erreur lors du chargement des tests'}</p>
+              <Button onClick={() => navigate('/manager/dashboard')} className="mt-4">
+                Retour au dashboard
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (!testResults.length) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <AlertCircle className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">Aucun résultat trouvé</h2>
+          <p className="text-gray-600">Aucun test complété trouvé.</p>
+          <Button onClick={() => navigate('/manager/dashboard')} className="mt-4">
+            Retour au dashboard
+          </Button>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="p-6 lg:p-8 max-w-7xl mx-auto">
-      <div className="flex items-center justify-between mb-8">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Résultats des tests</h1>
-          <p className="text-gray-600 mt-1">
-            {tests.length} test{tests.length > 1 ? 's' : ''} trouvé{tests.length > 1 ? 's' : ''}
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" asChild>
-            <Link to="/manager/dashboard">
-              Retour au dashboard
-            </Link>
+    <div className="min-h-screen bg-gray-50 p-6">
+      <div className="max-w-7xl mx-auto">
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-3xl font-bold text-gray-900">Résultats des Tests</h1>
+          <Button onClick={() => navigate('/manager/dashboard')} className="flex items-center gap-2">
+            <Briefcase className="h-4 w-4" />
+            Retour au Dashboard
           </Button>
         </div>
-      </div>
 
-      {tests.length === 0 ? (
-        <div className="text-center py-12">
-          <Briefcase className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">Aucun résultat trouvé</h3>
-          <p className="text-gray-600">Aucun candidat n'a encore passé de test.</p>
-        </div>
-      ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {tests.map((test) => (
-            <Card 
-              key={test.id} 
-              className="hover:shadow-lg transition-shadow cursor-pointer"
-              onClick={() => navigate(`/manager/test-results/${test.id}`)}
-            >
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  {getStatusBadge(test.status)}
-                  <Button variant="ghost" size="sm">
-                    <Eye className="w-4 h-4" />
-                  </Button>
-                </div>
+          {testResults.map((result) => (
+            <Card key={result.id} className="hover:shadow-lg transition-shadow">
+              <CardHeader>
+                <CardTitle className="flex items-center justify-between">
+                  <span className="truncate">{result.internshipPosition.title}</span>
+                  <Badge className={
+                    result.status === 'COMPLETED' ? 'bg-green-100 text-green-800' :
+                    result.status === 'SUBMITTED' ? 'bg-blue-100 text-blue-800' :
+                    'bg-gray-100 text-gray-800'
+                  }>
+                    {result.status === 'COMPLETED' ? 'Terminé' :
+                     result.status === 'SUBMITTED' ? 'Soumis' : 'Inconnu'}
+                  </Badge>
+                </CardTitle>
               </CardHeader>
-              <CardContent className="pt-0">
-                <div className="space-y-3">
-                  {/* Candidat */}
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                      <User className="w-5 h-5 text-blue-600" />
+              <CardContent className="p-6">
+                <div className="space-y-4">
+                  <div className="flex items-center space-x-4">
+                    <User className="h-5 w-5 text-gray-400" />
+                    <div>
+                      <p className="font-medium">{result.candidate.firstName} {result.candidate.lastName}</p>
+                      <p className="text-sm text-gray-600">{result.candidate.email}</p>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-medium text-gray-900 truncate">
-                        {test.candidate.firstName} {test.candidate.lastName}
-                      </h3>
-                      <p className="text-sm text-gray-500 truncate">{test.candidate.email}</p>
+                  </div>
+                  
+                  <div className="flex items-center space-x-4">
+                    <Briefcase className="h-5 w-5 text-gray-400" />
+                    <div>
+                      <p className="font-medium">{result.internshipPosition.title}</p>
+                      <p className="text-sm text-gray-600">{result.internshipPosition.company}</p>
                     </div>
                   </div>
 
-                  {/* Poste */}
-                  <div className="flex items-center gap-2 text-sm">
-                    <Briefcase className="w-4 h-4 text-gray-400" />
-                    <span className="text-gray-600 truncate">{test.internshipPosition.title}</span>
+                  <div className="flex items-center space-x-4">
+                    <Calendar className="h-5 w-5 text-gray-400" />
+                    <div>
+                      <p className="text-sm text-gray-600">
+                        Créé: {new Date(result.createdAt).toLocaleDateString()}
+                      </p>
+                      <p className="text-sm text-gray-600">
+                        Soumis: {new Date(result.submittedAt).toLocaleDateString()}
+                      </p>
+                    </div>
                   </div>
 
-                  {/* Score */}
-                  {test.finalScore !== undefined && (
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-600">Score</span>
-                      <span className={`font-bold ${getScoreColor(test.finalScore)}`}>
-                        {test.finalScore}%
-                      </span>
+                  <div className="flex items-center space-x-4">
+                    <Clock className="h-5 w-5 text-gray-400" />
+                    <div>
+                      <p className="text-sm text-gray-600">
+                        Temps: {result.timeSpentFormatted || 'Non spécifié'}
+                      </p>
+                      <p className="text-sm text-gray-600">
+                        Limite: {result.timeLimitMinutes} minutes
+                      </p>
+                    </div>
+                  </div>
+
+                  {result.finalScore !== undefined && (
+                    <div className="pt-4 border-t">
+                      <p className="text-lg font-semibold">Score: {result.finalScore}</p>
                     </div>
                   )}
 
-                  {/* Temps */}
-                  <div className="flex items-center justify-between text-sm">
-                    <div className="flex items-center gap-1 text-gray-600">
-                      <Clock className="w-4 h-4" />
-                      <span>{test.timeSpentFormatted || `${test.timeSpentMinutes || 'N/A'} min`}</span>
-                    </div>
-                    <span className="text-gray-500">
-                      / {test.timeLimitMinutes} min
-                    </span>
-                  </div>
-
-                  {/* Date */}
-                  <div className="flex items-center gap-2 text-xs text-gray-500 pt-2 border-t">
-                    <Calendar className="w-3 h-3" />
-                    <span>
-                      {test.submittedAt ? formatDate(test.submittedAt) : formatDate(test.createdAt)}
-                    </span>
+                  <div className="flex justify-between items-center pt-4">
+                    <Button
+                      onClick={() => navigate(`/manager/tests/${result.id}/review`)}
+                      className="flex items-center gap-2"
+                    >
+                      <Eye className="h-4 w-4" />
+                      Voir les détails
+                    </Button>
                   </div>
                 </div>
               </CardContent>
             </Card>
           ))}
         </div>
-      )}
+      </div>
     </div>
   );
 };

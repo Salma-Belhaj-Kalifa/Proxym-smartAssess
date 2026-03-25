@@ -4,7 +4,7 @@ import { ArrowLeft, FileText, Award, Briefcase, GraduationCap, Code, Users, Targ
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { useAuth } from '@/hooks/useApiHooks';
+import { useCurrentUser } from '@/features/auth/authQueries';
 
 interface CVAnalysisData {
   technicalProfile: any;
@@ -23,7 +23,7 @@ interface CVAnalysisData {
 }
 
 const CVAnalysisPage: React.FC = () => {
-  const { user } = useAuth();
+  const { data: user } = useCurrentUser();
   const [analysisData, setAnalysisData] = useState<CVAnalysisData | null>(null);
   const [loading, setLoading] = useState(true);
 

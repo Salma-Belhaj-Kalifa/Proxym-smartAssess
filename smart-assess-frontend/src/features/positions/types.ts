@@ -1,3 +1,5 @@
+import { Candidate } from '../candidates/types';
+
 export interface Position {
   id: number;
   title: string;
@@ -11,16 +13,4 @@ export interface Position {
   createdAt: string;
   updatedAt: string;
   candidatures?: Candidate[];
-}
-
-export interface Candidate {
-  id: number;
-  email: string;
-  firstName: string;
-  lastName: string;
-  phone?: string;
-  cvUrl?: string;
-  status: string;
-  createdAt: string;
-  updatedAt: string;
 }

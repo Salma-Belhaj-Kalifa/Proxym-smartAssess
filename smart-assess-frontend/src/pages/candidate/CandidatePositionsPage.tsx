@@ -5,8 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { positionService } from '@/services/apiService';
-import type { Position } from '@/services/apiService';
+import { usePositions } from '@/features/positions/positionsQueries';
+import type { Position } from '@/features/positions/types';
 
 const CandidatePositionsPage: React.FC = () => {
   const [positions, setPositions] = useState<Position[]>([]);
@@ -16,9 +16,14 @@ const CandidatePositionsPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Utiliser le hook usePositions pour récupérer les positions
+  const { data: positionsData = [], isLoading: isLoadingPositions, error: errorPositions } = usePositions();
+
   useEffect(() => {
-    loadPositions();
-  }, []);
+    setPositions(positionsData);
+    setIsLoading(isLoadingPositions);
+    setError(errorPositions);
+  }, [positionsData, isLoadingPositions, errorPositions]);
 
   useEffect(() => {
     // Charger les positions sélectionnées depuis localStorage
@@ -32,20 +37,6 @@ const CandidatePositionsPage: React.FC = () => {
     // Sauvegarder les positions sélectionnées dans localStorage
     localStorage.setItem('selectedPositions', JSON.stringify(selectedPositions));
   }, [selectedPositions]);
-
-  const loadPositions = async () => {
-    try {
-      setIsLoading(true);
-      const data = await positionService.getPublic();
-      setPositions(data);
-      setFilteredPositions(data);
-      setError(null);
-    } catch (err) {
-      setError('Impossible de charger les positions');
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   useEffect(() => {
     const filtered = positions.filter(position => {
@@ -107,7 +98,7 @@ const CandidatePositionsPage: React.FC = () => {
             />
           </div>
           <Button 
-            onClick={loadPositions} 
+            onClick={() => window.location.reload()} 
             variant="outline" 
             className="h-12 px-4"
             disabled={isLoading}

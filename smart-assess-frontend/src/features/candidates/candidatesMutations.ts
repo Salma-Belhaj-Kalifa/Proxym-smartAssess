@@ -1,83 +1,71 @@
-import { useMutation, useQueryClient as useTanStackQueryClient } from '@tanstack/react-query';
-import { candidatesService } from './candidatesService';
-import { candidatesKeys } from './candidatesKeys';
-import { toast } from 'sonner';
-import { Candidate } from './types';
+import { useMutation } from '@tanstack/react-query';
+import { candidateService } from './candidatesService';
 import { useQueryClient } from '@/hooks/useQueryClient';
+import { candidateKeys } from './candidatesKeys';
+import { toast } from 'sonner';
+import { removeAuthToken, removeAuthUserData } from '@/lib/api';
 
 export const useCreateCandidate = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: candidatesService.create,
+    mutationFn: candidateService.create,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: candidatesKeys.all });
-      toast.success('Candidat créé avec succès');
+      queryClient.invalidateQueries({ queryKey: candidateKeys.all });
+      toast.success('Candidat créé avec succès !');
     },
     onError: (error: any) => {
-      console.error('Error creating candidate:', error);
       toast.error('Erreur lors de la création du candidat');
-    }
+      console.error(error);
+    },
   });
 };
 
-export const useUpdateCandidate = () => {
+export const useUpdateCandidate = (id: number) => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, data }: { id: number; data: Partial<Candidate> }) => {
-      return await candidatesService.update(id, data);
-    },
+    mutationFn: (data: any) => candidateService.update(id, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: candidatesKeys.all });
-      toast.success('Candidat mis à jour avec succès');
+      queryClient.invalidateQueries({ queryKey: candidateKeys.all });
+      queryClient.invalidateQueries({ queryKey: candidateKeys.details(id) });
+      toast.success('Candidat mis à jour avec succès !');
     },
     onError: (error: any) => {
       toast.error('Erreur lors de la mise à jour du candidat');
-    }
+      console.error(error);
+    },
   });
 };
 
 export const useDeleteCandidate = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: candidatesService.delete,
+    mutationFn: candidateService.delete,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: candidatesKeys.all });
-      toast.success('Candidat supprimé avec succès');
+      queryClient.invalidateQueries({ queryKey: candidateKeys.all });
+      toast.success('Candidat supprimé avec succès !');
     },
     onError: (error: any) => {
       toast.error('Erreur lors de la suppression du candidat');
-    }
+      console.error(error);
+    },
   });
 };
 
-export const useUpdateCandidateProfile = () => {
+export const useDeleteMyProfile = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, profileData }: { id: number; profileData: any }) => {
-      return await candidatesService.updateProfile(id, profileData);
-    },
+    mutationFn: candidateService.deleteMyProfile,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: candidatesKeys.all });
-      toast.success('Profil mis à jour avec succès');
+      queryClient.clear();
+      toast.success('Profil supprimé avec succès !');
+      // Nettoyage et redirection
+      removeAuthToken();
+      removeAuthUserData();
+      window.location.href = '/';
     },
     onError: (error: any) => {
-      toast.error('Erreur lors de la mise à jour du profil');
-    }
-  });
-};
-
-export const useUploadCV = () => {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async ({ id, file }: { id: number; file: File }) => {
-      return await candidatesService.uploadCV(id, file);
+      toast.error('Erreur lors de la suppression du profil');
+      console.error(error);
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: candidatesKeys.all });
-      toast.success('CV téléchargé avec succès');
-    },
-    onError: (error: any) => {
-      toast.error('Erreur lors du téléchargement du CV');
-    }
   });
 };

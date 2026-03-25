@@ -60,12 +60,12 @@ public class Manager extends User {
         
         public Manager build() {
             Manager manager = new Manager();
-            // Utiliser les setters publics de Lombok
-            manager.setEmail(this.email);
-            manager.setPassword(this.password);
-            manager.setFirstName(this.firstName);
-            manager.setLastName(this.lastName);
-            manager.setRole(this.role);
+            // Hériter de la classe User avec les bonnes méthodes
+            manager.setEmail(email);
+            manager.setPassword(password);
+            manager.setFirstName(firstName);
+            manager.setLastName(lastName);
+            manager.setRole(role);
             manager.setCreatedAt(LocalDateTime.now());
             manager.department = this.department;
             manager.internshipPositions = new ArrayList<>();

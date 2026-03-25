@@ -1,53 +1,69 @@
 import apiClient from '@/lib/api';
-import { Test, TestResult } from './types';
+import API_ENDPOINTS from '@/config/apiEndpoints';
+import { Test } from './types';
 
-export const testsService = {
+export const testService = {
   getAll: async (): Promise<Test[]> => {
-    const res = await apiClient.get('/tests');
-    return res.data;
+    const response = await apiClient.get(API_ENDPOINTS.TESTS.GET_ALL);
+    return response.data;
   },
 
   getById: async (id: number): Promise<Test> => {
-    const res = await apiClient.get(`/tests/${id}`);
-    return res.data;
+    const response = await apiClient.get(API_ENDPOINTS.TESTS.GET_BY_ID(id));
+    return response.data;
   },
 
   create: async (data: Partial<Test>): Promise<Test> => {
-    const res = await apiClient.post('/tests', data);
-    return res.data;
+    const response = await apiClient.post(API_ENDPOINTS.TESTS.CREATE, data);
+    return response.data;
   },
 
   update: async (id: number, data: Partial<Test>): Promise<Test> => {
-    const res = await apiClient.put(`/tests/${id}`, data);
-    return res.data;
+    const response = await apiClient.put(API_ENDPOINTS.TESTS.UPDATE(id), data);
+    return response.data;
   },
 
   delete: async (id: number): Promise<void> => {
-    await apiClient.delete(`/tests/${id}`);
+    await apiClient.delete(API_ENDPOINTS.TESTS.DELETE(id));
   },
 
-  getResults: async (testId: number): Promise<TestResult[]> => {
-    const res = await apiClient.get(`/tests/${testId}/results`);
-    return res.data;
+  sendEmail: async (id: number, emailData: any): Promise<any> => {
+    const response = await apiClient.post(API_ENDPOINTS.TESTS.SEND_EMAIL(id), emailData);
+    return response.data;
   },
 
-  getForReview: async (testId: number): Promise<Test> => {
-    const res = await apiClient.get(`/tests/${testId}/review`);
-    return res.data;
+  generateTest: async (testData: any): Promise<any> => {
+    const response = await apiClient.post(API_ENDPOINTS.TESTS.GENERATE, testData);
+    return response.data;
   },
 
-  submit: async (testId: number, answers: any): Promise<TestResult> => {
-    const res = await apiClient.post(`/tests/${testId}/submit`, { answers });
-    return res.data;
+  submitTest: async (testId: number, answers: any): Promise<any> => {
+    const response = await apiClient.post(API_ENDPOINTS.TESTS.SUBMIT(testId), answers);
+    return response.data;
   },
 
-  generate: async (data: any): Promise<Test> => {
-    const res = await apiClient.post('/tests/generate', data);
-    return res.data;
+  startTest: async (token: string): Promise<any> => {
+    const response = await apiClient.post(API_ENDPOINTS.TESTS.START_TEST(token));
+    return response.data;
   },
 
-  checkExisting: async (candidateId: number): Promise<any> => {
-    const res = await apiClient.get(`/tests/check-existing/${candidateId}`);
-    return res.data;
+  getTestResults: async (token: string): Promise<any> => {
+    const response = await apiClient.get(`/tests/public/${token}/results`);
+    return response.data;
+  },
+
+  getPublicTest: async (token: string): Promise<any> => {
+    const response = await apiClient.get(`/tests/public/${token}`);
+    return response.data;
+  },
+
+  getTestForReview: async (id: number): Promise<any> => {
+    const response = await apiClient.get(`/tests/${id}/review`);
+    return response.data;
+  },
+
+  getTestResultsByToken: async (token: string): Promise<any> => {
+    const response = await apiClient.get(`/tests/public/${token}/results`);
+    return response.data;
   },
 };

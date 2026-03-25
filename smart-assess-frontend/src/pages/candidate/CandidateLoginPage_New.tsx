@@ -6,9 +6,16 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from 'sonner';
-import { useAuth } from '@/hooks/useApiHooks';
+import { useLogin, useRegister, useLogout } from '@/features/auth/authMutations';
+import { useCurrentUser } from '@/features/auth/authQueries';
 
 const CandidateLoginPage: React.FC = () => {
+  const loginMutation = useLogin();
+  const registerMutation = useRegister();
+  const logoutMutation = useLogout();
+  const { data: currentUser } = useCurrentUser();
+  const isLoading = loginMutation.isPending || registerMutation.isPending || logoutMutation.isPending;
+
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -18,18 +25,16 @@ const CandidateLoginPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
   
-  const { login, user } = useAuth();
-
   // Vérification si déjà connecté
   React.useEffect(() => {
-    if (user) {
-      if (user.role === 'CANDIDATE') {
+    if (currentUser) {
+      if (currentUser.role === 'CANDIDATE') {
         navigate('/candidat/dashboard');
       } else {
         navigate('/');
       }
     }
-  }, [user, navigate]);
+  }, [currentUser, navigate]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = e.target;
@@ -44,7 +49,7 @@ const CandidateLoginPage: React.FC = () => {
     setIsLoading(true);
 
     try {
-      const result = await login({ email: formData.email, password: formData.password });
+      const result = await loginMutation.mutateAsync({ email: formData.email, password: formData.password });
       
       if (!result || !result.user) {
         toast.error('Email ou mot de passe incorrect');

@@ -5,7 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useAuth } from '@/hooks/useApiHooks';
+import { useLogin, useRegister, useLogout } from '@/features/auth/authMutations';
+import { useCurrentUser } from '@/features/auth/authQueries';
 
 export default function RecruiterLoginPage() {
   const navigate = useNavigate();
@@ -19,7 +20,11 @@ export default function RecruiterLoginPage() {
   const [activeTab, setActiveTab] = useState("login");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const { login, register, logout, isLoading, user } = useAuth();
+  const loginMutation = useLogin();
+  const registerMutation = useRegister();
+  const logoutMutation = useLogout();
+  const { data: user } = useCurrentUser();
+  const isLoading = loginMutation.isPending || registerMutation.isPending || logoutMutation.isPending;
 
   // Vérification si déjà connecté
   useEffect(() => {
@@ -29,12 +34,12 @@ export default function RecruiterLoginPage() {
       } else if (user.role === 'HR') {
         navigate('/hr/dashboard');
       } else {
-        logout();
+        logoutMutation.mutateAsync();
         alert("Accès non autorisé. Vous avez été déconnecté.");
         navigate('/');
       }
     }
-  }, [user, navigate, logout]);
+  }, [user, navigate, logoutMutation]);
 
   // LOGIN
   const handleSubmit = async (e: React.FormEvent) => {
@@ -42,7 +47,7 @@ export default function RecruiterLoginPage() {
     setErrorMessage(null);
 
     try {
-      const result = await login({ email, password });
+      const result = await loginMutation.mutateAsync({ email, password });
 
       if (!result || !result.user || !result.user.role) {
         setErrorMessage("Utilisateur introuvable ou rôle incorrect.");
@@ -54,7 +59,7 @@ export default function RecruiterLoginPage() {
       } else if (result.user.role === 'HR') {
         navigate('/hr/dashboard');
       } else {
-        await logout();
+        await logoutMutation.mutateAsync();
         setErrorMessage("Accès refusé : ce portail est réservé aux managers et RH.");
         navigate('/');
       }
@@ -93,7 +98,7 @@ export default function RecruiterLoginPage() {
 
     try {
       const userData = { email, password, firstName, lastName, phone, role };
-      const result = await register(userData);
+      const result = await registerMutation.mutateAsync(userData);
 
       if (!result || !result.user || !result.user.role) {
         setErrorMessage("Erreur lors de l'inscription");
@@ -105,7 +110,7 @@ export default function RecruiterLoginPage() {
       } else if (result.user.role === 'HR') {
         navigate('/hr/dashboard');
       } else {
-        await logout();
+        await logoutMutation.mutateAsync();
         setErrorMessage("Accès refusé : ce portail est réservé aux managers et RH.");
         navigate('/');
       }

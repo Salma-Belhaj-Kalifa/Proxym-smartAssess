@@ -1,45 +1,33 @@
 import apiClient from '@/lib/api';
+import API_ENDPOINTS from '@/config/apiEndpoints';
 import { Candidate } from './types';
 
-export const candidatesService = {
+export const candidateService = {
   getAll: async (): Promise<Candidate[]> => {
-    const res = await apiClient.get('/candidates');
-    return res.data;
+    const response = await apiClient.get(API_ENDPOINTS.CANDIDATES.GET_ALL);
+    return response.data;
   },
 
   getById: async (id: number): Promise<Candidate> => {
-    const res = await apiClient.get(`/candidates/${id}`);
-    return res.data;
+    const response = await apiClient.get(API_ENDPOINTS.CANDIDATES.GET_BY_ID(id));
+    return response.data;
   },
 
   create: async (data: Partial<Candidate>): Promise<Candidate> => {
-    const res = await apiClient.post('/candidates', data);
-    return res.data;
+    const response = await apiClient.post(API_ENDPOINTS.CANDIDATES.CREATE, data);
+    return response.data;
   },
 
   update: async (id: number, data: Partial<Candidate>): Promise<Candidate> => {
-    const res = await apiClient.put(`/candidates/${id}`, data);
-    return res.data;
+    const response = await apiClient.put(API_ENDPOINTS.CANDIDATES.UPDATE(id), data);
+    return response.data;
   },
 
   delete: async (id: number): Promise<void> => {
-    await apiClient.delete(`/candidates/${id}`);
+    await apiClient.delete(API_ENDPOINTS.CANDIDATES.DELETE(id));
   },
 
-  updateProfile: async (id: number, profileData: any): Promise<Candidate> => {
-    const res = await apiClient.put(`/candidates/${id}/profile`, profileData);
-    return res.data;
-  },
-
-  uploadCV: async (id: number, file: File): Promise<any> => {
-    const formData = new FormData();
-    formData.append('file', file);
-    
-    const res = await apiClient.post(`/candidates/${id}/cv`, formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
-    return res.data;
+  deleteMyProfile: async (): Promise<void> => {
+    await apiClient.delete('/candidates/my-profile');
   },
 };

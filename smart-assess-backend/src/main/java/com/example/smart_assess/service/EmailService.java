@@ -124,4 +124,38 @@ public class EmailService {
             throw new RuntimeException("Impossible d'envoyer email HTML", e);
         }
     }
+
+    // ==========================================
+    // EMAIL NOTIFICATION TEST COMPLETÉ
+    // ==========================================
+    public void sendTestCompletedNotification(String toEmail, String candidateName, String positionTitle, String testUrl) {
+        try {
+            log.info("Envoi email notification test complété à {}", toEmail);
+
+            Context context = new Context();
+            context.setVariable("candidateName", candidateName);
+            context.setVariable("positionTitle", positionTitle);
+            context.setVariable("testUrl", testUrl);
+            context.setVariable("companyName", "PROXYM SmartAssess");
+
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+
+            helper.setFrom(fromEmail);
+            helper.setTo(toEmail);
+            helper.setSubject("✅ Test complété - " + positionTitle + " | PROXYM SmartAssess");
+
+            String htmlContent = templateEngine.process("test-completed-notification", context);
+
+            helper.setText(htmlContent, true);
+
+            mailSender.send(message);
+
+            log.info("Email notification test complété envoyé avec succès à {}", toEmail);
+
+        } catch (MessagingException e) {
+            log.error("Erreur envoi email notification test complété", e);
+            throw new RuntimeException("Impossible d'envoyer email notification test complété", e);
+        }
+    }
 }

@@ -8,13 +8,13 @@ import { Progress } from '@/components/ui/progress';
 import { toast } from 'sonner';
 import { positionService, candidateService } from '@/services/apiService';
 import apiClient from '@/lib/api';
-import { useAuth } from '@/hooks/useApiHooks';
+import { useCurrentUser } from '@/features/auth/authQueries';
 import { useQueryClient } from '@tanstack/react-query';
 import type { Position } from '@/services/apiService';
 
 const SubmissionPageSimple: React.FC = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { data: user } = useCurrentUser();
   const queryClient = useQueryClient();
   const [positions, setPositions] = useState<Position[]>([]);
   const [selectedPositions, setSelectedPositions] = useState<number[]>([]);

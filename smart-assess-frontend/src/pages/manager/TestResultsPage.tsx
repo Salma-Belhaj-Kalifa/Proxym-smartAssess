@@ -1,18 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { toast } from 'sonner';
+import { ArrowLeft, Clock, Calendar, User, Send, Timer, CheckCircle, AlertCircle, Download, Eye } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { 
-  Clock, 
-  AlertCircle, 
-  CheckCircle, 
-  ArrowLeft,
-  Send,
-  Timer
-} from 'lucide-react';
-import apiService from '@/services/apiService';
+import { getStatusLabel, getStatusVariant } from '@/utils/statusMappings';
+import { toast } from 'sonner';
+import apiClient from '@/lib/api';
+import { useTest } from '@/features/tests/testsQueries';
+import { useGetPublicTest, useGetTestResults } from '@/features/tests/testsQueries';
+import { useSubmitTest } from '@/features/tests/testsMutations';
 
 interface Question {
   id: number;
@@ -40,6 +37,12 @@ interface TestResult {
   questions: Question[];
   candidate?: any;
   hasRealAnswers?: boolean;
+  skillScores?: {
+    [skillName: string]: {
+      correct: number;
+      total: number;
+    };
+  };
   scores?: {
     totalScore: number;
     maxScore: number;
@@ -62,6 +65,11 @@ const TestResultsPage: React.FC = () => {
   const [testResult, setTestResult] = useState<TestResult | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [lastError, setLastError] = useState<Error | null>(null);
+
+  // Vérifier si testId est un token (UUID) ou un ID numérique
+  const isToken = testId && testId.includes('-');
+  console.log('Test ID from URL:', testId);
+  console.log('Is token:', isToken);
 
   const calculateRealScore = (testData: any) => {
     console.log('Test data structure:', Object.keys(testData));
@@ -149,7 +157,6 @@ const TestResultsPage: React.FC = () => {
   };
 
   const calculateResponseTime = (testData: any) => {
-    console.log('=== CALCUL DU TEMPS DE RÉPONSE ===');
     console.log('Session data from backend:', testData.session);
     
     if (testData.session && testData.session.startedAt && testData.session.submittedAt) {
@@ -186,56 +193,6 @@ const TestResultsPage: React.FC = () => {
     };
   };
 
-  const loadTestResult = async (testId: string) => {
-    try {
-      setIsLoading(true);
-      setLastError(null);
-      console.log('Loading test result for ID:', testId);
-      
-      const testData = await apiService.testService.getTestForReview(Number(testId));
-      console.log('Test data received:', testData);
-      
-      const calculatedScore = calculateRealScore(testData);
-      const timeData = calculateResponseTime(testData);
-      
-      const result: TestResult = {
-        id: testData.id,
-        token: testData.token,
-        candidateName: `${testData.candidate?.firstName || ''} ${testData.candidate?.lastName || ''}`.trim(),
-        positionTitle: testData.internshipPosition?.title || 'Poste non spécifié',
-        status: testData.status,
-        createdAt: testData.createdAt,
-        submittedAt: testData.submittedAt || testData.createdAt,
-        timeLimitMinutes: testData.timeLimitMinutes || testData.duration || 30,
-        questions: testData.questions || [],
-        scores: testData.scores,
-        session: timeData,
-        candidate: testData.candidate,
-        ...calculatedScore
-      };
-      
-      setTestResult(result);
-      console.log('Test result loaded successfully:', result);
-      
-    } catch (error: any) {
-      console.error('Error loading test result:', error);
-      setLastError(error);
-      toast.error('Erreur lors du chargement des résultats du test');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (testId && !isNaN(Number(testId))) {
-      loadTestResult(testId);
-    } else {
-      console.error('Invalid test ID:', testId);
-      setLastError(new Error('ID de test invalide'));
-      setIsLoading(false);
-    }
-  }, [testId]);
-
   const getSkillPercentage = (skill: string) => {
     const skillData = testResult?.skillScores?.[skill];
     if (!skillData || skillData.total === 0) return 0;
@@ -261,7 +218,7 @@ const TestResultsPage: React.FC = () => {
             <div className="text-center">
               <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
               <h2 className="text-xl font-semibold text-gray-900 mb-2">Erreur de chargement</h2>
-              <p className="text-gray-600">{lastError.message}</p>
+              <p className="text-gray-600">{lastError?.message || 'Erreur inconnue'}</p>
               <Button onClick={() => navigate('/manager/dashboard')} className="mt-4">
                 <ArrowLeft className="h-4 w-4 mr-2" />
                 Retour au dashboard
@@ -313,8 +270,8 @@ const TestResultsPage: React.FC = () => {
                 )}
               </div>
               <div className="text-right">
-                <Badge variant={testResult.status === 'SUBMITTED' ? 'default' : 'secondary'}>
-                  {testResult.status}
+                <Badge variant={getStatusVariant(testResult.status)}>
+                  {getStatusLabel(testResult.status)}
                 </Badge>
               </div>
             </div>

@@ -11,11 +11,13 @@ export const getStatusLabel = (status: string): string => {
     case 'ACCEPTED':
       return 'Accepté';
     case 'REJECTED':
-      return 'Rejeté';
+      return 'Refusé';
     case 'INELIGIBLE':
       return 'Non éligible';
     case 'VALIDATED':
       return 'Validé';
+    case 'SUBMITTED':
+      return 'Test soumis';
     default:
       return status;
   }
@@ -29,6 +31,8 @@ export const getStatusColor = (status: string): string => {
       return 'text-blue-600 border-blue-200';
     case 'IN_PROGRESS':
       return 'text-orange-600 border-orange-200';
+    case 'SUBMITTED':
+      return 'text-purple-600 border-purple-200';
     case 'COMPLETED':
       return 'text-emerald-700 border-emerald-300 bg-emerald-50';
     case 'ACCEPTED':
@@ -52,6 +56,8 @@ export const getStatusVariant = (status: string): 'default' | 'secondary' | 'des
       return 'secondary';
     case 'IN_PROGRESS':
       return 'secondary';
+    case 'SUBMITTED':
+      return 'default';
     case 'COMPLETED':
       return 'default';
     case 'ACCEPTED':

@@ -3,10 +3,10 @@ import { User, Briefcase, FileText, Clock, TrendingUp, Calendar, CheckCircle, Al
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { useAuth, useCandidaturesByCandidate, usePositions } from '@/hooks/useApiHooks';
+import { useCurrentUser, useCandidaturesByCandidate } from '@/features';
 
 export default function CandidateDashboardPage() {
-  const { user } = useAuth();
+  const { data: user } = useCurrentUser();
   const { data: candidatures = [], isLoading: isLoadingCandidatures, error: candidaturesError } = useCandidaturesByCandidate(user?.id || 0);
   const { data: positions = [], isLoading: isLoadingPositions } = usePositions();
   

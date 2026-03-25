@@ -1,43 +1,44 @@
 import apiClient from '@/lib/api';
+import API_ENDPOINTS from '@/config/apiEndpoints';
 import { Candidature } from './types';
 
 export const candidaturesService = {
   getAll: async (): Promise<Candidature[]> => {
-    const res = await apiClient.get('/candidatures');
-    return res.data;
+    const response = await apiClient.get(API_ENDPOINTS.CANDIDATURES.GET_ALL);
+    return response.data;
   },
 
   getById: async (id: number): Promise<Candidature> => {
-    const res = await apiClient.get(`/candidatures/${id}`);
-    return res.data;
+    const response = await apiClient.get(API_ENDPOINTS.CANDIDATURES.GET_BY_ID(id));
+    return response.data;
   },
 
-  create: async (data: Partial<Candidature>): Promise<Candidature> => {
-    const res = await apiClient.post('/candidatures', data);
-    return res.data;
+  create: async (candidatureData: {
+    candidateId: number;
+    positionId: number;
+    status: string;
+  }): Promise<Candidature> => {
+    const response = await apiClient.post(API_ENDPOINTS.CANDIDATURES.CREATE, candidatureData);
+    return response.data;
   },
 
   update: async (id: number, data: Partial<Candidature>): Promise<Candidature> => {
-    const res = await apiClient.put(`/candidatures/${id}`, data);
-    return res.data;
-  },
-
-  delete: async (id: number): Promise<void> => {
-    await apiClient.delete(`/candidatures/${id}`);
-  },
-
-  getByPosition: async (positionId: number): Promise<Candidature[]> => {
-    const res = await apiClient.get(`/candidatures/position/${positionId}`);
-    return res.data;
-  },
-
-  getByCandidate: async (candidateId: number): Promise<Candidature[]> => {
-    const res = await apiClient.get(`/candidatures/candidate/${candidateId}`);
-    return res.data;
+    const response = await apiClient.put(API_ENDPOINTS.CANDIDATURES.UPDATE(id), data);
+    return response.data;
   },
 
   updateStatus: async (id: number, status: string): Promise<Candidature> => {
-    const res = await apiClient.put(`/candidatures/${id}/status`, { status });
-    return res.data;
+    const response = await apiClient.put(API_ENDPOINTS.CANDIDATURES.UPDATE_STATUS(id), { status });
+    return response.data;
+  },
+
+  getByCandidate: async (candidateId: number): Promise<Candidature[]> => {
+    const response = await apiClient.get(API_ENDPOINTS.CANDIDATURES.BY_CANDIDATE(candidateId));
+    return response.data;
+  },
+
+  getByPosition: async (positionId: number): Promise<Candidature[]> => {
+    const response = await apiClient.get(API_ENDPOINTS.CANDIDATURES.BY_POSITION(positionId));
+    return response.data;
   },
 };
