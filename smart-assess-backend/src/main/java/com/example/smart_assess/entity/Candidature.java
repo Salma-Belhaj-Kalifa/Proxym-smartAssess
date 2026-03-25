@@ -1,6 +1,8 @@
 package com.example.smart_assess.entity;
 
 import com.example.smart_assess.enums.CandidatureStatus;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -10,6 +12,7 @@ import java.time.LocalDateTime;
 @Table(name = "candidatures")
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor
 @Builder
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 public class Candidature {
 
     @Id
@@ -18,10 +21,12 @@ public class Candidature {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "candidate_id", nullable = false)
+    @JsonIgnore
     private Candidate candidate;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "internship_position_id", nullable = false)
+    @JsonIgnore
     private InternshipPosition internshipPosition;
 
     @Enumerated(EnumType.STRING)
@@ -40,6 +45,7 @@ public class Candidature {
     private LocalDateTime updatedAt = LocalDateTime.now();
 
     @OneToOne(mappedBy = "candidature", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @JsonIgnore
     private GeneratedTest generatedTest;
 
     @PreUpdate

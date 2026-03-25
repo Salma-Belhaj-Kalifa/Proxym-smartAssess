@@ -164,9 +164,9 @@ public class GeneratedTestController {
                     .candidature(candidature)
                     .internshipPosition(candidature.getInternshipPosition())
                     .status(TestStatus.DRAFT)
-                    .timeLimitMinutes(40) // 24 heures par défaut
+                    .timeLimitMinutes(duration != null ? duration : 20) // Utiliser la durée configurée
                     .token(UUID.randomUUID().toString())
-                    .deadline(LocalDateTime.now().plusDays(7))
+                    .deadline(deadline != null ? LocalDateTime.parse(deadline) : LocalDateTime.now().plusDays(7))
                     .build();
             
             generatedTestRepository.save(test);
@@ -378,7 +378,8 @@ public class GeneratedTestController {
     @GetMapping("/{id}/review")
     public ResponseEntity<Map<String, Object>> getTestForReview(@PathVariable Long id) {
         try {
-            log.info("Getting test for review: {}", id);
+            log.info("=== GET TEST FOR REVIEW CALLED ===");
+            log.info("Test ID: {}", id);
             
             Optional<GeneratedTest> testOpt = generatedTestRepository.findById(id);
             if (testOpt.isEmpty()) {
@@ -389,6 +390,37 @@ public class GeneratedTestController {
             }
 
             GeneratedTest test = testOpt.get();
+            log.info("Test found - ID: {}, Status: {}, EvaluationResult: {}", 
+                test.getId(), test.getStatus(), test.getEvaluationResult() != null ? "PRESENT" : "NULL");
+            
+            // Préparer la réponse
+            Map<String, Object> response = new HashMap<>();
+            
+            // Calculer les scores
+            Map<String, Object> scores = new HashMap<>();
+            
+            // TOUJOURS recalculer les scores depuis les réponses pour éviter les incohérences
+            log.info("Forcing score calculation from answers for test {}", test.getId());
+            EvaluationResult calculatedResult = calculateTestResults(test);
+            
+            if (calculatedResult != null) {
+                scores.put("totalScore", calculatedResult.getTotalScore());
+                scores.put("maxScore", calculatedResult.getMaxScore());
+                scores.put("finalScore", calculatedResult.getFinalScore());
+                scores.put("totalQuestions", calculatedResult.getTotalQuestions());
+                scores.put("correctAnswers", calculatedResult.getCorrectAnswers());
+                scores.put("skillScores", calculatedResult.getSkillScores());
+                log.info("Calculated scores for test {}: finalScore={}, totalScore={}, maxScore={}", 
+                    test.getId(), calculatedResult.getFinalScore(), calculatedResult.getTotalScore(), calculatedResult.getMaxScore());
+            } else {
+                log.warn("Could not calculate scores for test {}", test.getId());
+                scores.put("totalScore", 0);
+                scores.put("maxScore", 0);
+                scores.put("finalScore", 0);
+                scores.put("totalQuestions", 0);
+                scores.put("correctAnswers", 0);
+                scores.put("skillScores", new HashMap<>());
+            }
             
             // Récupérer les questions avec les réponses du candidat
             List<TestQuestion> questions = testQuestionRepository.findByTestId(test.getId());
@@ -437,32 +469,30 @@ public class GeneratedTestController {
             Map<String, Object> sessionData = new HashMap<>();
             sessionData.put("startedAt", test.getStartedAt() != null ? test.getStartedAt().toString() : null);
             sessionData.put("submittedAt", test.getSubmittedAt() != null ? test.getSubmittedAt().toString() : null);
-            sessionData.put("timeSpentMinutes", test.getTimeSpentMinutes());
-            sessionData.put("tabSwitchCount", test.getTabSwitchCount());
-            sessionData.put("isAutoSubmitted", test.isAutoSubmitted());
-            
-            // Calculer les scores
-            Map<String, Object> scores = new HashMap<>();
-            if (test.getEvaluationResult() != null) {
-                scores.put("totalScore", test.getEvaluationResult().getTotalScore());
-                scores.put("maxScore", test.getEvaluationResult().getMaxScore());
-                scores.put("finalScore", test.getEvaluationResult().getFinalScore());
-                scores.put("totalQuestions", test.getEvaluationResult().getTotalQuestions());
-                scores.put("correctAnswers", test.getEvaluationResult().getCorrectAnswers());
-                scores.put("skillScores", test.getEvaluationResult().getSkillScores());
-            }
-            
-            // Réponse finale
-            Map<String, Object> response = new HashMap<>();
-            response.put("id", test.getId());
-            response.put("token", test.getToken());
             response.put("status", test.getStatus().toString());
             response.put("timeLimitMinutes", test.getTimeLimitMinutes());
             response.put("createdAt", test.getCreatedAt());
             response.put("deadline", test.getDeadline());
+            // Ajouter le niveau basé sur la complexité des questions ou le poste
+            String level = "JUNIOR"; // Par défaut
+            if (test.getInternshipPosition() != null && test.getInternshipPosition().getTitle() != null) {
+                String title = test.getInternshipPosition().getTitle().toLowerCase();
+                if (title.contains("senior") || title.contains("expert")) {
+                    level = "SENIOR";
+                } else if (title.contains("middle") || title.contains("intermédiaire")) {
+                    level = "MIDDLE";
+                } else if (title.contains("junior") || title.contains("débutant")) {
+                    level = "JUNIOR";
+                }
+            }
+            response.put("level", level);
             response.put("session", sessionData);
             response.put("scores", scores);
             response.put("questions", enrichedQuestions);
+            
+            log.info("=== RESPONSE READY FOR TEST {} ===", test.getId());
+            log.info("Scores in response: {}", scores);
+            log.info("Final score in response: {}", scores.get("finalScore"));
             
             // Informations du candidat
             if (test.getCandidature() != null) {
@@ -472,6 +502,10 @@ public class GeneratedTestController {
                 candidate.put("lastName", test.getCandidature().getCandidate().getLastName());
                 candidate.put("email", test.getCandidature().getCandidate().getEmail());
                 response.put("candidate", candidate);
+                
+                // Ajouter l'ID de la candidature pour le frontend
+                response.put("candidatureId", test.getCandidature().getId());
+                log.info("Added candidatureId to response: {}", test.getCandidature().getId());
             }
             
             // Informations du poste
@@ -482,6 +516,10 @@ public class GeneratedTestController {
                 position.put("company", test.getInternshipPosition().getCompany());
                 response.put("internshipPosition", position);
             }
+            
+            // Ajouter l'ID du test pour le frontend
+            response.put("id", test.getId());
+            response.put("testId", test.getId()); // Pour compatibilité
             
             return ResponseEntity.ok(response);
             
@@ -680,26 +718,36 @@ public class GeneratedTestController {
     
     private EvaluationResult calculateTestResults(GeneratedTest test) {
         try {
+            log.info("=== CALCULATING TEST RESULTS FOR TEST {} ===", test.getId());
             List<Answer> answers = test.getAnswers();
-            if (answers.isEmpty()) {
+            log.info("Answers found: {}", answers != null ? answers.size() : 0);
+            
+            if (answers == null || answers.isEmpty()) {
+                log.warn("No answers found for test {}", test.getId());
                 return null;
             }
             
             // Calculer les scores de base
             int totalQuestions = answers.size();
+            log.info("Total questions: {}", totalQuestions);
+            
             long correctAnswers = answers.stream()
                     .filter(answer -> answer.getIsCorrect() != null && answer.getIsCorrect())
                     .count();
+            log.info("Correct answers: {}", correctAnswers);
             
             double totalScore = answers.stream()
                     .mapToDouble(answer -> answer.getScoreObtained() != null ? answer.getScoreObtained() : 0.0)
                     .sum();
+            log.info("Total score: {}", totalScore);
             
             double maxScore = answers.stream()
                     .mapToDouble(answer -> answer.getMaxScore() != null ? answer.getMaxScore() : 1.0)
                     .sum();
+            log.info("Max score: {}", maxScore);
             
             double finalScore = maxScore > 0 ? (totalScore / maxScore) * 100 : 0;
+            log.info("Final score calculated: {}", finalScore);
             
             // Calculer les scores par compétence
             Map<String, EvaluationResult.SkillScore> skillScores = new HashMap<>();
@@ -1007,6 +1055,78 @@ public class GeneratedTestController {
         return questions;
     }
     
+    // =========================
+    // SEND TEST EMAIL
+    // =========================
+    @PostMapping("/{id}/send-email")
+    public ResponseEntity<Map<String, Object>> sendTestEmail(
+            @PathVariable Long id,
+            @RequestBody Map<String, Object> emailData) {
+        
+        try {
+            log.info("=== SEND TEST EMAIL CALLED ===");
+            log.info("Test ID: {}", id);
+            log.info("Email data: {}", emailData);
+            
+            GeneratedTest test = generatedTestRepository.findById(id)
+                    .orElseThrow(() -> new RuntimeException("Test not found"));
+            
+            String recipientEmail = (String) emailData.get("recipientEmail");
+            String customMessage = (String) emailData.get("customMessage");
+            
+            if (recipientEmail == null || recipientEmail.trim().isEmpty()) {
+                return ResponseEntity.badRequest().body(Map.of(
+                    "success", false,
+                    "message", "Recipient email is required"
+                ));
+            }
+            
+            // Envoyer l'email avec le service EmailService
+            String candidateFirstName = null;
+            String candidateLastName = null;
+            String candidateName = "Candidat";
+            String positionTitle = "Poste technique";
+            
+            if (test.getCandidature() != null && test.getCandidature().getCandidate() != null) {
+                candidateFirstName = test.getCandidature().getCandidate().getFirstName();
+                candidateLastName = test.getCandidature().getCandidate().getLastName();
+                if (candidateFirstName != null && candidateLastName != null) {
+                    candidateName = candidateFirstName + " " + candidateLastName;
+                }
+            }
+            
+            if (test.getInternshipPosition() != null) {
+                positionTitle = test.getInternshipPosition().getTitle();
+            }
+            
+            String testLink = frontendUrl + "/candidate/test/" + test.getToken();
+            LocalDateTime expirationDate = test.getDeadline();
+            
+            emailService.sendTestEmail(
+                recipientEmail,
+                candidateName != null ? candidateName : "Candidat",
+                test.getToken(),
+                positionTitle != null ? positionTitle : "Poste technique",
+                expirationDate != null ? expirationDate : LocalDateTime.now().plusHours(24)
+            );
+            
+            log.info("Test email sent successfully to: {}", recipientEmail);
+            
+            return ResponseEntity.ok(Map.of(
+                "success", true,
+                "message", "Email sent successfully",
+                "recipient", recipientEmail
+            ));
+            
+        } catch (Exception e) {
+            log.error("Error sending test email: {}", e.getMessage(), e);
+            return ResponseEntity.status(500).body(Map.of(
+                "success", false,
+                "message", "Error sending email: " + e.getMessage()
+            ));
+        }
+    }
+
     // =========================
     // GENERATE TEST LINK
     // =========================

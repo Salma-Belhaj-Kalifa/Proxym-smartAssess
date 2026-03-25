@@ -13,23 +13,54 @@ export const useCreateTest = () => {
       toast.success('Test créé avec succès !');
     },
     onError: (error: any) => {
-      toast.error('Erreur lors de la création du test');
+      const errorMessage = error?.response?.data?.message || error?.response?.data?.error || 'Erreur lors de la création du test';
+      toast.error(errorMessage);
       console.error(error);
     },
   });
 };
 
-export const useUpdateTest = (id: number) => {
+export const useCheckExistingTest = () => {
+  return useMutation({
+    mutationFn: testService.checkExistingTest,
+    onError: (error: any) => {
+      const errorMessage = error?.response?.data?.message || error?.response?.data?.error || 'Erreur lors de la vérification du test';
+      toast.error(errorMessage);
+      console.error(error);
+    },
+  });
+};
+
+export const useGenerateTest = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: any) => testService.update(id, data),
+    mutationFn: testService.generateTest,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: testKeys.all });
-      queryClient.invalidateQueries({ queryKey: testKeys.details(id) });
+      toast.success('Test généré avec succès !');
+    },
+    onError: (error: any) => {
+      const errorMessage = error?.response?.data?.message || error?.response?.data?.error || 'Erreur lors de la génération du test';
+      toast.error(errorMessage);
+      console.error(error);
+    },
+  });
+};
+
+export const useUpdateTest = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: any }) => {
+      return await testService.update(id, data);
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: testKeys.all });
+      queryClient.invalidateQueries({ queryKey: testKeys.details(variables.id) });
       toast.success('Test mis à jour avec succès !');
     },
     onError: (error: any) => {
-      toast.error('Erreur lors de la mise à jour du test');
+      const errorMessage = error?.response?.data?.message || error?.response?.data?.error || 'Erreur lors de la mise à jour du test';
+      toast.error(errorMessage);
       console.error(error);
     },
   });
@@ -44,7 +75,8 @@ export const useDeleteTest = () => {
       toast.success('Test supprimé avec succès !');
     },
     onError: (error: any) => {
-      toast.error('Erreur lors de la suppression du test');
+      const errorMessage = error?.response?.data?.message || error?.response?.data?.error || 'Erreur lors de la suppression du test';
+      toast.error(errorMessage);
       console.error(error);
     },
   });
@@ -60,22 +92,8 @@ export const useSendTestEmail = () => {
       toast.success('Email envoyé avec succès !');
     },
     onError: (error: any) => {
-      toast.error('Erreur lors de l\'envoi de l\'email');
-      console.error(error);
-    },
-  });
-};
-
-export const useGenerateTest = () => {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: testService.generateTest,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: testKeys.all });
-      toast.success('Test généré avec succès !');
-    },
-    onError: (error: any) => {
-      toast.error('Erreur lors de la génération du test');
+      const errorMessage = error?.response?.data?.message || error?.response?.data?.error || 'Erreur lors de l\'envoi de l\'email';
+      toast.error(errorMessage);
       console.error(error);
     },
   });
@@ -93,7 +111,8 @@ export const useSubmitTest = () => {
       toast.success('Test soumis avec succès !');
     },
     onError: (error: any) => {
-      toast.error('Erreur lors de la soumission du test');
+      const errorMessage = error?.response?.data?.message || error?.response?.data?.error || 'Erreur lors de la soumission du test';
+      toast.error(errorMessage);
       console.error(error);
     },
   });
@@ -102,13 +121,15 @@ export const useSubmitTest = () => {
 export const useStartTest = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (token: string) => testService.startTest(token),
+    mutationFn: (testId: number) => testService.startTest(testId),
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: testKeys.public(variables || '') });
+      queryClient.invalidateQueries({ queryKey: testKeys.all });
+      queryClient.invalidateQueries({ queryKey: testKeys.details(variables) });
       toast.success('Test démarré avec succès !');
     },
     onError: (error: any) => {
-      toast.error('Erreur lors du démarrage du test');
+      const errorMessage = error?.response?.data?.message || error?.response?.data?.error || 'Erreur lors du démarrage du test';
+      toast.error(errorMessage);
       console.error(error);
     },
   });

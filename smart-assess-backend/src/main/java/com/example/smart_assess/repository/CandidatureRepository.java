@@ -4,6 +4,7 @@ import com.example.smart_assess.entity.Candidature;
 import com.example.smart_assess.enums.CandidatureStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -22,4 +23,15 @@ public interface CandidatureRepository extends JpaRepository<Candidature, Long> 
     
     @Query("SELECT c FROM Candidature c JOIN FETCH c.candidate JOIN FETCH c.internshipPosition")
     List<Candidature> findAllWithRelations();
+    
+    // Requêtes natives pour récupérer les données IA depuis les tables candidate_cvs et technical_profiles
+    @Query(value = "SELECT cc.id, cc.file_name, cc.file_size_bytes, cc.parsing_status, cc.upload_date, cc.file_data " +
+                   "FROM candidate_cvs cc WHERE cc.candidate_id = :candidateId", nativeQuery = true)
+    List<Object[]> findCandidateCVsWithData(Long candidateId);
+    
+    @Query(value = "SELECT tp.id, tp.cv_id, tp.created_at, tp.parsed_data " +
+                   "FROM technical_profiles tp " +
+                   "JOIN candidate_cvs cc ON tp.cv_id = cc.id " +
+                   "WHERE cc.candidate_id = :candidateId", nativeQuery = true)
+    List<Object[]> findTechnicalProfilesWithData(Long candidateId);
 }

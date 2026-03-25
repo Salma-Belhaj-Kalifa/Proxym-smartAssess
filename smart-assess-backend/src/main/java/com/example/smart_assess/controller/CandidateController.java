@@ -2,6 +2,7 @@ package com.example.smart_assess.controller;
 
 import com.example.smart_assess.dto.CreateCandidateRequest;
 import com.example.smart_assess.dto.CandidateDto;
+import com.example.smart_assess.dto.UpdateCandidateProfileRequest;
 import com.example.smart_assess.service.CandidateService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -48,6 +49,12 @@ public class CandidateController {
     @PreAuthorize("hasRole('MANAGER') or hasRole('HR') or @candidateService.isOwner(#id, authentication.name)")
     public ResponseEntity<CandidateDto> updateCandidate(@PathVariable Long id, @Valid @RequestBody CreateCandidateRequest request) {
         return ResponseEntity.ok(candidateService.updateCandidate(id, request));
+    }
+
+    @PutMapping("/{id}/profile")
+    @PreAuthorize("hasRole('MANAGER') or hasRole('HR') or @candidateService.isOwner(#id, authentication.name)")
+    public ResponseEntity<CandidateDto> updateProfile(@PathVariable Long id, @Valid @RequestBody UpdateCandidateProfileRequest request) {
+        return ResponseEntity.ok(candidateService.updateProfile(id, request));
     }
 
     @DeleteMapping("/{id}")

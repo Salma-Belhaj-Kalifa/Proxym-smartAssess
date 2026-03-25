@@ -23,7 +23,21 @@ export const authService = {
   },
 
   getCurrentUser: async (): Promise<User> => {
-    const response = await apiClient.get(API_ENDPOINTS.AUTH.ME);
-    return response.data;
+    try {
+      const response = await apiClient.get(API_ENDPOINTS.AUTH.ME);
+      console.log('API Response from /auth/me:', response.data);
+      return response.data;
+    } catch (error: any) {
+      // En cas d'erreur 401 ou 500, nettoyer le token et retourner une valeur par défaut
+      if (error.response?.status === 401 || error.response?.status === 500) {
+        console.warn('Erreur d\'authentification, nettoyage du token:', error.response?.status);
+        removeAuthToken();
+        removeAuthUserData();
+        // Retourner une valeur par défaut pour éviter les erreurs
+        throw new Error('Session expirée ou invalide');
+      }
+      // Pour les autres erreurs, propager l'erreur
+      throw error;
+    }
   },
 };

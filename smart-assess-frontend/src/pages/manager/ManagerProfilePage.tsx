@@ -7,26 +7,34 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useCurrentUser } from '@/features/auth/authQueries';
-import { useUpdateManager } from '@/features/managers/managersMutations';
-import { authService } from '@/services/apiService';
-import apiService from '@/services/apiService';
+import { useManagerProfile } from '@/features/managers/managersQueries';
+import { useUpdateManager, useUpdateManagerProfile, useDeleteManagerProfile } from '@/features/managers/managersMutations';
 import { removeAuthToken, removeAuthUserData } from '@/lib/api';
-import { useQueryClient } from '@/hooks/useQueryClient';
+import { useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 
 export default function ManagerProfilePage() {
-  const { data: user } = useCurrentUser();
-  const updateProfileMutation = useUpdateManager();
+  const { data: user, isLoading, error } = useCurrentUser();
+  const { data: managerProfile, isLoading: isLoadingProfile } = useManagerProfile(user?.id || 0);
   const queryClient = useQueryClient();
+  
+  // State variables
   const [isEditing, setIsEditing] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   
-  // Utiliser les données du profil ou fallback vers user
-  const profileData = user;
+  // Mutations
+  const updateProfileMutation = useUpdateManagerProfile();
+  const deleteProfileMutation = useDeleteManagerProfile();
+  
+  // Utiliser les données du manager (qui contient le department) ou fallback vers user
+  const profileData = managerProfile || user;
   
   const [tempFormData, setTempFormData] = useState({
     firstName: profileData?.firstName || '',
     lastName: profileData?.lastName || '',
     email: profileData?.email || '',
+    phone: profileData?.phone || '',
+    department: profileData?.department || '',
   });
 
   // Synchroniser tempFormData quand les données du profil changent
@@ -36,6 +44,8 @@ export default function ManagerProfilePage() {
         firstName: profileData.firstName || '',
         lastName: profileData.lastName || '',
         email: profileData.email || '',
+        phone: profileData.phone || '',
+        department: profileData.department || '',
       });
     }
   }, [profileData]);
@@ -47,6 +57,8 @@ export default function ManagerProfilePage() {
         firstName: profileData.firstName || '',
         lastName: profileData.lastName || '',
         email: profileData.email || '',
+        phone: profileData.phone || '',
+        department: profileData.department || '',
       });
     }
     setIsEditing(false);
@@ -56,8 +68,8 @@ export default function ManagerProfilePage() {
     try {
       if (user?.id) {
         await updateProfileMutation.mutateAsync({ 
-          id: user.id, 
-          data: tempFormData
+          userId: user.id, 
+          profileData: tempFormData
         });
         setIsEditing(false);
       }
@@ -68,8 +80,8 @@ export default function ManagerProfilePage() {
 
   const handleDeleteAccount = async () => {
     try {
-      // Appeler l'API de suppression du profil manager
-      await apiService.managerService.deleteMyProfile();
+      // Appeler l'API de suppression du profil manager via React Query
+      await deleteProfileMutation.mutateAsync();
       
       // Nettoyage manuel pour éviter les redirections automatiques
       removeAuthToken();
@@ -87,7 +99,7 @@ export default function ManagerProfilePage() {
     }
   };
 
-  if (isLoading) {
+  if (isLoading || isLoadingProfile) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary"></div>
@@ -134,13 +146,13 @@ export default function ManagerProfilePage() {
                   <Mail className="w-4 h-4 text-blue-600" />
                   <span className="text-sm font-medium">{tempFormData.email}</span>
                 </div>
-                {tempFormData.phone && (
+                {(tempFormData.phone) && (
                   <div className="flex items-center gap-2 px-3 py-1 bg-blue-50 rounded-full">
                     <Phone className="w-4 h-4 text-blue-600" />
                     <span className="text-sm font-medium">{tempFormData.phone}</span>
                   </div>
                 )}
-                {tempFormData.department && (
+                {(tempFormData.department) && (
                   <div className="flex items-center gap-2 px-3 py-1 bg-blue-50 rounded-full">
                     <Building className="w-4 h-4 text-blue-600" />
                     <span className="text-sm font-medium">{tempFormData.department}</span>
@@ -267,6 +279,7 @@ export default function ManagerProfilePage() {
                       value={tempFormData.phone}
                       onChange={(e) => setTempFormData(prev => ({ ...prev, phone: e.target.value }))}
                       className="w-full"
+                      placeholder="Numéro de téléphone"
                     />
                   ) : (
                     <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">

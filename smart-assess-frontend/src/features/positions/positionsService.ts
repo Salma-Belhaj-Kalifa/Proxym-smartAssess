@@ -36,5 +36,25 @@ export const positionService = {
     } catch (error) {
       throw error;
     }
+  },
+
+  toggleStatus: async (id: number, isActive?: boolean): Promise<Position> => {
+    // Si isActive n'est pas fourni, c'est un toggle simple (ancienne méthode)
+    if (isActive === undefined) {
+      // Récupérer d'abord la position actuelle pour déterminer le nouveau statut
+      const currentPosition = await apiClient.get(`/positions/${id}`);
+      const newIsActive = !currentPosition.data.isActive;
+      
+      const response = await apiClient.patch(`/positions/${id}/toggle-status`, { 
+        isActive: newIsActive 
+      });
+      return response.data;
+    } else {
+      // Nouvelle méthode avec le statut fourni
+      const response = await apiClient.patch(`/positions/${id}/toggle-status`, { 
+        isActive 
+      });
+      return response.data;
+    }
   }
 };

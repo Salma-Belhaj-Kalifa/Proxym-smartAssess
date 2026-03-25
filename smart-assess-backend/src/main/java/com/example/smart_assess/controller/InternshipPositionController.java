@@ -97,9 +97,22 @@ public class InternshipPositionController {
         return ResponseEntity.ok(positionService.updatePosition(id, request));
     }
 
-    @PatchMapping("/{id}/status")
+    @PatchMapping("/{id}/toggle-status")
     public ResponseEntity<InternshipPositionDto> togglePositionStatus(@PathVariable Long id, @Valid @RequestBody TogglePositionStatusRequest request) {
-        return ResponseEntity.ok(positionService.togglePositionStatus(id, request.getIsActive()));
+        log.info("=== TOGGLE POSITION STATUS CALLED ===");
+        log.info("Position ID: {}", id);
+        log.info("Request body: {}", request);
+        
+        try {
+            InternshipPositionDto updatedPosition = positionService.togglePositionStatus(id, request.getIsActive());
+            log.info("Position status toggled successfully - ID: {}, New IsActive: {}", 
+                updatedPosition.getId(), updatedPosition.getIsActive());
+            
+            return ResponseEntity.ok(updatedPosition);
+        } catch (Exception e) {
+            log.error("Error toggling position status for ID: {}", id, e);
+            return ResponseEntity.status(500).build();
+        }
     }
 
     @DeleteMapping("/{id}")

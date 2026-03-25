@@ -21,6 +21,9 @@ public class CreateManagerRequest {
     @NotBlank
     private String lastName;
 
+    @NotBlank(message = "Le numéro de téléphone est requis")
+    private String phone;
+
     private String department;
     
     private Role role;

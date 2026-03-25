@@ -7,36 +7,68 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useCurrentUser } from '@/features/auth/authQueries';
-import { useUpdateCandidate, useDeleteMyProfile } from '@/features/candidates/candidatesMutations';
+import { useUpdateCandidateProfile, useDeleteMyProfile } from '@/features/candidates/candidatesMutations';
 import { useLogout } from '@/features/auth/authMutations';
 import { removeAuthToken, removeAuthUserData } from '@/lib/api';
 import { useQueryClient } from '@/hooks/useQueryClient';
 
 export default function CandidateProfilePage() {
-  const { data: user } = useCurrentUser();
-  const updateProfileMutation = useUpdateCandidate(user?.id || 0);
+  const { data: user, refetch: refetchUser } = useCurrentUser();
+  const updateProfileMutation = useUpdateCandidateProfile();
   const deleteProfileMutation = useDeleteMyProfile();
   const queryClient = useQueryClient();
   const [isEditing, setIsEditing] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [freshUserData, setFreshUserData] = useState(null);
   
-  // Utiliser les données du profil ou fallback vers user
-  const profileData = user;
+  // Manually fetch fresh user data to get phone field
+  useEffect(() => {
+    const fetchFreshUserData = async () => {
+      try {
+        const token = localStorage.getItem('auth_token') || sessionStorage.getItem('auth_token');
+        if (token) {
+          const response = await fetch('http://localhost:8080/api/auth/me', {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            }
+          });
+          if (response.ok) {
+            const freshData = await response.json();
+            console.log('Fresh user data from API:', freshData);
+            setFreshUserData(freshData);
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching fresh user data:', error);
+      }
+    };
+    
+    fetchFreshUserData();
+  }, []);
+  
+  // Utiliser les données fraîches de l'API si disponibles, sinon utiliser les données du cache
+  const profileData = freshUserData || user;
   
   const [tempFormData, setTempFormData] = useState({
     firstName: profileData?.firstName || '',
     lastName: profileData?.lastName || '',
     email: profileData?.email || '',
+    phone: profileData?.phone || '',
   });
 
   // Synchroniser tempFormData quand les données du profil changent
   useEffect(() => {
-    if (profileData?.firstName || profileData?.lastName || profileData?.email) {
-      setTempFormData({
+    if (profileData) {
+      console.log('Profile data received:', profileData);
+      const newFormData = {
         firstName: profileData.firstName || '',
         lastName: profileData.lastName || '',
         email: profileData.email || '',
-      });
+        phone: profileData.phone || '',
+      };
+      console.log('Setting form data to:', newFormData);
+      setTempFormData(newFormData);
     }
   }, [profileData]);
 
@@ -54,6 +86,7 @@ export default function CandidateProfilePage() {
         firstName: profileData.firstName || '',
         lastName: profileData.lastName || '',
         email: profileData.email || '',
+        phone: profileData.phone || '',
       });
     }
     setIsEditing(false);
@@ -69,8 +102,13 @@ export default function CandidateProfilePage() {
   const handleSave = async () => {
     try {
       if (user?.id) {
-        await updateProfileMutation.mutateAsync(tempFormData);
+        await updateProfileMutation.mutateAsync({
+          id: user.id,
+          data: tempFormData
+        });
         setIsEditing(false);
+        // Force refetch user data to ensure we have the latest data
+        await refetchUser();
       }
     } catch (error) {
       console.error('Erreur lors de la mise à jour du profil:', error);
@@ -225,13 +263,23 @@ export default function CandidateProfilePage() {
                     <Mail className="w-4 h-4 text-purple-600" />
                     Email
                   </Label>
+                  <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                    <p className="text-gray-900">{tempFormData.email}</p>
+                  </div>
+                </div>
+                
+                <div className="group">
+                  <Label htmlFor="phone" className="text-sm font-bold text-gray-700 mb-2 block flex items-center gap-2">
+                    <Phone className="w-4 h-4 text-purple-600" />
+                    Téléphone
+                  </Label>
                   <Input
-                    id="email"
-                    type="email"
-                    value={tempFormData.email}
-                    onChange={(e) => handleInputChange('email', e.target.value)}
+                    id="phone"
+                    type="tel"
+                    value={tempFormData.phone}
+                    onChange={(e) => handleInputChange('phone', e.target.value)}
                     disabled={!isEditing}
-                    placeholder="votre.email@exemple.com"
+                    placeholder="Votre numéro de téléphone"
                     className="h-12 text-base border-gray-200 focus:border-purple-500 focus:ring-2 focus:ring-purple-100 transition-all rounded-lg"
                   />
                 </div>

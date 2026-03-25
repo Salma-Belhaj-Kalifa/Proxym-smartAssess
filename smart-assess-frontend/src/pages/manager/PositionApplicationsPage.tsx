@@ -59,19 +59,54 @@ export default function PositionApplicationsPage() {
   const applications = candidatures.map(c => {
     console.log('Processing candidature:', c);
     
+    // Le backend envoie 'internship_position_id' au lieu de 'positionId'
+    const possibleIds = [
+      c.positionId,
+      (c as any).position_id,
+      (c as any).PositionId,
+      (c as any).jobPositionId,
+      (c as any).jobId,
+      (c as any).internship_position_id  // ← AJOUT DU NOM CORRECT DU BACKEND
+    ].filter(id => id !== undefined && id !== null);
+    
+    let foundPosition = null;
+    
+    // Essayer chaque ID possible avec les positions disponibles
+    for (const posId of possibleIds) {
+      const parsedId = typeof posId === 'string' ? parseInt(posId) : posId;
+      foundPosition = positions.find(p => p.id === parsedId);
+      if (foundPosition) {
+        break;
+      }
+    }
+    
+    // Si la position est directement dans la candidature (backend envoie les données)
+    if (!foundPosition && (c as any).title && (c as any).company) {
+      foundPosition = {
+        id: (c as any).internship_position_id,
+        title: (c as any).title,
+        company: (c as any).company
+      };
+    }
+    
+    // Fallback vers la position de la page si aucune autre trouvée
+    if (!foundPosition && position) {
+      foundPosition = position;
+    }
+    
     return {
       id: c.id,
       candidate: {
-        id: c.candidateId,
-        firstName: c.candidateFirstName || '',
-        lastName: c.candidateLastName || '',
-        email: c.candidateEmail || '',
-        phone: c.candidatePhone || ''
+        id: c.candidateId || c.candidate?.id || c.id,
+        firstName: c.candidate?.firstName || c.firstName || c.candidateFirstName || '',
+        lastName: c.candidate?.lastName || c.lastName || c.candidateLastName || '',
+        email: c.candidate?.email || c.email || c.candidateEmail || '',
+        phone: c.candidate?.phone || c.phone || c.candidatePhone || ''
       },
       position: {
-        id: c.internshipPositionId || id,
-        title: c.positionTitle || position?.title || 'Poste non spécifié',
-        company: c.positionCompany || position?.company || 'Entreprise'
+        id: foundPosition?.id || c.positionId || id,
+        title: foundPosition?.title || (c as any).title || c.position?.title || position?.title || 'Poste non spécifié',
+        company: foundPosition?.company || (c as any).company || c.position?.company || position?.company || 'Entreprise'
       },
       status: c.status || 'PENDING',
       appliedAt: c.appliedAt || new Date().toISOString(),

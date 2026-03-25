@@ -1,7 +1,7 @@
 // Auth Feature
 export * from './auth/authKeys';
 export * from './auth/authService';
-export { useAuthQuery, useProfile as useAuthProfile } from './auth/authQueries';
+export { useCurrentUser, useCurrentUserSafe, useCurrentUserForLogin } from './auth/authQueries';
 export * from './auth/authMutations';
 export * from './auth/types';
 
@@ -44,7 +44,7 @@ export * from './managers/types';
 export * from './cv-analysis/cvAnalysisKeys';
 export * from './cv-analysis/cvAnalysisService';
 export * from './cv-analysis/cvAnalysisQueries';
-export { useAnalyzeCV, useUploadCV as useUploadCVAnalysis } from './cv-analysis/cvAnalysisMutations';
+export { useAnalyzeCV } from './cv-analysis/cvAnalysisMutations';
 export * from './cv-analysis/types';
 
 // Technical Profile Feature

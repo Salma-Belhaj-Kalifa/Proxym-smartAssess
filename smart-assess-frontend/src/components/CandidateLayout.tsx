@@ -2,7 +2,7 @@ import { Outlet, Link, useLocation, Navigate } from "react-router-dom";
 import { LayoutDashboard, Briefcase, Users, FileText, Settings, LogOut, ChevronLeft, Menu, User, Upload, Search } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
-import { useCurrentUser } from '@/features/auth/authQueries';
+import { useCurrentUserSafe } from '@/features/auth/authQueries';
 import { useLogout } from '@/features/auth/authMutations';
 
 const navItems = [
@@ -16,7 +16,7 @@ const navItems = [
 const CandidateLayout = () => {
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
-  const { data: user, isLoading } = useCurrentUser();
+  const { data: user, isLoading } = useCurrentUserSafe();
   const logoutMutation = useLogout();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 

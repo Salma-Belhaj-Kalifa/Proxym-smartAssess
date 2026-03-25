@@ -2,6 +2,7 @@ package com.example.smart_assess.service.impl;
 
 import com.example.smart_assess.dto.CreateCandidateRequest;
 import com.example.smart_assess.dto.CandidateDto;
+import com.example.smart_assess.dto.UpdateCandidateProfileRequest;
 import com.example.smart_assess.entity.*;
 import com.example.smart_assess.enums.Role;
 import com.example.smart_assess.repository.*;
@@ -54,6 +55,19 @@ public class CandidateServiceImpl implements CandidateService {
         if (request.getPassword() != null && !request.getPassword().isBlank()) {
             candidate.setPassword(passwordEncoder.encode(request.getPassword()));
         }
+
+        candidate = candidateRepository.save(candidate);
+        return toDto(candidate);
+    }
+
+    @Override
+    public CandidateDto updateProfile(Long id, UpdateCandidateProfileRequest request) {
+        Candidate candidate = candidateRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Candidate not found"));
+
+        candidate.setFirstName(request.getFirstName());
+        candidate.setLastName(request.getLastName());
+        candidate.setPhone(request.getPhone());
 
         candidate = candidateRepository.save(candidate);
         return toDto(candidate);

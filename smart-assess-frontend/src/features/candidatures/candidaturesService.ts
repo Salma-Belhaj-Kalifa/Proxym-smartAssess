@@ -18,7 +18,13 @@ export const candidaturesService = {
     positionId: number;
     status: string;
   }): Promise<Candidature> => {
-    const response = await apiClient.post(API_ENDPOINTS.CANDIDATURES.CREATE, candidatureData);
+    // Le backend attend 'internshipPositionId' et définit le status automatiquement à PENDING
+    const requestData = {
+      candidateId: candidatureData.candidateId,
+      internshipPositionId: candidatureData.positionId // ← Nom correct du backend
+      // status non envoyé car le backend le définit automatiquement à PENDING
+    };
+    const response = await apiClient.post(API_ENDPOINTS.CANDIDATURES.CREATE, requestData);
     return response.data;
   },
 

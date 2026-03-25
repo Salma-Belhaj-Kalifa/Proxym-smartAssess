@@ -19,14 +19,6 @@ export const useTest = (id: number) => {
   });
 };
 
-export const useGenerateTest = () => {
-  return useQuery({
-    queryKey: testKeys.generate,
-    queryFn: testService.generateTest,
-    ...queryOptions.stable,
-  });
-};
-
 export const useGetPublicTest = (token: string) => {
   return useQuery({
     queryKey: testKeys.public(token),
@@ -36,11 +28,20 @@ export const useGetPublicTest = (token: string) => {
   });
 };
 
-export const useGetTestResults = (token: string) => {
+export const useGetTestResults = (testId: number) => {
   return useQuery({
-    queryKey: testKeys.results(token),
-    queryFn: () => testService.getTestResults(token),
+    queryKey: testKeys.results(testId.toString()),
+    queryFn: () => testService.getTestResults(testId),
     ...queryOptions.stable,
-    enabled: !!token,
+    enabled: !!testId,
+  });
+};
+
+export const useTestReview = (id: number) => {
+  return useQuery({
+    queryKey: testKeys.details(id),
+    queryFn: () => testService.getTestForReview(id),
+    ...queryOptions.stable,
+    enabled: !!id,
   });
 };

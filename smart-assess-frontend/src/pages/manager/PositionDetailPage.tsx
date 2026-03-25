@@ -8,9 +8,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { useCandidaturesByPosition } from '@/features/candidatures/candidaturesQueries';
+import { useCandidaturesByPosition, usePositions, useUpdatePosition, useDeletePosition } from '@/features';
 import { toast } from 'sonner';
-import apiService from '@/services/apiService';
 
 export default function PositionDetailPage() {
   const location = useLocation();
@@ -58,16 +57,15 @@ export default function PositionDetailPage() {
   console.log('PositionDetailPage - pathname:', location.pathname);
   console.log('PositionDetailPage - positionId from params:', positionId);
   
-  // Utiliser une requête directe pour récupérer le poste par ID
-  const [position, setPosition] = useState<any>(null);
-  const [isLoading, setIsLoading] = useState(id > 0); // Loading seulement si ID valide
-  
+  // Utiliser les hooks React Query
+  const { data: positions = [] } = usePositions();
+  const position = positions.find(p => p.id === id);
   const { data: candidatures = [] } = useCandidaturesByPosition(id);
+  const updatePositionMutation = useUpdatePosition(0); // Sera mis à jour avec le bon ID
+  const deletePositionMutation = useDeletePosition();
   
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
   const [editFormData, setEditFormData] = useState({
     title: '',
     description: '',
@@ -77,40 +75,19 @@ export default function PositionDetailPage() {
     isActive: true
   });
   
-  // Charger le poste directement par ID
+  // Initialiser le formulaire d'édition quand le poste change
   React.useEffect(() => {
-    const loadPosition = async () => {
-      if (id > 0) {
-        try {
-          setIsLoading(true);
-          console.log('Loading position with ID:', id);
-          const positionData = await apiService.positionService.getById(id);
-          console.log('Position data received:', positionData);
-          setPosition(positionData);
-          
-          // Initialiser le formulaire d'édition
-          setEditFormData({
-            title: positionData.title,
-            description: positionData.description,
-            company: positionData.company,
-            requiredSkills: positionData.requiredSkills.join(', '),
-            acceptedDomains: positionData.acceptedDomains.join(', '),
-            isActive: positionData.isActive
-          });
-        } catch (error: any) {
-          console.error('Error loading position:', error);
-          toast.error('Erreur lors du chargement du poste');
-        } finally {
-          setIsLoading(false);
-        }
-      } else {
-        console.log('Invalid position ID:', id, 'PositionId param:', positionId);
-        setIsLoading(false);
-      }
-    };
-    
-    loadPosition();
-  }, [id]); // Ajouter positionId comme dépendance
+    if (position) {
+      setEditFormData({
+        title: position.title || '',
+        description: position.description || '',
+        company: position.company || '',
+        requiredSkills: Array.isArray(position.requiredSkills) ? position.requiredSkills.join(', ') : (position.requiredSkills || ''),
+        acceptedDomains: Array.isArray(position.acceptedDomains) ? position.acceptedDomains.join(', ') : (position.acceptedDomains || ''),
+        isActive: position.isActive !== false
+      });
+    }
+  }, [position]);
   
   const navigate = useNavigate();
 
@@ -132,26 +109,19 @@ export default function PositionDetailPage() {
     if (!position) return;
 
     try {
-      setIsSaving(true);
-      
       const updatedData = {
         ...editFormData,
         requiredSkills: editFormData.requiredSkills.split(',').map(skill => skill.trim()).filter(skill => skill),
         acceptedDomains: editFormData.acceptedDomains.split(',').map(domain => domain.trim()).filter(domain => domain)
       };
 
-      await apiService.positionService.update(position.id, updatedData);
-      
-      // Recharger la page pour mettre à jour les données
-      window.location.reload();
+      await updatePositionMutation.mutateAsync({ id: position.id, data: updatedData });
       
       setIsEditDialogOpen(false);
       toast.success('Poste mis à jour avec succès');
     } catch (error: any) {
       console.error('Error updating position:', error);
       toast.error('Erreur lors de la mise à jour du poste');
-    } finally {
-      setIsSaving(false);
     }
   };
 
@@ -159,32 +129,20 @@ export default function PositionDetailPage() {
     if (!position) return;
 
     try {
-      setIsDeleting(true);
-      await apiService.positionService.delete(position.id);
+      await deletePositionMutation.mutateAsync(position.id);
       toast.success('Poste supprimé avec succès');
       navigate('/manager/postes');
     } catch (error: any) {
       console.error('Error deleting position:', error);
       toast.error('Erreur lors de la suppression du poste');
     } finally {
-      setIsDeleting(false);
       setIsDeleteDialogOpen(false);
     }
   };
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <h2 className="text-lg font-semibold mb-2">Chargement du poste...</h2>
-          <p className="text-gray-600">Veuillez patienter</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!position) {
+  // Pas besoin de logique de chargement manuelle - React Query gère cela
+  // Si le poste n'est pas trouvé et que nous avons un ID valide, afficher une erreur
+  if (id > 0 && !position && positions.length > 0) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
@@ -544,10 +502,10 @@ export default function PositionDetailPage() {
               </Button>
               <Button 
                 onClick={handleSave}
-                disabled={isSaving}
+                disabled={updatePositionMutation.isPending}
               >
                 <Save className="w-4 h-4 mr-2" />
-                {isSaving ? 'Sauvegarde...' : 'Sauvegarder'}
+                {updatePositionMutation.isPending ? 'Sauvegarde...' : 'Sauvegarder'}
               </Button>
             </div>
           </div>
@@ -576,17 +534,17 @@ export default function PositionDetailPage() {
               <Button 
                 variant="outline" 
                 onClick={() => setIsDeleteDialogOpen(false)}
-                disabled={isDeleting}
+                disabled={deletePositionMutation.isPending}
               >
                 Annuler
               </Button>
               <Button 
                 variant="destructive" 
                 onClick={handleDelete}
-                disabled={isDeleting}
+                disabled={deletePositionMutation.isPending}
               >
                 <Trash2 className="w-4 h-4 mr-2" />
-                {isDeleting ? 'Suppression...' : 'Supprimer'}
+                {deletePositionMutation.isPending ? 'Suppression...' : 'Supprimer'}
               </Button>
             </div>
           </div>

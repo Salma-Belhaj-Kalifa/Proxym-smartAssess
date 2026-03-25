@@ -3,12 +3,8 @@ export interface Manager {
   firstName: string;
   lastName: string;
   email: string;
-  role: 'MANAGER';
   phone?: string;
+  role: 'MANAGER';
   department?: string;
-  bio?: string;
-  linkedin?: string;
-  github?: string;
   createdAt: string;
-  updatedAt: string;
 }

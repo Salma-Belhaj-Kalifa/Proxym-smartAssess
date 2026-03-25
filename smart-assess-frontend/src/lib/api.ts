@@ -54,6 +54,17 @@ apiClient.interceptors.request.use(
         });
       }
       
+      // Logging spécifique pour les technical profiles
+      if (config.url?.includes('/technical-profiles')) {
+        console.log('=== TECHNICAL PROFILE REQUEST ===');
+        console.log('URL:', config.url);
+        console.log('Method:', config.method);
+        console.log('Has Token:', !!token);
+        console.log('Token Length:', token?.length || 0);
+        console.log('Headers:', config.headers);
+        console.log('=== END TECHNICAL PROFILE REQUEST ===');
+      }
+      
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
       } else {
@@ -71,9 +82,29 @@ apiClient.interceptors.request.use(
 
 apiClient.interceptors.response.use(
   (response) => {
+    // Logging spécifique pour les technical profiles réussis
+    if (response.config.url?.includes('/technical-profiles')) {
+      console.log('=== TECHNICAL PROFILE SUCCESS ===');
+      console.log('URL:', response.config.url);
+      console.log('Status:', response.status);
+      console.log('Data Type:', typeof response.data);
+      console.log('Data Keys:', response.data ? Object.keys(response.data) : 'No data');
+      console.log('=== END TECHNICAL PROFILE SUCCESS ===');
+    }
     return response;
   },
   (error) => {
+    // Logging spécifique pour les erreurs 500 de technical profiles
+    if (error.config?.url?.includes('/technical-profiles') && error.response?.status === 500) {
+      console.log('=== TECHNICAL PROFILE ERROR 500 ===');
+      console.log('URL:', error.config.url);
+      console.log('Status:', error.response.status);
+      console.log('Status Text:', error.response.statusText);
+      console.log('Error Data:', error.response.data);
+      console.log('Request Headers:', error.config.headers);
+      console.log('=== END TECHNICAL PROFILE ERROR 500 ===');
+    }
+    
     if (error.response?.status === 401) {
       const isAuthRequest = error.config?.url?.includes('/auth/login') || 
                            error.config?.url?.includes('/auth/register');
@@ -114,17 +145,26 @@ apiClient.interceptors.response.use(
           // Ignorer les erreurs de toast
         }
         
-        // Redirection après un court délai pour permettre l'affichage du message
+        // Redirection vers la page de connexion appropriée selon le contexte actuel
         setTimeout(() => {
-          window.location.href = '/';
+          // Vérifier si nous sommes sur une page manager ou candidat
+          const currentPath = window.location.pathname;
+          if (currentPath.includes('/manager')) {
+            window.location.href = '/recruteur/connexion';
+          } else if (currentPath.includes('/candidat')) {
+            window.location.href = '/candidat/connexion';
+          } else {
+            window.location.href = '/'; // Page d'accueil par défaut
+          }
         }, 1500);
       }
     } else if (error.response?.status === 500) {
       const errorMessage = error.response?.data?.error || error.message || '';
       const isUserDeleted = errorMessage.includes('User not found') || 
                             errorMessage.includes('not found with email');
+      const isAuthEndpoint = error.config?.url?.includes('/auth/me');
       
-      if (isUserDeleted) {
+      if (isUserDeleted && !isAuthEndpoint) {
         console.warn('Erreur 500 due à utilisateur supprimé, nettoyage des données d\'authentification');
         removeAuthToken();
         removeAuthUserData();
@@ -143,6 +183,10 @@ apiClient.interceptors.response.use(
         setTimeout(() => {
           window.location.href = '/';
         }, 1500);
+      } else if (isAuthEndpoint) {
+        // Pour les erreurs 500 sur /auth/me, ne pas nettoyer le token mais logguer l'erreur
+        console.warn('Erreur 500 sur endpoint /auth/me, probablement un problème temporaire du backend');
+        // Ne pas nettoyer le token, laisser React Query gérer les retry limités
       }
     }
     return Promise.reject(error);

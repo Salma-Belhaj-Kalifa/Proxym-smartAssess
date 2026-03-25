@@ -203,4 +203,27 @@ public class AuthController {
                     .body(Map.of("error", "Erreur lors de la déconnexion."));
         }
     }
+
+    @GetMapping("/me")
+    public ResponseEntity<?> getCurrentUser(@RequestHeader(value = "Authorization", required = false) String authorization) {
+        log.info("Getting current user info");
+        
+        try {
+            if (authorization != null && authorization.startsWith("Bearer ")) {
+                String token = authorization.substring(7);
+                var user = authenticationService.getCurrentUser(token);
+                
+                if (user != null) {
+                    return ResponseEntity.ok(user);
+                }
+            }
+            
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of("error", "Utilisateur non authentifié"));
+        } catch (Exception ex) {
+            log.error("Error getting current user: {}", ex.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Erreur lors de la récupération des données utilisateur."));
+        }
+    }
 }

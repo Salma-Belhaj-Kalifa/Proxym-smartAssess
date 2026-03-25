@@ -198,10 +198,7 @@ const ManagerPositionsPage: React.FC = () => {
         return updated;
       });
 
-      const result = await togglePositionStatusMutation.mutateAsync({ 
-        id: position.id, 
-        isActive: newIsActive 
-      });
+      const result = await togglePositionStatusMutation.mutateAsync(position.id);
             
       queryClient.setQueryData(['positions'], (oldData: any) => {
         if (!oldData) return oldData;
@@ -272,10 +269,7 @@ const ManagerPositionsPage: React.FC = () => {
       // Activer toutes les positions inactives
       await Promise.all(
         inactivePositions.map(position =>
-          togglePositionStatusMutation.mutateAsync({
-            id: position.id,
-            isActive: true
-          })
+          togglePositionStatusMutation.mutateAsync(position.id)
         )
       );
       

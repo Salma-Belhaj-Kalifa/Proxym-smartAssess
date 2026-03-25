@@ -51,11 +51,16 @@ const CandidateTestPage: React.FC = () => {
   const [timeRemaining, setTimeRemaining] = useState<number>(0);
   const [testStarted, setTestStarted] = useState(false);
   const [testSubmitted, setTestSubmitted] = useState(false);
-  
+
   // États de sécurité
   const [tabSwitchCount, setTabSwitchCount] = useState(0);
   const [copyAttempts, setCopyAttempts] = useState(0);
   const [securityWarnings, setSecurityWarnings] = useState<string[]>([]);
+
+  // Utiliser le hook pour récupérer les données du test public uniquement si token est disponible
+  const { data: testDataFromHook, isLoading: testLoading, error: testError } = useGetPublicTest(token || '');
+  const startTestMutation = useStartTest();
+  const submitTestMutation = useSubmitTest();
 
   useEffect(() => {
     if (token) {
@@ -63,32 +68,128 @@ const CandidateTestPage: React.FC = () => {
     }
   }, [token]);
 
+  // Effet pour traiter les données du hook quand elles arrivent
+  useEffect(() => {
+    if (testDataFromHook) {
+      console.log('=== DONNÉES DU TEST REÇUES DU HOOK ===');
+      console.log('Test data from hook:', testDataFromHook);
+      
+      processTestData(testDataFromHook);
+    }
+  }, [testDataFromHook]);
+
+  const processTestData = (dataFromHook: any) => {
+    try {
+      console.log('=== DONNÉES COMPLÈTES DU TEST ===');
+      console.log('Test data from hook:', dataFromHook);
+      console.log('Test data keys:', Object.keys(dataFromHook || {}));
+      
+      // Backend returns {success: true, test: {...}} structure
+      const test = dataFromHook.test || dataFromHook;
+      console.log('Extracted test object:', test);
+      console.log('Questions:', test?.questions);
+      console.log('Questions type:', typeof test?.questions);
+      console.log('Questions length:', test?.questions?.length);
+      console.log('Is array:', Array.isArray(test?.questions));
+      console.log('=== FIN DONNÉES TEST ===');
+      
+      // Créer un objet testData compatible avec ce que le frontend attend
+      const testData = {
+        testId: test?.id,
+        duration: test?.timeLimitMinutes || 20,
+        questions: test?.questions || [],
+        positionTitle: 'Poste technique', // À améliorer si nécessaire
+        token: token || '',
+        candidateName: 'Candidat', // À améliorer si nécessaire
+        deadline: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() // 24h from now
+      };
+      
+      console.log('Processed test data:', testData);
+      
+      setTestData(testData);
+      setTimeRemaining(testData.duration * 60); // Convertir minutes en secondes
+      setIsLoading(false); // ← Important: Set loading to false
+      
+      // Charger les réponses sauvegardées après avoir reçu les données du test
+      setTimeout(() => {
+        loadSavedAnswers();
+      }, 100);
+      
+    } catch (error: any) {
+      console.error('Error processing test data:', error);
+      toast.error('Erreur lors du chargement du test');
+      setIsLoading(false);
+    }
+  };
+
+  const loadTestData = async (testToken: string) => {
+    try {
+      setIsLoading(true);
+      console.log('Loading test data for token:', testToken);
+      
+      // Le hook useGetPublicTest est déjà appelé au niveau du composant
+      // Cette fonction sert principalement à logger et à gérer l'état de chargement
+      
+    } catch (error: any) {
+      console.error('Error loading test data:', error);
+      console.error('Error response:', error.response?.data);
+      console.error('Error status:', error.response?.status);
+      toast.error('Erreur lors du chargement du test');
+      setIsLoading(false);
+    }
+  };
+
   // Effet de sécurité : détection de changement d'onglet
+  // Effet de sécurité : détection de changement d'onglet et sortie de fenêtre
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.hidden && testStarted && !testSubmitted) {
         setTabSwitchCount(prev => prev + 1);
-        const warning = `Attention : Changement d'onglet détecté (${tabSwitchCount + 1})`;
+        const warning = `⚠️ ALERTE : Changement d'onglet détecté (${tabSwitchCount + 1}/3) - Tentative de fraude enregistrée!`;
         setSecurityWarnings(prev => [...prev, warning]);
-        toast.warning(warning);
+        toast.error(warning, { duration: 5000 });
+        
+        // Soumettre automatiquement le test après 3 changements d'onglet
+        if (tabSwitchCount >= 2) {
+          toast.error("🚨 Trop de changements d'onglet! Le test sera soumis automatiquement.", { duration: 5000 });
+          setTimeout(() => {
+            submitTest();
+          }, 2000);
+        }
       }
     };
 
     const handleBlur = () => {
       if (testStarted && !testSubmitted) {
         setTabSwitchCount(prev => prev + 1);
-        const warning = `Attention : Perte de focus détectée (${tabSwitchCount + 1})`;
+        const warning = `⚠️ ALERTE : Perte de focus détectée (${tabSwitchCount + 1}/3) - Ne quittez pas la fenêtre!`;
         setSecurityWarnings(prev => [...prev, warning]);
-        toast.warning(warning);
+        toast.error(warning, { duration: 5000 });
+        
+        // Soumettre automatiquement le test après 3 pertes de focus
+        if (tabSwitchCount >= 2) {
+          toast.error("🚨 Trop de pertes de focus! Le test sera soumis automatiquement.", { duration: 5000 });
+          setTimeout(() => {
+            submitTest();
+          }, 2000);
+        }
+      }
+    };
+
+    const handleFocus = () => {
+      if (testStarted && !testSubmitted) {
+        toast.warning("🔒 Restez sur cette page pendant le test", { duration: 3000 });
       }
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('blur', handleBlur);
+    window.addEventListener('focus', handleFocus);
 
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('blur', handleBlur);
+      window.removeEventListener('focus', handleFocus);
     };
   }, [testStarted, testSubmitted, tabSwitchCount]);
 
@@ -244,24 +345,46 @@ const CandidateTestPage: React.FC = () => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       if (testStarted && !testSubmitted) {
         e.preventDefault();
-        e.returnValue = 'Le test est en cours. Voulez-vous vraiment quitter ? Toutes vos réponses seront perdues.';
+        e.returnValue = '🚨 ALERTE : Test en cours! Si vous quittez cette page, le test sera soumis automatiquement et vos réponses seront enregistrées. Voulez-vous vraiment continuer ?';
         return e.returnValue;
       }
     };
 
     const handlePageHide = (e: PageTransitionEvent) => {
       if (testStarted && !testSubmitted) {
-        e.preventDefault();
-        toast.error('Ne quittez pas la page pendant le test');
+        // Soumettre automatiquement le test si l'utilisateur essaie de quitter la page
+        console.log('Page hide detected - submitting test automatically');
+        submitTest();
       }
     };
 
-    // Bloquer le clic droit sur tout le document pendant le test
+    // Bloquer les raccourcis clavier pour sortir
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (testStarted && !testSubmitted) {
+        // Bloquer Alt+Tab, Ctrl+W, Ctrl+T, F5, etc.
+        if (
+          e.key === 'F5' || 
+          (e.ctrlKey && (e.key === 'w' || e.key === 't' || e.key === 'Tab')) ||
+          (e.altKey && e.key === 'Tab')
+        ) {
+          e.preventDefault();
+          toast.error('🔒 Cette action est bloquée pendant le test!', { duration: 3000 });
+          return false;
+        }
+        
+        // Bloquer la touche Échap pour sortir du plein écran
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          toast.error('🔒 La touche Échap est bloquée pendant le test!', { duration: 3000 });
+          return false;
+        }
+      }
+    };
+
     const handleGlobalContextMenu = (e: MouseEvent) => {
       if (testStarted && !testSubmitted) {
         e.preventDefault();
-        e.stopPropagation();
-        toast.warning('Le clic droit est désactivé pendant le test');
+        toast.error('🔒 Le clic droit est bloqué pendant le test!', { duration: 3000 });
       }
     };
 
@@ -270,6 +393,7 @@ const CandidateTestPage: React.FC = () => {
       window.addEventListener('beforeunload', handleBeforeUnload);
       window.addEventListener('pagehide', handlePageHide);
       document.addEventListener('contextmenu', handleGlobalContextMenu);
+      window.addEventListener('keydown', handleKeyDown);
     }
 
     return () => {
@@ -277,6 +401,7 @@ const CandidateTestPage: React.FC = () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
       window.removeEventListener('pagehide', handlePageHide);
       document.removeEventListener('contextmenu', handleGlobalContextMenu);
+      window.removeEventListener('keydown', handleKeyDown);
     };
   }, [testStarted, testSubmitted]);
 
@@ -290,54 +415,6 @@ const CandidateTestPage: React.FC = () => {
       submitTest();
     }
   }, [timeRemaining, testStarted, testSubmitted]);
-
-  const loadTestData = async (testToken: string) => {
-    try {
-      setIsLoading(true);
-      console.log('Loading test data for token:', testToken);
-      
-      // Utiliser le hook pour récupérer les données du test public
-  const { data: testData, isLoading: testLoading, error: testError } = useGetPublicTest(testToken);
-  
-  console.log('=== DONNÉES COMPLÈTES DU TEST ===');
-  console.log('Test data from hook:', testData);
-      console.log('Test data keys:', Object.keys(testDataResponse || {}));
-      console.log('Questions:', testDataResponse?.questions);
-      console.log('Questions type:', typeof testDataResponse?.questions);
-      console.log('Questions length:', testDataResponse?.questions?.length);
-      console.log('Is array:', Array.isArray(testDataResponse?.questions));
-      console.log('=== FIN DONNÉES TEST ===');
-      
-      // Créer un objet testData compatible avec ce que le frontend attend
-      const testData = {
-        testId: testDataResponse.test?.id,
-        duration: testDataResponse.test?.timeLimitMinutes || 40,
-        questions: testDataResponse.test?.questions || [],
-        positionTitle: 'Poste technique', // À améliorer si nécessaire
-        token: testToken,
-        candidateName: 'Candidat', // À améliorer si nécessaire
-        deadline: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() // 24h from now
-      };
-      
-      setTestData(testData);
-      setTimeRemaining(testData.duration * 60); // Convertir minutes en secondes
-      
-      // Charger les réponses sauvegardées après avoir reçu les données du test
-      setTimeout(() => {
-        loadSavedAnswers();
-      }, 100);
-      
-    } catch (error: any) {
-      console.error('Error loading test data:', error);
-      console.error('Error response:', error.response?.data);
-      console.error('Error status:', error.response?.status);
-      const errorMessage = error.response?.data?.message || error.message || 'Erreur inconnue';
-      toast.error(`Erreur lors du chargement du test: ${errorMessage}`);
-      navigate('/candidate/login');
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   const startTest = async () => {
     if (!token) {
@@ -381,12 +458,12 @@ const CandidateTestPage: React.FC = () => {
         return;
       }
       
-      // Appeler l'endpoint de démarrage du test
-      const startResponse = await apiService.testService.startTest(token);
+      // Appeler l'endpoint de démarrage du test via le hook
+      const startResponse = await startTestMutation.mutateAsync(Number(testData.testId));
       console.log('Test started successfully:', startResponse);
       
       setTestStarted(true);
-      setTimeRemaining(testData!.duration * 60);
+      setTimeRemaining(testDataFromHook!.duration * 60);
       loadSavedAnswers();
       
       toast.success('Test démarré en mode plein écran. Toute tentative de sortie sera bloquée.');
@@ -480,7 +557,10 @@ const CandidateTestPage: React.FC = () => {
   };
 
   const submitTest = async () => {
-    if (!testData) return;
+    if (!testData) {
+      console.error('No test data available for submission');
+      return;
+    }
     
     try {
       setIsSubmitting(true);
@@ -499,18 +579,25 @@ const CandidateTestPage: React.FC = () => {
       
       console.log('Formatted answers:', formattedAnswers);
       
+      // Créer les données de soumission selon le format attendu par le backend
       const submissionData = {
         testId: testData.testId,
-        token: token,  // ✅ Utiliser le token de l'URL
         answers: formattedAnswers,
-        timeSpent: (testData.duration * 60) - timeRemaining,
+        timeSpentMinutes: Math.floor(((testData.duration * 60) - timeRemaining) / 60),
         submittedAt: new Date().toISOString()
       };
       
       console.log('Données de soumission complètes:', JSON.stringify(submissionData, null, 2));
       
-      // Utiliser le service API au lieu de apiClient directement
-      const response = await apiService.testService.submitTest(testData.testId, submissionData);
+      // Utiliser le hook useSubmitTest déclaré au niveau du composant
+      const response = await submitTestMutation.mutateAsync({ 
+        testId: testData.testId, 
+        answers: {
+          token: token, // ← Required for backend validation
+          answers: formattedAnswers, // ← Answers as Map
+          timeSpent: (testData.duration * 60) - timeRemaining // ← Time spent in seconds
+        }
+      });
       
       console.log('Réponse du backend:', response);
       
@@ -527,21 +614,12 @@ const CandidateTestPage: React.FC = () => {
       
       setTimeout(() => {
         navigate(`/test-submitted/${token}`);
-      }, 3000);
+      }, 2000);
       
     } catch (error: any) {
-      console.error('=== ERREUR SOUMISSION TEST ===');
-      console.error('Error details:', error);
+      console.error('Error submitting test:', error);
       console.error('Error response:', error.response?.data);
-      console.error('Error status:', error.response?.status);
-      console.error('Error message:', error.message);
-      
-      const errorMessage = error.response?.data?.message || 
-                          error.response?.data?.error || 
-                          error.message || 
-                          'Erreur inconnue lors de la soumission';
-      
-      toast.error(`Erreur lors de la soumission du test: ${errorMessage}`);
+      toast.error('Erreur lors de la soumission du test');
     } finally {
       setIsSubmitting(false);
     }

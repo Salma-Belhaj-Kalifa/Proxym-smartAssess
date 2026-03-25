@@ -1,5 +1,7 @@
 package com.example.smart_assess.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -11,14 +13,17 @@ import java.util.List;
 @Table(name = "candidates")
 @PrimaryKeyJoinColumn(name = "user_id")
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 public class Candidate extends User {
 
     @Builder.Default
     private String phone = "";
 
     @OneToOne(mappedBy = "candidate", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @JsonIgnore
     private CandidateCV cv;
 
     @OneToMany(mappedBy = "candidate", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @JsonIgnore
     private List<Candidature> candidatures = new ArrayList<>();
 }

@@ -1,11 +1,13 @@
-import React, { useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from 'sonner';
-import { useTests } from '@/features/tests/testsQueries';
+import { useTests, useGetTestResults } from '@/features/tests/testsQueries';
+import { useCandidatures, usePositions } from '@/features';
 import { AlertCircle, Eye, User, Briefcase, Clock, Calendar } from 'lucide-react';
+import apiClient from '@/lib/api';
 
 interface TestResult {
   id: number;
@@ -29,178 +31,249 @@ interface TestResult {
   timeSpentMinutes?: number;
   timeSpentSeconds?: number;
   timeSpentFormatted?: string;
+  session?: {
+    startedAt?: string;
+    submittedAt?: string;
+  };
 }
 
 const TestResultsListPage: React.FC = () => {
   const navigate = useNavigate();
-  const [tests, setTests] = useState<TestResult[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [failedTestIds] = useState<Set<number>>(new Set());
+  const [refreshKey, setRefreshKey] = useState(0); // Forcer le rechargement
+  
+  // Utiliser React Query pour récupérer les données
+  const { data: testsData = [], isLoading: testsLoading, error: testsError, refetch: refetchTests } = useTests();
+  const { data: candidatures = [] } = useCandidatures();
+  const { data: positions = [] } = usePositions();
+
+  // Extraire les tests de l'objet si nécessaire (comme dans le dashboard)
+  const tests = Array.isArray(testsData) ? testsData : 
+               (testsData && typeof testsData === 'object' && 'tests' in testsData) ? 
+               (testsData as any).tests : [];
+
+  // Récupérer les résultats pour chaque test complété
+  const [testResults, setTestResults] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [failedTestIds] = useState<Set<number>>(new Set()); // Cache des tests en erreur
+  const [renderKey, setRenderKey] = useState(0); // Forcer le re-render
 
   useEffect(() => {
-    loadTests();
-  }, []);
+    console.log('=== TESTS DATA CHANGED ===');
+    console.log('Raw testsData:', testsData);
+    console.log('Extracted tests:', tests);
+    console.log('Tests with SUBMITTED status:', tests.filter(t => t.status === 'SUBMITTED'));
+    console.log('Tests with COMPLETED status:', tests.filter(t => t.status === 'COMPLETED'));
+    
+    if (tests.length > 0) {
+      loadTestsWithResults();
+    }
+  }, [tests, refreshKey]);
 
-  const loadTests = async () => {
+  const loadTestsWithResults = async () => {
     try {
       setIsLoading(true);
       setError(null);
       
-      // Utiliser la nouvelle fonction pour trouver les tests existants
-      const results = await getAllTestsWithResults();
+      const results: TestResult[] = [];
       
-      setTests(results);
-      
-      if (results.length === 0) {
-        console.log('Aucun test complété trouvé');
-        setError('Aucun test complété trouvé. Les candidats n\'ont pas encore soumis de tests.');
-      } else {
-        console.log(`${results.length} tests trouvés et chargés`);
-      }
-      
-    } catch (error: any) {
-      console.error('Erreur lors du chargement des résultats:', error);
-      setError('Impossible de charger les résultats des tests. Veuillez réessayer plus tard.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const getAllTestsWithResults = async (): Promise<TestResult[]> => {
-    const results: TestResult[] = [];
-
-    console.log('Recherche dynamique des tests existants pour éviter les erreurs 500');
-    
-    try {
-      // Essayer de récupérer la liste de tous les tests disponibles
-      const response = await testService.getAll();
-      console.log('Tests trouvés:', response);
-      
-      // Extraire le tableau de tests depuis la réponse du backend
-      const allTests = (response as any).tests || (response as any).data || response || [];
-      console.log('Tests extraits:', allTests);
-      
-      // Filtrer uniquement les tests qui ont des résultats (status SUBMITTED)
-      const completedTests = allTests.filter((test: any) => 
-        test.status === 'SUBMITTED' || test.status === 'COMPLETED'
+      // Filtrer les tests complétés
+      const completedTests = tests.filter(test => 
+        test.status === 'COMPLETED' || test.status === 'SUBMITTED'
       );
       
+      console.log('=== CHARGEMENT DES RÉSULTATS DE TESTS ===');
       console.log('Tests complétés trouvés:', completedTests.length);
-      
-      if (completedTests.length === 0) {
-        console.log('Aucun test complété trouvé dans la base de données');
-        return results; // Retourner tableau vide
-      }
       
       for (const test of completedTests) {
         try {
-          // Vérifier si le test existe réellement en essayant de le récupérer
-          const testDetails = await testService.getTestForReview(test.id);
-          console.log('TestDetails récupérés pour test', test.id, ':', testDetails);
+          console.log('Chargement des résultats pour le test ID:', test.id);
           
-          if (testDetails) {
-            // Calculer le temps exact depuis les dates de session
-            let exactTimeSpentMinutes = 0;
-            let exactTimeSpentSeconds = 0;
-            let timeSpentFormatted = '';
-            if (testDetails.session?.startedAt && testDetails.session?.submittedAt) {
-              const startedAt = new Date(testDetails.session.startedAt);
-              const submittedAt = new Date(testDetails.session.submittedAt);
-              const timeDiffMs = submittedAt.getTime() - startedAt.getTime();
-              exactTimeSpentMinutes = Math.floor(timeDiffMs / (1000 * 60));
-              exactTimeSpentSeconds = Math.floor((timeDiffMs % (1000 * 60)) / 1000);
-              timeSpentFormatted = `${exactTimeSpentMinutes} min ${exactTimeSpentSeconds}s`;
-              console.log('Temps exact calculé:', exactTimeSpentMinutes, 'minutes', exactTimeSpentSeconds, 'secondes');
-            }
-            
-            const testResult: TestResult = {
-              id: test.id,
-              candidate: testDetails.candidate || test.candidate || {
-                id: 0,
-                firstName: testDetails.candidate?.firstName || test.candidate?.firstName || 'Candidat',
-                lastName: testDetails.candidate?.lastName || test.candidate?.lastName || 'Inconnu',
-                email: testDetails.candidate?.email || test.candidate?.email || 'email@example.com'
-              },
-              internshipPosition: testDetails.internshipPosition || test.internshipPosition || {
-                id: test.internshipPosition?.id || 1,
-                title: testDetails.internshipPosition?.title || test.internshipPosition?.title || 'Poste inconnu',
-                company: testDetails.internshipPosition?.company || test.internshipPosition?.company || 'SmartAssess'
-              },
-              status: testDetails.status || test.status || 'SUBMITTED',
-              createdAt: testDetails.createdAt || test.createdAt || new Date().toISOString(),
-              submittedAt: testDetails.submittedAt,
-              timeLimitMinutes: testDetails.timeLimitMinutes || test.timeLimitMinutes || 24,
-              finalScore: testDetails.finalScore,
-              testScore: testDetails.testScore,
-              timeSpentMinutes: exactTimeSpentMinutes || testDetails.session?.timeSpentMinutes || testDetails.timeSpentMinutes || test.timeSpentMinutes || 0,
-              timeSpentSeconds: exactTimeSpentSeconds || 0,
-              timeSpentFormatted: timeSpentFormatted || `${testDetails.session?.timeSpentMinutes || 0} min`
-            };
-            results.push(testResult);
+          // Appeler l'endpoint /review pour obtenir les vraies données
+          const response = await apiClient.get(`/tests/${test.id}/review`);
+          console.log('Réponse API reçue pour le test', test.id, ':', response.status, response.data);
+          const reviewData = response.data;
+          
+          console.log('Données reçues pour le test', test.id, ':', reviewData);
+          
+          // Vérifier spécifiquement les scores
+          console.log('Scores disponibles:', {
+            finalScore: reviewData.scores?.finalScore,
+            totalScore: reviewData.scores?.totalScore,
+            maxScore: reviewData.scores?.maxScore,
+            scoresObj: reviewData.scores
+          });
+          
+          // Si finalScore est undefined, logger mais ne pas calculer manuellement (le backend le fait maintenant)
+          if (!reviewData.scores?.finalScore) {
+            console.log('⚠️ Scores manquants pour le test', test.id, '- le backend devrait calculer automatiquement');
+            console.log('Contenu complet de reviewData.scores:', JSON.stringify(reviewData.scores, null, 2));
           }
+          
+          // Extraire les données de l'endpoint /review
+          const testResult: TestResult = {
+            id: reviewData.id || test.id,
+            candidate: {
+              id: reviewData.candidate?.id || test.candidate?.id || 0,
+              firstName: reviewData.candidate?.firstName || test.candidate?.firstName || 'Candidat',
+              lastName: reviewData.candidate?.lastName || test.candidate?.lastName || 'Inconnu',
+              email: reviewData.candidate?.email || test.candidate?.email || 'email@example.com'
+            },
+            internshipPosition: {
+              id: reviewData.internshipPosition?.id || test.internshipPosition?.id || 0,
+              title: reviewData.internshipPosition?.title || test.internshipPosition?.title || 'Poste non spécifié',
+              company: reviewData.internshipPosition?.company || test.internshipPosition?.company || 'Entreprise'
+            },
+            status: (reviewData.status as 'SUBMITTED' | 'IN_PROGRESS' | 'PENDING' | 'EXPIRED') || 'SUBMITTED',
+            createdAt: reviewData.createdAt || test.createdAt || new Date().toISOString(),
+            submittedAt: reviewData.session?.submittedAt,
+            timeLimitMinutes: reviewData.timeLimitMinutes || test.timeLimitMinutes || 60,
+            finalScore: reviewData.scores?.finalScore,
+            testScore: reviewData.scores?.totalScore,
+            timeSpentMinutes: reviewData.session?.timeSpentMinutes,
+            timeSpentSeconds: reviewData.session?.timeSpentSeconds,
+            timeSpentFormatted: reviewData.session?.timeSpentMinutes ? 
+              `${reviewData.session.timeSpentMinutes} min` : 'N/A',
+            session: reviewData.session
+          };
+          
+          console.log('TestResult créé pour le test', test.id, ':', {
+            finalScore: testResult.finalScore,
+            submittedAt: testResult.submittedAt,
+            candidate: testResult.candidate?.firstName + ' ' + testResult.candidate?.lastName
+          });
+          
+          results.push(testResult);
+          
         } catch (error: any) {
-          console.error(`Erreur lors du chargement du test ${test.id}:`, error);
-          failedTestIds.add(test.id);
+          console.error(`❌ ERREUR API pour le test ${test.id}:`, error);
+          console.error('Status:', error.response?.status);
+          console.error('Message:', error.message);
+          console.error('Données:', error.response?.data);
+          console.log('Tentative avec les données de base pour le test', test.id);
           
-          // Vérifier si c'est une erreur "Test not found" déguisée en 500
-          if (error.response?.status === 500) {
-            const errorData = error.response?.data;
-            if (errorData?.message?.includes('Test not found') || 
-                errorData?.error?.includes('Test not found') ||
-                error.message?.includes('Test not found')) {
-              console.warn(`Le test ${test.id} n'existe pas (Test not found) - ignoré dans la liste`);
-            } else {
-              console.warn(`Le test ${test.id} n'est pas disponible (erreur 500) - ignoré dans la liste`);
-            }
-          } else if (error.response?.status === 404) {
-            console.warn(`Le test ${test.id} n'existe pas (erreur 404) - ignoré dans la liste`);
-          } else {
-            console.warn(`Erreur inattendue pour le test ${test.id}:`, error.message);
+          // En cas d'erreur, essayer d'abord avec les données de base mais de manière améliorée
+          try {
+            // Réessayer avec l'endpoint /review une deuxième fois (parfois c'est un timeout)
+            const retryResponse = await apiClient.get(`/tests/${test.id}/review`);
+            const retryData = retryResponse.data;
+            
+            console.log('Retry réussi pour le test', test.id, ':', retryData);
+            
+            const retryResult: TestResult = {
+              id: retryData.id || test.id,
+              candidate: {
+                id: retryData.candidate?.id || test.candidate?.id || 0,
+                firstName: retryData.candidate?.firstName || test.candidate?.firstName || 'Candidat',
+                lastName: retryData.candidate?.lastName || test.candidate?.lastName || 'Inconnu',
+                email: retryData.candidate?.email || test.candidate?.email || 'email@example.com'
+              },
+              internshipPosition: {
+                id: retryData.internshipPosition?.id || test.internshipPosition?.id || 0,
+                title: retryData.internshipPosition?.title || test.internshipPosition?.title || 'Poste non spécifié',
+                company: retryData.internshipPosition?.company || test.internshipPosition?.company || 'Entreprise'
+              },
+              status: (retryData.status as 'SUBMITTED' | 'IN_PROGRESS' | 'PENDING' | 'EXPIRED') || 'SUBMITTED',
+              createdAt: retryData.createdAt || test.createdAt || new Date().toISOString(),
+              submittedAt: retryData.session?.submittedAt,
+              timeLimitMinutes: retryData.timeLimitMinutes || test.timeLimitMinutes || 60,
+              finalScore: retryData.scores?.finalScore,
+              testScore: retryData.scores?.totalScore,
+              timeSpentMinutes: retryData.session?.timeSpentMinutes,
+              timeSpentSeconds: retryData.session?.timeSpentSeconds,
+              timeSpentFormatted: retryData.session?.timeSpentMinutes ? 
+                `${retryData.session.timeSpentMinutes} min` : 'N/A',
+              session: retryData.session
+            };
+            
+            console.log('Retry TestResult créé pour le test', test.id, ':', {
+              finalScore: retryResult.finalScore,
+              submittedAt: retryResult.submittedAt
+            });
+            
+            results.push(retryResult);
+            
+          } catch (retryError: any) {
+            console.error(`Retry échoué pour le test ${test.id}:`, retryError);
+            
+            // Vraiment utiliser les données de base en dernier recours
+            const fallbackResult: TestResult = {
+              id: test.id,
+              candidate: {
+                id: test.candidate?.id || 0,
+                firstName: test.candidate?.firstName || 'Candidat',
+                lastName: test.candidate?.lastName || 'Inconnu',
+                email: test.candidate?.email || 'email@example.com'
+              },
+              internshipPosition: {
+                id: test.internshipPosition?.id || 0,
+                title: test.internshipPosition?.title || 'Poste non spécifié',
+                company: test.internshipPosition?.company || 'Entreprise'
+              },
+              status: (test.status as 'SUBMITTED' | 'IN_PROGRESS' | 'PENDING' | 'EXPIRED') || 'SUBMITTED',
+              createdAt: test.createdAt || new Date().toISOString(),
+              submittedAt: test.session?.submittedAt,
+              timeLimitMinutes: test.timeLimitMinutes || 60,
+              finalScore: test.score, // Dernier recours - peut être undefined
+              testScore: test.score,
+              timeSpentMinutes: test.session?.timeSpentMinutes,
+              timeSpentSeconds: test.session?.timeSpentSeconds,
+              timeSpentFormatted: test.session?.timeSpentMinutes ? 
+                `${test.session.timeSpentMinutes} min` : 'N/A',
+              session: test.session
+            };
+            
+            console.log('Fallback TestResult créé pour le test', test.id, ':', {
+              finalScore: fallbackResult.finalScore,
+              submittedAt: fallbackResult.submittedAt
+            });
+            
+            results.push(fallbackResult);
+            failedTestIds.add(test.id);
           }
-          // Ne pas ajouter ce test à la liste des résultats
-          continue;
         }
       }
       
-    } catch (error: any) {
-      console.error('Erreur lors de la récupération de la liste des tests:', error);
-      console.error('Aucun fallback utilisé - uniquement les vrais tests de la base de données');
+      setTestResults(results);
+      console.log('=== RÉSULTATS FINAUX CHARGÉS ===');
+      console.log('Nombre de résultats:', results.length);
       
-      setTests([]); // Tableau vide si erreur
+      // Forcer le re-render des cartes
+      setRenderKey(prev => prev + 1);
+      
+    } catch (error: any) {
+      console.error('Erreur lors de la récupération des résultats de tests:', error);
+      setError('Erreur lors du chargement des résultats');
+      setTestResults([]);
     } finally {
       setIsLoading(false);
     }
-
-    console.log(`Résultats finaux: ${results.length} tests valides trouvés`);
-    return results;
   };
 
-  const transformTestData = (data: any): TestResult[] => {
-    if (!data) return [];
-    
-    if (Array.isArray(data)) {
-      return data.map(item => transformSingleTest(item));
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'SUBMITTED':
+      case 'COMPLETED':
+        return <Badge className="bg-green-100 text-green-800 border-green-300">Soumis</Badge>;
+      case 'IN_PROGRESS':
+        return <Badge className="bg-blue-100 text-blue-800 border-blue-300">En cours</Badge>;
+      case 'PENDING':
+        return <Badge className="bg-yellow-100 text-yellow-800 border-yellow-300">En attente</Badge>;
+      case 'EXPIRED':
+        return <Badge className="bg-red-100 text-red-800 border-red-300">Expiré</Badge>;
+      default:
+        return <Badge className="bg-gray-100 text-gray-800 border-gray-300">Inconnu</Badge>;
     }
-    
-    if (data.tests || data.data || data.content) {
-      const testArray = data.tests || data.data || data.content;
-      return Array.isArray(testArray) ? testArray.map(transformSingleTest) : [];
-    }
-    
-    return [transformSingleTest(data)];
   };
 
-  const transformSingleTest = (item: any): TestResult => {
-    return {
-      id: item.id || item.testId || 0,
-      candidate: item.candidate || item.user || {
-        id: 0,
-        firstName: item.candidate?.firstName || item.user?.firstName || 'Candidat',
-        lastName: item.candidate?.lastName || item.user?.lastName || 'Inconnu',
-        email: item.candidate?.email || item.user?.email || 'unknown@example.com'
-      },
-      internshipPosition: item.internshipPosition || item.position || {
+  const getScoreColor = (score?: number) => {
+    if (!score) return 'text-gray-500';
+    if (score >= 80) return 'text-green-600 font-semibold';
+    if (score >= 60) return 'text-yellow-600 font-semibold';
+    return 'text-red-600 font-semibold';
+  };
+
+  if (testsLoading || isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
@@ -211,7 +284,7 @@ const TestResultsListPage: React.FC = () => {
     );
   }
 
-  if (testsError) {
+  if (error) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <Card className="w-full max-w-2xl mx-auto m-4">
@@ -219,7 +292,7 @@ const TestResultsListPage: React.FC = () => {
             <div className="text-center">
               <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
               <h2 className="text-xl font-semibold text-gray-900 mb-2">Erreur de chargement</h2>
-              <p className="text-gray-600">{testsError.message || 'Erreur lors du chargement des tests'}</p>
+              <p className="text-gray-600">{error || 'Erreur lors du chargement des tests'}</p>
               <Button onClick={() => navigate('/manager/dashboard')} className="mt-4">
                 Retour au dashboard
               </Button>
@@ -230,7 +303,19 @@ const TestResultsListPage: React.FC = () => {
     );
   }
 
-  if (!testResults.length) {
+  // Vérifier s'il y a des tests complétés
+  const hasCompletedTests = testResults.length > 0;
+  
+  console.log('=== VÉRIFICATION ÉTAT FINAL ===');
+  console.log('Tests bruts:', tests.length);
+  console.log('Tests complétés:', tests.filter(t => t.status === 'COMPLETED' || t.status === 'SUBMITTED').length);
+  console.log('TestResults:', testResults.length);
+  console.log('HasCompletedTests:', hasCompletedTests);
+  console.log('IsLoading:', isLoading);
+  console.log('Error:', error);
+
+  if (!hasCompletedTests && !isLoading) {
+    console.log('⚠️ Aucun test complété trouvé - redirection vers dashboard');
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
@@ -250,79 +335,91 @@ const TestResultsListPage: React.FC = () => {
       <div className="max-w-7xl mx-auto">
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-3xl font-bold text-gray-900">Résultats des Tests</h1>
-          <Button onClick={() => navigate('/manager/dashboard')} className="flex items-center gap-2">
-            <Briefcase className="h-4 w-4" />
-            Retour au Dashboard
-          </Button>
+          <div className="flex gap-2">
+            <Button 
+              onClick={() => {
+                console.log('Manual refresh triggered');
+                refetchTests();
+                setRefreshKey(prev => prev + 1);
+              }} 
+              variant="outline"
+              className="flex items-center gap-2"
+            >
+              <Calendar className="h-4 w-4" />
+              Actualiser
+            </Button>
+            <Button onClick={() => navigate('/manager/dashboard')} className="flex items-center gap-2">
+              <Briefcase className="h-4 w-4" />
+              Retour au Dashboard
+            </Button>
+          </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {testResults.map((result) => (
-            <Card key={result.id} className="hover:shadow-lg transition-shadow">
-              <CardHeader>
-                <CardTitle className="flex items-center justify-between">
-                  <span className="truncate">{result.internshipPosition.title}</span>
-                  <Badge className={
-                    result.status === 'COMPLETED' ? 'bg-green-100 text-green-800' :
-                    result.status === 'SUBMITTED' ? 'bg-blue-100 text-blue-800' :
-                    'bg-gray-100 text-gray-800'
-                  }>
-                    {result.status === 'COMPLETED' ? 'Terminé' :
-                     result.status === 'SUBMITTED' ? 'Soumis' : 'Inconnu'}
-                  </Badge>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-6">
-                <div className="space-y-4">
-                  <div className="flex items-center space-x-4">
-                    <User className="h-5 w-5 text-gray-400" />
-                    <div>
-                      <p className="font-medium">{result.candidate.firstName} {result.candidate.lastName}</p>
-                      <p className="text-sm text-gray-600">{result.candidate.email}</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" key={renderKey}>
+          {testResults
+            .map((test) => {
+              // Mapping intelligent des positions - les données sont directement dans test.internshipPosition
+              const position = test.internshipPosition || {
+                title: 'Poste non spécifié',
+                company: 'Entreprise'
+              };
+              
+              return (
+              <Card key={`${test.id}-${test.finalScore || 'na'}-${renderKey}`} className="hover:shadow-lg transition-shadow">
+                <CardHeader>
+                  <CardTitle className="flex items-center justify-between">
+                    <span className="truncate">{position.title || 'Poste non spécifié'}</span>
+                    <Badge className={
+                      test.status === 'COMPLETED' ? 'bg-green-100 text-green-800' :
+                      test.status === 'SUBMITTED' ? 'bg-blue-100 text-blue-800' :
+                      'bg-gray-100 text-gray-800'
+                    }>
+                      {test.status === 'COMPLETED' ? 'Terminé' :
+                       test.status === 'SUBMITTED' ? 'Soumis' : 'Inconnu'}
+                    </Badge>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-6">
+                  <div className="space-y-4">
+                    <div className="flex items-center space-x-4">
+                      <User className="h-5 w-5 text-gray-400" />
+                      <div>
+                        <p className="font-medium">{test.candidate?.firstName || 'Candidat'} {test.candidate?.lastName || 'Inconnu'}</p>
+                        <p className="text-sm text-gray-600">{test.candidate?.email || 'email@example.com'}</p>
+                      </div>
                     </div>
-                  </div>
-                  
-                  <div className="flex items-center space-x-4">
-                    <Briefcase className="h-5 w-5 text-gray-400" />
-                    <div>
-                      <p className="font-medium">{result.internshipPosition.title}</p>
-                      <p className="text-sm text-gray-600">{result.internshipPosition.company}</p>
+                    
+                    <div className="flex items-center space-x-4">
+                      <Briefcase className="h-5 w-5 text-gray-400" />
+                      <div>
+                        <p className="font-medium">{position.title || 'Poste non spécifié'}</p>
+                        <p className="text-sm text-gray-600">{position.company || 'Entreprise'}</p>
+                      </div>
                     </div>
-                  </div>
 
-                  <div className="flex items-center space-x-4">
-                    <Calendar className="h-5 w-5 text-gray-400" />
-                    <div>
-                      <p className="text-sm text-gray-600">
-                        Créé: {new Date(result.createdAt).toLocaleDateString()}
-                      </p>
-                      <p className="text-sm text-gray-600">
-                        Soumis: {new Date(result.submittedAt).toLocaleDateString()}
-                      </p>
+                    <div className="flex items-center space-x-4">
+                      <Calendar className="h-5 w-5 text-gray-400" />
+                      <div>
+                        <p className="text-sm text-gray-600">
+                          Créé: {new Date(test.createdAt || '').toLocaleDateString()}
+                        </p>
+                        <p className="text-sm text-gray-600">
+                          Soumis: {test.submittedAt ? new Date(test.submittedAt).toLocaleDateString() : 'N/A'}
+                        </p>
+                      </div>
                     </div>
-                  </div>
 
-                  <div className="flex items-center space-x-4">
-                    <Clock className="h-5 w-5 text-gray-400" />
-                    <div>
-                      <p className="text-sm text-gray-600">
-                        Temps: {result.timeSpentFormatted || 'Non spécifié'}
-                      </p>
-                      <p className="text-sm text-gray-600">
-                        Limite: {result.timeLimitMinutes} minutes
-                      </p>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-2">
+                      <span className="text-sm font-medium">Score:</span>
+                      <div className="text-2xl font-bold text-blue-600">
+                        {test.finalScore !== null && test.finalScore !== undefined 
+                          ? `${Math.round(test.finalScore)}%` 
+                          : '0%'}
+                      </div>
                     </div>
-                  </div>
-
-                  {result.finalScore !== undefined && (
-                    <div className="pt-4 border-t">
-                      <p className="text-lg font-semibold">Score: {result.finalScore}</p>
-                    </div>
-                  )}
-
-                  <div className="flex justify-between items-center pt-4">
                     <Button
-                      onClick={() => navigate(`/manager/tests/${result.id}/review`)}
+                      onClick={() => navigate(`/manager/test-results/${test.id}`)}
                       className="flex items-center gap-2"
                     >
                       <Eye className="h-4 w-4" />
@@ -332,7 +429,8 @@ const TestResultsListPage: React.FC = () => {
                 </div>
               </CardContent>
             </Card>
-          ))}
+              );
+            })}
         </div>
       </div>
     </div>

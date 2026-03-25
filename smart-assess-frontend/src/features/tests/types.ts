@@ -40,7 +40,7 @@ export interface Test {
 }
 
 export interface Question {
-  id: number;
+  id?: number;
   questionText: string;
   questionType: string;
   options: string[];
@@ -91,4 +91,27 @@ export interface TestResults {
       total: number;
     };
   };
+}
+
+export interface TestReviewData {
+  id: number;
+  testId?: number;
+  token: string;
+  status: string;
+  createdAt: string;
+  deadline: string;
+  timeLimitMinutes: number;
+  level?: string;
+  questions: Question[];
+  internshipPosition: {
+    id: number;
+    title: string;
+  };
+  candidate: {
+    id: number;
+    firstName: string;
+    lastName: string;
+    email: string;
+  };
+  isDraft?: boolean;
 }

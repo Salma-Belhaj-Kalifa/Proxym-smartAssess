@@ -15,7 +15,8 @@ export const useCreateCandidature = () => {
     },
     onError: (error: any) => {
       console.error('Erreur lors de la création de la candidature:', error);
-      toast.error('Erreur lors de la création de la candidature');
+      const errorMessage = error?.response?.data?.message || error?.response?.data?.error || 'Erreur lors de la création de la candidature';
+      toast.error(errorMessage);
     },
   });
 };

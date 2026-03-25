@@ -11,6 +11,8 @@ export interface User {
   firstName: string;
   lastName: string;
   role: string;
+  phone?: string;
+  department?: string;
   bio?: string;
   linkedin?: string;
   github?: string;

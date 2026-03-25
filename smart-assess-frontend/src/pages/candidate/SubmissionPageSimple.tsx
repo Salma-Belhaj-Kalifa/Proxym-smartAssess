@@ -6,17 +6,23 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { toast } from 'sonner';
-import { positionService, candidateService } from '@/services/apiService';
+import { usePositions } from '@/features/positions/positionsQueries';
+import { useCreateCandidature } from '@/features/candidatures/candidaturesMutations';
+import { useUpdateCandidate, useUploadCV } from '@/features/candidates/candidatesMutations';
+import { useAnalyzeCV } from '@/features/cv-analysis/cvAnalysisMutations';
 import apiClient from '@/lib/api';
 import { useCurrentUser } from '@/features/auth/authQueries';
 import { useQueryClient } from '@tanstack/react-query';
-import type { Position } from '@/services/apiService';
+import type { Position } from '@/features/positions/types';
 
 const SubmissionPageSimple: React.FC = () => {
   const navigate = useNavigate();
   const { data: user } = useCurrentUser();
   const queryClient = useQueryClient();
-  const [positions, setPositions] = useState<Position[]>([]);
+  
+  // Utiliser le hook pour récupérer les positions
+  const { data: positions = [], isLoading: positionsLoading } = usePositions();
+  
   const [selectedPositions, setSelectedPositions] = useState<number[]>([]);
   const [file, setFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -24,20 +30,15 @@ const SubmissionPageSimple: React.FC = () => {
   const [submitStatus, setSubmitStatus] = useState<'idle' | 'uploading' | 'success' | 'error'>('idle');
   const [error, setError] = useState<string | null>(null);
 
+  // Mutations
+  const createCandidatureMutation = useCreateCandidature();
+  const updateCandidateMutation = useUpdateCandidate();
+  const uploadCVMutation = useUploadCV();
+  const analyzeCVMutation = useAnalyzeCV();
+
   useEffect(() => {
-    loadPositions();
     loadSelectedPositions();
   }, []);
-
-  const loadPositions = async () => {
-    try {
-      const data = await positionService.getPublic();
-      setPositions(data);
-    } catch (err) {
-      console.error('Erreur lors du chargement des positions:', err);
-      setError('Impossible de charger les positions');
-    }
-  };
 
   const loadSelectedPositions = () => {
     const saved = localStorage.getItem('selectedPositions');
@@ -115,60 +116,30 @@ const SubmissionPageSimple: React.FC = () => {
         
         const candidatureData = {
           candidateId: user.id,
-          internshipPositionId: positionId,
+          positionId: positionId,
           status: 'PENDING'
         };
         
         console.log('Creating candidature with data:', candidatureData);
-        await candidateService.createCandidature(candidatureData);
+        await createCandidatureMutation.mutateAsync(candidatureData);
       }        
         queryClient.invalidateQueries({ queryKey: ['candidatures', 'candidate', user.id] });
         
         if (file) {
           try {
-            const iaFormData = new FormData();
-            iaFormData.append('file', file);
-            
-            const iaResponse = await fetch('http://localhost:8000/api/v1/analyze-cv', {
-              method: 'POST',
-              body: iaFormData,
+            // Utiliser le service d'analyse CV existant
+            const analysisResult = await analyzeCVMutation.mutateAsync({
+              candidateId: user.id,
+              file: file
             });
             
-            if (iaResponse.ok) {
-              const iaResult = await iaResponse.json();
-              
-              try {
-                const cvFormData = new FormData();
-                cvFormData.append('file', file);
-                cvFormData.append('candidateId', user.id.toString());
-                
-                const cvUploadResponse = await apiClient.post('/candidates/cv', cvFormData, {
-                  headers: {
-                    'Content-Type': 'multipart/form-data',
-                  },
-                });
-                                
-                if (cvUploadResponse.data.id) {
-                  const profileData = {
-                    parsedData: iaResult // Les données complètes de l'analyse IA
-                  };
-                                    
-                 await apiClient.post(`/technical_profiles/cv/${cvUploadResponse.data.id}`, profileData);
-                  toast.success('CV et profil technique sauvegardés avec succès !');
-                } else {
-                  toast.success('CV analysé avec succès !');
-                }
-              } catch (saveError) {
-                console.error('Failed to save CV or profile:', saveError);
-                toast.success('CV analysé avec succès !');
-              }
-            } else {
-              console.warn('CV Analysis failed');
-              toast.info('Analyse CV non disponible');
+            if (analysisResult) {
+              toast.success('CV analysé avec succès !');
+              console.log('CV Analysis Result:', analysisResult);
             }
-          } catch (iaError) {
-            console.error('CV Analysis error:', iaError);
-            toast.info('Analyse CV non disponible');
+          } catch (analysisError) {
+            console.error('CV Analysis error:', analysisError);
+            toast.error('Erreur lors de l\'analyse du CV');
           }
         }
       }

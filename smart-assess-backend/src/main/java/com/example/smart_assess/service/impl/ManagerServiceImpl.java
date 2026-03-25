@@ -2,6 +2,7 @@ package com.example.smart_assess.service.impl;
 
 import com.example.smart_assess.dto.CreateManagerRequest;
 import com.example.smart_assess.dto.ManagerDto;
+import com.example.smart_assess.dto.UpdateProfileRequest;
 import com.example.smart_assess.entity.*;
 import com.example.smart_assess.enums.Role;
 import com.example.smart_assess.repository.*;
@@ -37,6 +38,7 @@ public class ManagerServiceImpl implements ManagerService {
         manager.setPassword(passwordEncoder.encode(request.getPassword()));
         manager.setFirstName(request.getFirstName());
         manager.setLastName(request.getLastName());
+        manager.setPhone(request.getPhone());
         manager.setDepartment(request.getDepartment());
         manager.setRole(Role.MANAGER);
 
@@ -55,6 +57,20 @@ public class ManagerServiceImpl implements ManagerService {
         if (request.getPassword() != null && !request.getPassword().isBlank()) {
             manager.setPassword(passwordEncoder.encode(request.getPassword()));
         }
+
+        manager = managerRepository.save(manager);
+        return toDto(manager);
+    }
+
+    @Override
+    public ManagerDto updateProfile(Long id, UpdateProfileRequest request) {
+        Manager manager = managerRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Manager not found"));
+
+        manager.setFirstName(request.getFirstName());
+        manager.setLastName(request.getLastName());
+        manager.setPhone(request.getPhone());
+        manager.setDepartment(request.getDepartment());
 
         manager = managerRepository.save(manager);
         return toDto(manager);
@@ -173,6 +189,7 @@ public class ManagerServiceImpl implements ManagerService {
                 .email(manager.getEmail())
                 .firstName(manager.getFirstName())
                 .lastName(manager.getLastName())
+                .phone(manager.getPhone())
                 .department(manager.getDepartment())
                 .createdAt(manager.getCreatedAt())
                 .build();

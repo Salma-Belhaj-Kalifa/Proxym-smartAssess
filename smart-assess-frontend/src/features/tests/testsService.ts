@@ -1,6 +1,6 @@
 import apiClient from '@/lib/api';
 import API_ENDPOINTS from '@/config/apiEndpoints';
-import { Test } from './types';
+import { Test, TestReviewData } from './types';
 
 export const testService = {
   getAll: async (): Promise<Test[]> => {
@@ -32,8 +32,24 @@ export const testService = {
     return response.data;
   },
 
-  generateTest: async (testData: any): Promise<any> => {
-    const response = await apiClient.post(API_ENDPOINTS.TESTS.GENERATE, testData);
+  checkExistingTest: async (candidateId: number): Promise<{ status: string; exists: boolean; testId?: number; message: string }> => {
+    const response = await apiClient.get(`/tests/check-existing/${candidateId}`);
+    return response.data;
+  },
+
+  generateTest: async (data: {
+    candidatureId: number;
+    level: string;
+    questionCount: number;
+    focusAreas?: string[];
+    customInstructions?: string;
+  }): Promise<any> => {
+    const response = await apiClient.post('/tests/generate', data);
+    return response.data;
+  },
+
+  getTestForReview: async (id: number): Promise<TestReviewData> => {
+    const response = await apiClient.get(`/tests/${id}/review`);
     return response.data;
   },
 
@@ -42,13 +58,13 @@ export const testService = {
     return response.data;
   },
 
-  startTest: async (token: string): Promise<any> => {
-    const response = await apiClient.post(API_ENDPOINTS.TESTS.START_TEST(token));
+  startTest: async (testId: number): Promise<any> => {
+    const response = await apiClient.post(`/tests/${testId}/start`);
     return response.data;
   },
 
-  getTestResults: async (token: string): Promise<any> => {
-    const response = await apiClient.get(`/tests/public/${token}/results`);
+  getTestResults: async (testId: number): Promise<any> => {
+    const response = await apiClient.get(`/tests/${testId}/results`);
     return response.data;
   },
 
@@ -57,13 +73,8 @@ export const testService = {
     return response.data;
   },
 
-  getTestForReview: async (id: number): Promise<any> => {
-    const response = await apiClient.get(`/tests/${id}/review`);
-    return response.data;
-  },
-
   getTestResultsByToken: async (token: string): Promise<any> => {
-    const response = await apiClient.get(`/tests/public/${token}/results`);
+    const response = await apiClient.get(`/tests/results/${token}`);
     return response.data;
-  },
+  }
 };

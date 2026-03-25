@@ -22,7 +22,7 @@ const CandidatePositionsPage: React.FC = () => {
   useEffect(() => {
     setPositions(positionsData);
     setIsLoading(isLoadingPositions);
-    setError(errorPositions);
+    setError(errorPositions?.message || null);
   }, [positionsData, isLoadingPositions, errorPositions]);
 
   useEffect(() => {

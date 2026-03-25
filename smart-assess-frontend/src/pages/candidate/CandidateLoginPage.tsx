@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useLogin, useRegister, useLogout } from '@/features/auth/authMutations';
-import { useCurrentUser } from '@/features/auth/authQueries';
+import { useCurrentUserSafe } from '@/features/auth/authQueries';
 
 export default function CandidateLoginPage() {
   const navigate = useNavigate();
@@ -23,36 +23,61 @@ export default function CandidateLoginPage() {
   const loginMutation = useLogin();
   const registerMutation = useRegister();
   const logoutMutation = useLogout();
-  const { data: user } = useCurrentUser();
+  const { data: user } = useCurrentUserSafe();
   const isLoading = loginMutation.isPending || registerMutation.isPending || logoutMutation.isPending;
 
   // Vérification si déjà connecté
   useEffect(() => {
-    if (user) {
-      if (user.role === 'CANDIDATE') {
-        navigate('/candidat/dashboard');
-      } else {
-        await logoutMutation.mutateAsync();
-        alert("Accès non autorisé. Vous avez été déconnecté.");
-        navigate('/');
+    const checkAuth = async () => {
+      if (user) {
+        if (user.role === 'CANDIDATE') {
+          navigate('/candidat/dashboard');
+        } else {
+          await logoutMutation.mutateAsync();
+          alert("Accès non autorisé. Vous avez été déconnecté.");
+          navigate('/');
+        }
       }
-    }
+    };
+    
+    checkAuth();
   }, [user, navigate, logoutMutation]);
 
   // LOGIN
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setErrorMessage(null);
+    setErrorMessage(null); // Réinitialiser le message d'erreur
 
     try {
       const result = await loginMutation.mutateAsync({ email, password });
+      
+      console.log('Login result:', result); // Debug pour voir la structure de la réponse
 
-      if (!result || !result.user || !result.user.role) {
+      // Validation flexible pour différents formats de réponse
+      let user = null;
+      if (result && typeof result === 'object' && 'user' in result && result.user) {
+        user = result.user;
+      } else if (result && typeof result === 'object' && 'id' in result && 'email' in result) {
+        // Si le résultat contient directement les données utilisateur
+        user = result;
+      } else if (result && typeof result === 'object' && 'token' in result) {
+        // Si seulement le token est retourné, utiliser les données du formulaire
+        user = {
+          id: (result as any).id,
+          email: email,
+          firstName: (result as any).firstName || 'Utilisateur',
+          lastName: (result as any).lastName || '',
+          role: (result as any).role || 'CANDIDATE'
+        };
+      }
+
+      if (!user || !user.role) {
+        console.error('Login validation failed:', { result, user, hasUser: !!user, hasRole: !!user?.role });
         setErrorMessage("Utilisateur introuvable ou rôle incorrect.");
         return;
       }
 
-      if (result.user.role === 'CANDIDATE') {
+      if (user.role === 'CANDIDATE') {
         navigate('/candidat/dashboard');
       } else {
         await logoutMutation.mutateAsync();
@@ -64,7 +89,7 @@ export default function CandidateLoginPage() {
       
       // Gérer les erreurs selon le nouveau format du backend
       if (err?.response?.status === 401) {
-        setErrorMessage("Mot de passe incorrect ou utilisateur introuvable.");
+        setErrorMessage("Email ou mot de passe incorrect. Veuillez vérifier vos identifiants.");
       } else if (err?.response?.status === 403) {
         setErrorMessage("Accès non autorisé pour ce rôle.");
       } else if (err?.response?.status === 404) {
@@ -80,7 +105,7 @@ export default function CandidateLoginPage() {
   // SIGNUP
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
-    setErrorMessage(null);
+    setErrorMessage(null); // Réinitialiser le message d'erreur
 
     if (password !== confirmPassword) {
       setErrorMessage("Les mots de passe ne correspondent pas");
@@ -90,13 +115,34 @@ export default function CandidateLoginPage() {
     try {
       const userData = { email, password, firstName, lastName, phone, role };
       const result = await registerMutation.mutateAsync(userData);
+      
+      console.log('Signup result:', result); // Debug pour voir la structure de la réponse
 
-      if (!result || !result.user || !result.user.role) {
-        setErrorMessage("Erreur lors de l'inscription");
+      // Validation flexible pour différents formats de réponse
+      let user = null;
+      if (result && typeof result === 'object' && 'user' in result && result.user) {
+        user = result.user;
+      } else if (result && typeof result === 'object' && 'id' in result && 'email' in result) {
+        // Si le résultat contient directement les données utilisateur
+        user = result;
+      } else if (result && typeof result === 'object' && 'token' in result) {
+        // Si seulement le token est retourné, utiliser les données du formulaire
+        user = {
+          id: (result as any).id,
+          email: email,
+          firstName: firstName,
+          lastName: lastName,
+          role: role
+        };
+      }
+
+      if (!user || !user.role) {
+        console.error('Validation failed:', { result, user, hasUser: !!user, hasRole: !!user?.role });
+        setErrorMessage("Erreur lors de l'inscription - réponse invalide du serveur");
         return;
       }
 
-      if (result.user.role === 'CANDIDATE') {
+      if (user.role === 'CANDIDATE') {
         navigate('/candidat/dashboard');
       } else {
         await logoutMutation.mutateAsync();

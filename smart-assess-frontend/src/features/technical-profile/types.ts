@@ -1,5 +1,15 @@
 export interface TechnicalProfile {
   id: number;
+  cvId?: number;
+  candidateId?: number;
+  parsedData?: any; // Données brutes du parsing du CV
+  createdAt: string;
+  updatedAt?: string;
+}
+
+// Interface pour l'ancienne structure (si utilisée ailleurs)
+export interface DetailedTechnicalProfile {
+  id: number;
   userId: number;
   skills: string[];
   experience: Experience[];

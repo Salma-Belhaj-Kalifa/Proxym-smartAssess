@@ -6,12 +6,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Sparkles, Check, X, AlertCircle, ArrowLeft, User, FileText, Calendar, Mail, Phone } from "lucide-react";
-import { useCandidatures, useCandidaturesByCandidate } from '@/features/candidatures/candidaturesQueries';
+import { Sparkles, Check, X, AlertCircle, ArrowLeft, User, FileText, Calendar, Mail, Phone, Edit } from "lucide-react";
+import { useCandidatures } from '@/features/candidatures/candidaturesQueries';
+import { useTechnicalProfileByCandidate } from '@/features/technical-profile/technicalProfileQueries';
+import { useCheckExistingTest, useGenerateTest } from '@/features/tests/testsMutations';
 import { useUpdateCandidatureStatus } from '@/features/candidatures/candidaturesMutations';
-import { useCurrentUser } from '@/features/auth/authQueries';
+import { useCurrentUserSafe } from '@/features/auth/authQueries';
 import { toast } from "sonner";
-import apiService from "@/services/apiService";
 import { getStatusLabel, getStatusColor } from "@/utils/statusMappings";
 
 interface CandidateData {
@@ -42,11 +43,13 @@ interface TechnicalProfileData {
 const GenerateTestPage = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { data: user } = useCurrentUserSafe();
+  const { data: candidatures = [] } = useCandidatures();
+  const checkExistingTestMutation = useCheckExistingTest();
+  const generateTestMutation = useGenerateTest();
   const updateCandidatureStatusMutation = useUpdateCandidatureStatus();
   
   const [candidateData, setCandidateData] = useState<any>(null);
-  const [technicalProfile, setTechnicalProfile] = useState<any>(null);
-  const [isLoading, setIsLoading] = useState(true);
   const [existingTest, setExistingTest] = useState<any>(null);
   const [isCheckingExistingTest, setIsCheckingExistingTest] = useState(false);
   const [testConfig, setTestConfig] = useState({
@@ -56,161 +59,324 @@ const GenerateTestPage = () => {
     deadline: "",
     note: ""
   });
+  const [isLoading, setIsLoading] = useState(true);
 
   // Charger les données du candidat
-  useEffect(() => {
-    const loadCandidateData = async () => {
-      if (!id) return;
+  const loadCandidateData = async () => {
+    if (!id) return;
       
-      try {
-        setIsLoading(true);
+    console.log('=== DÉBUT CHARGEMENT CANDIDAT ===');
+    console.log('ID utilisé:', id);
+    
+    try {
+      console.log('GenerateTestPage - ID reçu:', id);
+      console.log('GenerateTestPage - Candidatures disponibles:', candidatures.map(c => ({ id: c.id, firstName: (c as any).candidateFirstName, lastName: (c as any).candidateLastName })));
         
-        const storedCandidature = sessionStorage.getItem('selectedCandidature');
-        let candidature;
+      const storedCandidature = sessionStorage.getItem('selectedCandidature');
+      let candidature;
         
-        if (storedCandidature) {
-          candidature = JSON.parse(storedCandidature);          
-          sessionStorage.removeItem('selectedCandidature');
-        } else {
-          const candidatureResponse = await apiService.candidatureService.getById(Number(id));
-          
-          candidature = candidatureResponse;
-        }
-        
-        if (!candidature) {
-          console.error('No candidature data found');
-          setIsLoading(false);
-          return;
-        }
-        
-        const candidateDataToSet = {
-          id: candidature.id || Number(id),
-          firstName: candidature.candidateFirstName || candidature.firstName || '',
-          lastName: candidature.candidateLastName || candidature.lastName || '',
-          email: candidature.candidateEmail || candidature.email || '',
-          phone: candidature.candidatePhone || candidature.phone || '',
-          position: {
-            id: candidature.internshipPositionId || candidature.positionId || 0,
-            title: candidature.positionTitle || 'Poste non spécifié',
-            company: candidature.positionCompany || 'Entreprise'
-          },
-          status: candidature.status || 'PENDING',
-          appliedAt: candidature.appliedAt,
-          cvUrl: candidature.cvUrl
-        };
-   
-        setCandidateData(candidateDataToSet);
-
-        if (candidature.candidateId) {
-          try {
-            const profileResponse = await apiService.technicalProfileService.getByCandidateId(candidature.candidateId);
-            
-            console.log('Technical profile response:', profileResponse);
-            
-            // Gérer différentes structures de données possibles
-            let profileData = profileResponse;
-            
-            // Si la réponse contient directement les données parsées
-            if (profileResponse && typeof profileResponse === 'object') {
-              // Si les données sont déjà parsées (nouvelle structure)
-              if (profileResponse.parsedData) {
-                profileData = profileResponse;
-              }
-              // Si les données sont directement dans l'objet (ancienne structure)
-              else if (profileResponse.domain || profileResponse.technologies || profileResponse.projects) {
-                profileData = {
-                  parsedData: {
-                    "Basic Information": {
-                      full_name: `${candidature.candidateFirstName || ''} ${candidature.candidateLastName || ''}`.trim(),
-                      email: candidature.candidateEmail || '',
-                      phone: candidature.candidatePhone || ''
-                    },
-                    "Technical Information": {
-                      domain: profileResponse.domain,
-                      technologies: profileResponse.technologies || {}
-                    },
-                    "Projects": profileResponse.projects || [],
-                    "Certifications": profileResponse.certifications || [],
-                    "Education": profileResponse.education || [],
-                    "Work Experience": profileResponse.experience || [],
-                    "Languages": profileResponse.languages || [],
-                    "Summary": profileResponse.summary || {}
-                  }
-                };
-              }
-              // Si les données sont dans un champ 'data'
-              else if (profileResponse.data) {
-                profileData = {
-                  parsedData: profileResponse.data
-                };
-              }
-            }
-            
-            if (profileData && !technicalProfile) {
-              console.log('Setting technical profile:', profileData);
-              console.log('profileData.parsedData exists:', !!profileData.parsedData);
-              console.log('profileData.id exists:', !!profileData.id);
-              
-              setTechnicalProfile(profileData);
-              
-              if (profileData.cvId && !candidateData.cvUrl) {
-                setCandidateData(prev => ({
-                  ...prev!,
-                  cvUrl: `/api/candidates/download/${profileData.cvId}`
-                }));
-              }
-            } else if (profileData) {
-              console.log('Technical profile already set, skipping...');
-            } else {
-              console.log('No technical profile found - profileData:', profileData);
-            }
-          } catch (profileError) {
-            console.log('No technical profile found for this candidate - this is normal if no CV has been uploaded/analyzed yet');
-            
-            if (candidature.cvUrl) {
-              setCandidateData(prev => ({
-                ...prev!,
-                cvUrl: candidature.cvUrl
-              }));
-            }
-          }
-        }
-        
-      } catch (error) {
-        console.error('Error loading candidate data:', error);
-        toast.error('Erreur lors du chargement des données du candidat');
-      } finally {
-        setIsLoading(false);
+      if (storedCandidature) {
+        candidature = JSON.parse(storedCandidature);          
+        sessionStorage.removeItem('selectedCandidature');
+        console.log('GenerateTestPage - Candidature depuis sessionStorage:', candidature);
+      } else {
+        // Chercher la candidature avec l'ID
+        console.log('GenerateTestPage - Recherche candidature ID:', id, 'dans:', candidatures);
+        console.log('GenerateTestPage - Détails des candidatures:');
+        candidatures.forEach((c, index) => {
+          console.log(`  [${index}] ID: ${c.id}, Nom: ${(c as any).candidateFirstName} ${(c as any).candidateLastName}`);
+        });
+        candidature = candidatures.find(c => c.id.toString() === id.toString());
+        console.log('GenerateTestPage - Candidature trouvée:', candidature);
       }
-    };
+        
+      console.log('GenerateTestPage - Candidature trouvée avec ID direct:', candidature ? 'OUI' : 'NON');
+          
+      // Si pas trouvé avec l'ID direct, essayer avec candidateId
+      if (!candidature) {
+        candidature = candidatures.find(c => (c as any).candidateId === Number(id));
+        console.log('GenerateTestPage - Candidature trouvée avec candidateId:', candidature ? 'OUI' : 'NON');
+      }
+          
+      // Si toujours pas trouvé, essayer avec d'autres IDs possibles
+      if (!candidature) {
+        candidature = candidatures.find(c => 
+          (c as any).id === Number(id) || 
+          (c as any).candidateId === Number(id) ||
+          c.id === Number(id)
+        );
+        console.log('GenerateTestPage - Candidature trouvée avec recherche multiple:', candidature ? 'OUI' : 'NON');
+      }
+        
+      if (!candidature) {
+        console.error('No candidature data found');
+        setIsLoading(false);
+        return;
+      }
+        
+      console.log('=== CANDIDATURE TROUVÉE ===');
+      console.log('ID:', candidature.id);
+      console.log('=== FIN CANDIDATURE ===');
 
-    loadCandidateData();
-  }, [id]);
+      const candidateDataToSet = {
+        id: candidature.id || Number(id),
+        firstName: (candidature as any).candidateFirstName || (candidature as any).firstName || '',
+        lastName: (candidature as any).candidateLastName || (candidature as any).lastName || '',
+        email: (candidature as any).candidateEmail || (candidature as any).email || '',
+        phone: (candidature as any).candidatePhone || (candidature as any).phone || '',
+        position: {
+          id: (candidature as any).internshipPositionId || (candidature as any).positionId || (candidature as any).internship_position_id || 0,
+          title: (candidature as any).positionTitle || (candidature as any).title || (candidature as any).position?.title || 'Poste non spécifié',
+          company: (candidature as any).positionCompany || (candidature as any).company || (candidature as any).position?.company || 'Entreprise'
+        },
+        status: (candidature as any).status || 'PENDING',
+        appliedAt: (candidature as any).appliedAt,
+        cvUrl: (candidature as any).cvUrl,
+        aiScore: (candidature as any).aiScore,
+        aiAnalysis: (candidature as any).aiAnalysis
+      };
+   
+      setCandidateData(candidateDataToSet);
+      setIsLoading(false);
+        
+    } catch (error) {
+      console.error('Error loading candidate data:', error);
+      toast.error('Erreur lors du chargement des données du candidat');
+      setIsLoading(false);
+    }
+  };
+
+  // Charger les données du candidat quand les candidatures sont disponibles
+  useEffect(() => {
+    if (candidatures.length > 0 && !candidateData) {
+      console.log('=== APPEL DE loadCandidateData ===');
+      loadCandidateData();
+    }
+  }, [candidatures, candidateData, id]);
+
+  // Vérifier si un test existe dès qu'on a un ID (URL ou candidateData)
+  useEffect(() => {
+    console.log('=== USE EFFECT S\'EXÉCUTE ===');
+    console.log('candidateData:', candidateData);
+    console.log('candidateData?.id:', candidateData?.id);
+    console.log('URL id:', id);
+    console.log('=== FIN USE EFFECT ===');
+    
+    // Utiliser soit candidateData.id soit l'ID de l'URL
+    const candidateId = candidateData?.id || (id && !isNaN(Number(id)) ? Number(id) : null);
+    
+    console.log('Candidate ID calculé:', candidateId);
+    
+    if (candidateId) {
+      console.log('=== CANDIDATE ID DISPO, VÉRIFICATION TEST ===');
+      console.log('Candidate ID utilisé:', candidateId);
+      
+      const timer = setTimeout(() => {
+        console.log('APPEL DE checkExistingTest...');
+        checkExistingTest();
+      }, 500);
+      
+      return () => clearTimeout(timer);
+    } else {
+      console.log('PAS DE CANDIDATE ID DISPONIBLE');
+    }
+  }, [candidateData?.id, id]);
+
+  // Utiliser le hook pour récupérer le technical profile du candidat
+  const candidature = candidatures.find(c => c.id === Number(id));
+  const [cvId, setCvId] = useState<number | null>(null);
+  
+  // Mettre à jour cvId quand les candidatures sont chargées
+  useEffect(() => {
+    if (candidatures.length > 0 && !cvId) {
+      const newCvId = (candidature as any)?.candidateId || Number(id);
+      setCvId(newCvId);
+      console.log('=== MISE À JOUR CV ID ===');
+      console.log('Nouveau CvId:', newCvId);
+      console.log('Candidature trouvée:', candidature ? 'OUI' : 'NON');
+      console.log('Candidature ID:', candidature?.id);
+      console.log('Candidature CandidateId:', (candidature as any)?.candidateId);
+      console.log('URL ID:', id);
+      console.log('=== FIN MISE À JOUR ===');
+    }
+  }, [candidatures, id, cvId]);
+  
+  const { data: technicalProfileData, isLoading: technicalProfileLoading, error: technicalProfileError } = useTechnicalProfileByCandidate(cvId);
+
+  // Logger l'état actuel pour le debugging
+  useEffect(() => {
+    console.log('=== NOUVELLE ARCHITECTURE ===');
+    console.log('CvId pour technical profile:', cvId);
+    console.log('CandidateId (candidature):', (candidature as any)?.candidateId);
+    console.log('CandidateData ID:', candidateData?.id);
+    console.log('ID from URL:', id);
+    console.log('Candidatures chargées:', candidatures.length);
+    console.log('=== FIN NOUVELLE ARCHITECTURE ===');
+  }, [cvId, candidateData?.id, id, candidatures.length]);
+
+  // Logger l'erreur technique du backend
+  useEffect(() => {
+    if (technicalProfileError) {
+      console.log('=== ERREUR TECHNICAL PROFILE ===');
+      console.log('Erreur:', technicalProfileError);
+      console.log('Message:', (technicalProfileError as any)?.message);
+      console.log('Status:', (technicalProfileError as any)?.response?.status);
+      console.log('Data:', (technicalProfileError as any)?.response?.data);
+      console.log('=== FIN ERREUR ===');
+    }
+  }, [technicalProfileError]);
+
+  // Récupérer les données d'analyse CV du candidat
+// Désactivé - utilise directement les données de la candidature pour éviter l'erreur 500
+// const { data: cvAnalysisData, isLoading: cvAnalysisLoading } = useCVAnalysesByCandidate(
+//   candidateData?.id ? (candidateData.id as any).cvId || candidateData.id : null
+// );
+
+  // Effet pour surveiller les changements du technical profile
+  useEffect(() => {
+    if (technicalProfileData) {
+      console.log('=== ************************TECHNICAL PROFILE REÇU DU HOOK ===');
+      console.log('Technical Profile Data:', technicalProfileData);
+      console.log('ParsedData:', technicalProfileData?.parsedData);      console.log('Type:', typeof technicalProfileData);
+      console.log('=== FIN TECHNICAL PROFILE ===');
+    } else {
+      console.log('=== PAS DE DONNÉES IA TROUVÉES ===');
+      console.log('Aucune donnée d\'analyse IA n\'a été trouvée pour ce candidat.');
+      console.log('Veuillez contacter l\'administrateur système pour vérifier l\'analyse IA.');
+      console.log('=== FIN ERREUR IA ===');
+      
+      // Afficher un message d'erreur clair à l'utilisateur
+      toast.error('Aucune donnée d\'analyse IA trouvée. Veuillez contacter l\'administrateur.');
+    }
+  }, [technicalProfileData, candidateData, candidatures, id]);
+
+  // Créer un technical profile fallback à partir des données de la candidature
+  const createFallbackTechnicalProfile = () => {
+    if (!candidateData) return null;
+    
+    console.log('=== CRÉATION DU FALLBACK TECHNICAL PROFILE ===');
+    console.log('CandidateData:', candidateData);
+    
+    // Chercher la candidature correspondante pour plus de données
+    const candidature = candidatures.find(c => c.id === Number(id));
+    console.log('Candidature trouvée pour fallback:', candidature);
+    
+    // Log détaillé de toutes les propriétés de la candidature
+    if (candidature) {
+      console.log('=== ANALYSE COMPLÈTE DE LA CANDIDATURE ===');
+      console.log('ID:', candidature.id);
+      console.log('CandidateId:', (candidature as any).candidateId);
+      console.log('AI Score:', candidature.aiScore);
+      console.log('AI Analysis:', candidature.aiAnalysis);
+      console.log('ParsedData:', (candidature as any).parsedData);
+      console.log('TechnicalProfile:', (candidature as any).technicalProfile);
+      console.log('Domain:', (candidature as any).domain);
+      console.log('Technologies:', (candidature as any).technologies);
+      console.log('ExperienceYears:', (candidature as any).experienceYears);
+      console.log('SkillLevel:', (candidature as any).skillLevel);
+      console.log('CareerLevel:', (candidature as any).careerLevel);
+      console.log('Certifications:', (candidature as any).certifications);
+      console.log('Projects:', (candidature as any).projects);
+      console.log('Education:', (candidature as any).education);
+      console.log('WorkExperience:', (candidature as any).workExperience);
+      console.log('Experience:', (candidature as any).experience);
+      console.log('Toutes les clés:', Object.keys(candidature));
+      console.log('=== FIN ANALYSE CANDIDATURE ===');
+    }
+    
+    const fallbackProfile = {
+      id: candidateData.id,
+      cvId: (candidature as any)?.candidateId || candidateData.id,
+      candidateId: (candidature as any)?.candidateId || candidateData.id,
+      parsedData: (candidature as any)?.aiAnalysis || (candidature as any)?.parsedData || (candidature as any)?.technicalProfile?.parsedData || {
+        "Basic Information": {
+          "full_name": `${candidateData.firstName} ${candidateData.lastName}`,
+          "email": candidateData.email,
+          "phone": candidateData.phone || ""
+        },
+        "Technical Information": {
+          "domain": (candidature as any)?.domain || "Backend Development",
+          "technologies": (candidature as any)?.technologies || {
+            "Frontend": ["React", "TypeScript", "Tailwind CSS"],
+            "Backend": ["Node.js", "Express", "MongoDB"],
+            "Tools": ["Git", "Docker", "VS Code"]
+          }
+        },
+        "Summary": {
+          "overall_score": (candidature as any)?.aiScore || 0,
+          "experience_years": (candidature as any)?.experienceYears || "2-3",
+          "skill_level": (candidature as any)?.skillLevel || "Intermédiaire",
+          "career_level": (candidature as any)?.careerLevel || "Intermédiaire",
+          "recommendation": (candidature as any)?.aiScore && (candidature as any)?.aiScore >= 7 ? "Recommandé" : "À évaluer",
+          "summary": `Candidat avec ${(candidature as any)?.aiScore || 0}/10 de score IA. Expérience de ${(candidature as any)?.experienceYears || "2-3"} ans. Niveau ${(candidature as any)?.skillLevel || "Intermédiaire"} en développement. ${(candidature as any)?.aiScore && (candidature as any)?.aiScore >= 7 ? "Profil recommandé pour le poste." : "Profil à évaluer davantage."}`
+        },
+        // Ajouter des données réelles si elles existent dans la candidature
+        "Certifications": (candidature as any)?.certifications || [],
+        "Projects": (candidature as any)?.projects || [],
+        "Education": (candidature as any)?.education || [],
+        "Work Experience": (candidature as any)?.workExperience || (candidature as any)?.experience || []
+      },
+      createdAt: (candidature as any)?.createdAt || new Date().toISOString()
+    };
+    
+    console.log('Fallback technical profile créé:', fallbackProfile);
+    console.log('=== FIN FALLBACK ===');
+    
+    return fallbackProfile;
+  };
+
+  const finalIsLoading = !candidateData || technicalProfileLoading;
+  const technicalProfile = technicalProfileData;
+
+  // Logs pour déboguer le chargement
+  console.log('=== DÉBOGAGE CHARGEMENT ===');
+  console.log('candidateData:', candidateData);
+  console.log('technicalProfileLoading:', technicalProfileLoading);
+  console.log('finalIsLoading:', finalIsLoading);
+  console.log('=== FIN DÉBOGAGE CHARGEMENT ===');
 
   useEffect(() => {
     console.log('CandidateData updated:', candidateData);
   }, [candidateData]);
 
   const checkExistingTest = async () => {
-    if (!candidateData?.id) {
-      console.log('No candidate data ID available');
+    // Utiliser soit candidateData.id soit l'ID de l'URL
+    const candidateId = candidateData?.id || (id && !isNaN(Number(id)) ? Number(id) : null);
+    
+    if (!candidateId) {
+      console.log('No candidate ID available');
       return;
     }
         
     try {
       setIsCheckingExistingTest(true);
+      console.log('=== CHECKING EXISTING TEST ===');
+      console.log('Candidate ID utilisé:', candidateId);
       
-      const response = await apiService.testService.checkExistingTest(candidateData.id);
+      const response = await checkExistingTestMutation.mutateAsync(candidateId);
       
-      if (response.hasTest) {
-        setExistingTest({
+      console.log('=== RESPONSE DU BACKEND ===');
+      console.log('Response brute:', response);
+      console.log('Response type:', typeof response);
+      console.log('Response keys:', response ? Object.keys(response) : 'null/undefined');
+      console.log('=== FIN RESPONSE BACKEND ===');
+      
+      console.log('Response from checkExistingTest:', response);
+      console.log('Has test:', response.exists);
+      console.log('Test ID:', response.testId);
+      
+      if (response.exists) {
+        const testInfo = {
           existingTestId: response.testId,
-          existingTestToken: response.token,
-          existingTestStatus: response.status,
-          existingTestCreatedAt: response.createdAt
-        });
+          existingTestToken: '', // Pas disponible dans la réponse actuelle
+          existingTestStatus: response.status || 'UNKNOWN', // Utiliser le statut réel du backend
+          existingTestCreatedAt: new Date().toISOString() // Pas disponible dans la réponse actuelle
+        };
+        console.log('Setting existingTest:', testInfo);
+        setExistingTest(testInfo);
         toast.info("Un test existe déjà pour cette candidature");
       } else {
+        console.log('No existing test found');
         setExistingTest(null);
       }
       
@@ -221,9 +387,7 @@ const GenerateTestPage = () => {
         toast.error('Session expirée, veuillez vous reconnecter');
       } else if (error.response?.status === 403) {
         toast.error('Vous n\'avez pas les permissions pour vérifier les tests');
-      } else if (error.response?.status === 404) {
-        console.log('Endpoint not found - this is expected if the backend is not updated yet');
-      } else if (error.response?.status >= 500) {
+      } else {
         toast.error('Erreur serveur lors de la vérification du test');
       }
     } finally {
@@ -231,22 +395,12 @@ const GenerateTestPage = () => {
     }
   };
 
-  useEffect(() => {
-    if (candidateData?.id && technicalProfile) {
-      const timer = setTimeout(() => {
-        checkExistingTest();
-      }, 500);
-      
-      return () => clearTimeout(timer);
-    }
-  }, [candidateData?.id, technicalProfile]);
-
   const getCvUrl = () => {
     if (candidateData?.cvUrl) {
       return candidateData.cvUrl;
     }
-    if (technicalProfile?.cvId) {
-      return `/api/candidates/download/${technicalProfile.cvId}`;
+    if (technicalProfileData?.cvId) {
+      return `/api/candidates/download/${technicalProfileData.cvId}`;
     }
     
     if (candidateData?.id) {
@@ -265,7 +419,7 @@ const GenerateTestPage = () => {
       const response = await fetch(`http://localhost:8080${cvUrl}`, {
         method: 'GET',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${localStorage.getItem('auth_token') || sessionStorage.getItem('auth_token')}`,
         },
       });
       
@@ -297,7 +451,7 @@ const GenerateTestPage = () => {
       const response = await fetch(`http://localhost:8080${cvUrl}`, {
         method: 'GET',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${localStorage.getItem('auth_token') || sessionStorage.getItem('auth_token')}`,
         },
       });
       
@@ -339,30 +493,54 @@ const GenerateTestPage = () => {
   };
 
   const extractSkillsFromProfile = () => {
-    if (!technicalProfile?.parsedData) return [];
+    console.log('extractSkillsFromProfile called, technicalProfile:', technicalProfile);
+    
+    if (!technicalProfile?.parsedData) {
+      console.log('No parsedData in technicalProfile for skills');
+      return [];
+    }
     
     const data = technicalProfile.parsedData;
+    console.log('=== STRUCTURE DES DONNÉES POUR COMPÉTENCES ===');
+    console.log('Technical Information:', data["Technical Information"]);
+    console.log('Technologies dans Technical Information:', data["Technical Information"]?.["technologies"]);
+    console.log('=== FIN STRUCTURE COMPÉTENCES ===');
+    
     const skills = [];
     let hasRealSkills = false;
     
     if (data["Technical Information"]?.["technologies"]) {
       const techData = data["Technical Information"]["technologies"];
+      console.log('TechData trouvé:', techData);
+      console.log('Type de TechData:', typeof techData);
+      console.log('TechData est Array:', Array.isArray(techData));
       
       Object.keys(techData).forEach(category => {
         const categorySkills = techData[category];
+        console.log(`Catégorie "${category}":`, categorySkills);
+        
         if (Array.isArray(categorySkills)) {
-          categorySkills.forEach(skill => {
+          categorySkills.forEach((skill, index) => {
+            console.log(`  Skill ${index}:`, skill, typeof skill);
+            
             if (typeof skill === 'string' && skill.trim()) {
               skills.push({ name: skill.trim(), level: "Intermédiaire" });
               hasRealSkills = true;
+              console.log(`    → Ajouté: ${skill.trim()}`);
             } else if (skill && typeof skill === 'object' && skill.name && skill.name.trim()) {
               skills.push({ name: skill.name.trim(), level: skill.level || "Intermédiaire" });
               hasRealSkills = true;
+              console.log(`    → Ajouté (objet): ${skill.name.trim()}`);
             }
           });
         }
       });
+    } else {
+      console.log('Aucune donnée "Technical Information" ou "technologies" trouvée');
     }
+    
+    console.log('Compétences finales extraites:', skills);
+    console.log('hasRealSkills:', hasRealSkills);
     
     return hasRealSkills ? skills.slice(0, 6) : [];
   };
@@ -376,8 +554,16 @@ const GenerateTestPage = () => {
     }
     
     const data = technicalProfile.parsedData;
+    console.log('=== STRUCTURE COMPLÈTE DES DONNÉES PARSED DATA ===');
     console.log('parsedData keys:', Object.keys(data));
-    console.log('Summary data:', data["Summary"]);
+    console.log('parsedData complet:', JSON.stringify(data, null, 2));
+    console.log('Basic Information:', data["Basic Information"]);
+    console.log('Technical Information:', data["Technical Information"]);
+    console.log('Summary:', data["Summary"]);
+    console.log('Certifications:', data["Certifications"]);
+    console.log('Projects:', data["Projects"]);
+    console.log('Education:', data["Education"]);
+    console.log('=== FIN STRUCTURE COMPLÈTE ===');
     
     // Retourner une structure riche pour une meilleure UI
     const profileData = {
@@ -390,8 +576,8 @@ const GenerateTestPage = () => {
       
       // Domaine et expertise
       expertise: {
-        domain: data["Technical Information"]?.["domain"] || "",
-        level: data["Summary"]?.["career_level"] || "Débutant",
+        domain: data["Technical Information"]?.["domain"] || "Non spécifié",
+        level: data["Summary"]?.["career_level"] || data["Summary"]?.["skill_level"] || "Débutant",
         specializations: data["Summary"]?.["specializations"] || []
       },
       
@@ -410,7 +596,7 @@ const GenerateTestPage = () => {
       } : null,
       
       // Résumé du profil
-      summary: data["Summary"]?.["summary"] || "",
+      summary: data["Summary"]?.["summary"] || `Candidat avec score IA de ${data["Summary"]?.["overall_score"] || 0}/10. Expérience de ${data["Summary"]?.["experience_years"] || "non spécifiée"} ans. Niveau ${data["Summary"]?.["skill_level"] || "non spécifié"} en développement.`,
       
       // Compétences principales (si disponibles)
       keySkills: data["Summary"]?.["key_skills"]?.slice(0, 6) || []
@@ -618,20 +804,19 @@ const GenerateTestPage = () => {
   };
 
   const handleForceGenerateTest = async () => {
-    if (!candidateData || !technicalProfile) {
+    if (!candidateData || !technicalProfileData) {
       toast.error('Veuillez patienter que les données du candidat soient chargées');
       return;
     }
 
     try {
       // Appeler l'API pour générer le test directement
-      const testResponse = await apiService.testService.generateTest({
+      const testResponse = await generateTestMutation.mutateAsync({
         candidatureId: candidateData.id,
         level: testConfig.level,
         questionCount: testConfig.questionCount,
-        duration: testConfig.duration,
-        deadline: testConfig.deadline,
-        note: testConfig.note || ""
+        focusAreas: [], // Propriété existante dans le type
+        customInstructions: `Duration: ${testConfig.duration} minutes, Deadline: ${testConfig.deadline}, Note: ${testConfig.note || ""}` // Utiliser customInstructions
       });
       
       console.log('Force generate - Test response received:', testResponse);
@@ -698,20 +883,19 @@ const GenerateTestPage = () => {
   };
 
   const handleGenerateTest = async () => {
-    if (!candidateData || !technicalProfile) {
+    if (!candidateData || !technicalProfileData) {
       toast.error('Veuillez patienter que les données du candidat soient chargées');
       return;
     }
 
     try {
       // Appeler l'API pour générer le test directement
-      const testResponse = await apiService.testService.generateTest({
+      const testResponse = await generateTestMutation.mutateAsync({
         candidatureId: candidateData.id,
         level: testConfig.level,
         questionCount: testConfig.questionCount,
-        duration: testConfig.duration,
-        deadline: testConfig.deadline,
-        note: testConfig.note || ""
+        focusAreas: [], // Propriété existante dans le type
+        customInstructions: `Duration: ${testConfig.duration} minutes, Deadline: ${testConfig.deadline}, Note: ${testConfig.note || ""}` // Utiliser customInstructions
       });
       
       console.log('Normal generate - Test response received:', testResponse);
@@ -818,7 +1002,7 @@ const GenerateTestPage = () => {
     }
   };
 
-  if (isLoading) {
+  if (finalIsLoading) {
     return (
       <div className="p-6 lg:p-8 max-w-5xl mx-auto">
         <div className="animate-pulse space-y-4">
@@ -846,7 +1030,7 @@ const GenerateTestPage = () => {
   }
 
   const skills = extractSkillsFromProfile();
-  const analysis = extractAnalysisFromProfile();
+  const analysis: any = extractAnalysisFromProfile();
   const eligibility = getEligibilityChecks();
 
   // Fonction pour gérer l'affichage de l'analyse (ancien format ou nouveau)
@@ -854,7 +1038,7 @@ const GenerateTestPage = () => {
     if (!analysis) return null;
     
     // Si c'est une chaîne (ancien format), utiliser l'ancien rendu
-    if (typeof analysis === 'string') {
+    if (typeof analysis === 'string' && analysis.length > 0) {
       return (
         <div className="text-sm text-muted-foreground whitespace-pre-line">
           {analysis.split('\n').map((line, index) => {
@@ -864,133 +1048,72 @@ const GenerateTestPage = () => {
                   {line.replace(/\*\*/g, '')}
                 </div>
               );
-            } else if (line.startsWith('**')) {
+            }
+            if (line.startsWith('- ')) {
               return (
-                <div key={index} className="font-semibold text-foreground">
-                  {line.replace(/\*\*/g, '')}
-                </div>
-              );
-            } else if (line.startsWith('•')) {
-              return (
-                <div key={index} className="ml-4 text-muted-foreground">
-                  {line}
-                </div>
-              );
-            } else if (line.trim() === '') {
-              return <div key={index} className="h-2" />;
-            } else {
-              return (
-                <div key={index} className="text-muted-foreground">
-                  {line}
+                <div key={index} className="ml-4">
+                  • {line.substring(2)}
                 </div>
               );
             }
+            return (
+              <div key={index}>
+                {line}
+              </div>
+            );
           })}
         </div>
       );
     }
     
-    // Nouveau format structuré
-    return (
-      <div className="space-y-4">
-        {/* Informations personnelles */}
-        <div className="flex items-start gap-3">
-          <User className="w-4 h-4 text-muted-foreground mt-0.5" />
-          <div className="flex-1">
-            <div className="font-medium text-foreground">{analysis.personalInfo.fullName}</div>
-            <div className="text-sm text-muted-foreground">{analysis.personalInfo.email}</div>
-            {analysis.personalInfo.phone && (
-              <div className="text-sm text-muted-foreground">{analysis.personalInfo.phone}</div>
-            )}
-          </div>
-        </div>
-
-        {/* Domaine et expertise */}
-        {analysis.expertise.domain && (
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 bg-primary rounded-full"></div>
-            <span className="text-sm font-medium">{analysis.expertise.domain}</span>
-            <Badge variant="outline" className="text-xs">
-              {analysis.expertise.level}
-            </Badge>
-          </div>
-        )}
-
-        {/* Statistiques */}
-        <div className="grid grid-cols-3 gap-3">
-          {analysis.stats.certifications > 0 && (
-            <div className="text-center p-2 bg-muted/30 rounded-lg">
-              <div className="text-lg font-bold text-primary">{analysis.stats.certifications}</div>
-              <div className="text-xs text-muted-foreground">Certification(s)</div>
+    // Si c'est un objet (nouveau format), utiliser le nouveau rendu structuré
+    if (typeof analysis === 'object' && analysis !== null) {
+      return (
+        <div className="space-y-4">
+          {analysis.personalInfo && (
+            <div>
+              <h4 className="font-semibold text-foreground">Informations personnelles</h4>
+              <p className="text-sm text-muted-foreground">
+                {analysis.personalInfo.fullName} • {analysis.personalInfo.email}
+              </p>
             </div>
           )}
-          {analysis.stats.projects > 0 && (
-            <div className="text-center p-2 bg-muted/30 rounded-lg">
-              <div className="text-lg font-bold text-primary">{analysis.stats.projects}</div>
-              <div className="text-xs text-muted-foreground">Projet(s)</div>
+          
+          {analysis.expertise && (
+            <div>
+              <h4 className="font-semibold text-foreground">Expertise</h4>
+              <p className="text-sm text-muted-foreground">
+                {analysis.expertise.domain} • {analysis.expertise.level}
+              </p>
             </div>
           )}
-          {analysis.stats.education > 0 && (
-            <div className="text-center p-2 bg-muted/30 rounded-lg">
-              <div className="text-lg font-bold text-primary">{analysis.stats.education}</div>
-              <div className="text-xs text-muted-foreground">Formation(s)</div>
+          
+          {analysis.summary && (
+            <div>
+              <h4 className="font-semibold text-foreground">Résumé du profil</h4>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                {analysis.summary}
+              </p>
             </div>
           )}
-        </div>
-
-        {/* Formation */}
-        {analysis.education && (
-          <div className="flex items-start gap-3">
-            <FileText className="w-4 h-4 text-muted-foreground mt-0.5" />
-            <div className="flex-1">
-              <div className="text-sm font-medium text-foreground">
-                {analysis.education.degree}
-                {analysis.education.field && ` en ${analysis.education.field}`}
+          
+          {analysis.keySkills && Array.isArray(analysis.keySkills) && analysis.keySkills.length > 0 && (
+            <div>
+              <h4 className="font-semibold text-foreground">Compétences clés</h4>
+              <div className="flex flex-wrap gap-2 mt-2">
+                {analysis.keySkills.map((skill: any, index: number) => (
+                  <Badge key={index} variant="secondary">
+                    {typeof skill === 'string' ? skill : skill.name || 'Compétence'}
+                  </Badge>
+                ))}
               </div>
-              <div className="text-xs text-muted-foreground">{analysis.education.institution}</div>
             </div>
-          </div>
-        )}
-
-        {/* Spécialisations */}
-        {analysis.expertise.specializations.length > 0 && (
-          <div className="space-y-2">
-            <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Spécialisations</div>
-            <div className="flex flex-wrap gap-1">
-              {analysis.expertise.specializations.map((spec, index) => (
-                <Badge key={index} variant="secondary" className="text-xs">
-                  {spec}
-                </Badge>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Résumé du profil */}
-        {analysis.summary && (
-          <div className="space-y-2">
-            <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Résumé du profil</div>
-            <div className="text-sm text-muted-foreground leading-relaxed">
-              {analysis.summary}
-            </div>
-          </div>
-        )}
-
-        {/* Compétences clés */}
-        {analysis.keySkills.length > 0 && (
-          <div className="space-y-2">
-            <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Compétences clés</div>
-            <div className="flex flex-wrap gap-1">
-              {analysis.keySkills.map((skill, index) => (
-                <Badge key={index} variant="outline" className="text-xs">
-                  {skill}
-                </Badge>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-    );
+          )}
+        </div>
+      );
+    }
+    
+    return null;
   };
 
   return (
@@ -1019,7 +1142,7 @@ const GenerateTestPage = () => {
           <div className="glass-card p-6">
             <div className="flex items-center gap-2 mb-4">
               <Badge variant="secondary">Profil candidat</Badge>
-              {technicalProfile && <Badge variant="outline">Analyse IA disponible</Badge>}
+              {technicalProfileData && <Badge variant="outline">Analyse IA disponible</Badge>}
             </div>
             <div className="flex items-center gap-4 mb-4">
               <div className="w-14 h-14 rounded-full bg-primary/20 flex items-center justify-center text-lg font-bold text-primary">
@@ -1049,7 +1172,7 @@ const GenerateTestPage = () => {
             <div className="grid grid-cols-4 gap-3 mb-4">
               <div className="text-center glass-card p-2">
                 <div className="text-sm font-bold text-success">
-                  {technicalProfile ? 'ANALYSÉ' : 'NON ANALYSÉ'}
+                  {technicalProfileData ? 'ANALYSÉ' : 'NON ANALYSÉ'}
                 </div>
                 <div className="text-xs text-muted-foreground">Statut IA</div>
               </div>
@@ -1063,9 +1186,15 @@ const GenerateTestPage = () => {
               
               {analysis ? (
                 renderAnalysis()
-              ) : (
+              ) : technicalProfileData ? (
                 <div className="text-sm text-muted-foreground">
                   Analyse IA du CV en cours de traitement...
+                </div>
+              ) : (
+                <div className="text-sm text-red-600 bg-red-50 p-3 rounded-lg">
+                  <p className="text-xs mb-2">
+                    Le CV de ce candidat n'a pas été analysé par l'IA.
+                  </p>
                 </div>
               )}
             </div>
@@ -1096,13 +1225,13 @@ const GenerateTestPage = () => {
                     </div>
                   </div>
                   
-                  {technicalProfile?.cvId && (
+                  {technicalProfileData?.cvId && (
                     <div className="text-xs text-muted-foreground bg-blue-50 p-2 rounded">
                       <div className="flex items-center gap-1 mb-1">
                         <Check className="w-3 h-3 text-blue-600" />
                         <span className="font-medium text-blue-600">CV analysé par l'IA</span>
                       </div>
-                      <p>L'analyse a été effectuée sur ce fichier le {new Date(technicalProfile.createdAt).toLocaleDateString('fr-FR')}</p>
+                      <p>L'analyse a été effectuée sur ce fichier le {new Date(technicalProfileData.createdAt).toLocaleDateString('fr-FR')}</p>
                     </div>
                   )}
                 </div>
@@ -1111,8 +1240,8 @@ const GenerateTestPage = () => {
                   <FileText className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
                   <p className="text-sm text-muted-foreground">CV non disponible</p>
                   <p className="text-xs text-muted-foreground mt-1">Le candidat n'a pas encore uploadé de CV</p>
-                  {technicalProfile ? (
-                    <p className="text-xs text-gray-400 mt-2">Profil technique trouvé mais cvId: {technicalProfile.cvId || 'non défini'}</p>
+                  {technicalProfileData ? (
+                    <p className="text-xs text-gray-400 mt-2">Profil technique trouvé mais cvId: {technicalProfileData.cvId || 'non défini'}</p>
                   ) : (
                     <p className="text-xs text-gray-400 mt-2">Aucun profil technique trouvé (pas d'analyse IA)</p>
                   )}
@@ -1162,8 +1291,31 @@ const GenerateTestPage = () => {
 
         {/* Right: Test Config */}
         <div className="space-y-6">
-          {/* Configuration du test - Masquer si un test existe déjà */}
-          {!existingTest?.existingTestId && (
+          {/* Configuration du test - Masquer si un test existe déjà ET si la vérification est terminée */}
+          {(() => {
+            console.log('=== DÉCISION SECTION CONFIGURATION ===');
+            console.log('existingTest:', existingTest);
+            console.log('existingTest?.existingTestId:', existingTest?.existingTestId);
+            console.log('existingTest?.existingTestStatus:', existingTest?.existingTestStatus);
+            console.log('isCheckingExistingTest:', isCheckingExistingTest);
+            
+            // Masquer la configuration si un test existe et N'EST PAS en statut DRAFT
+            // ET seulement si la vérification est terminée (pour éviter le clignotement)
+            const shouldHideConfig = !isCheckingExistingTest && 
+              existingTest?.existingTestId && 
+              existingTest.existingTestStatus !== 'DRAFT';
+            
+            console.log('=== DÉCISION SECTION CONFIGURATION ===');
+            console.log('existingTest?.existingTestId:', existingTest?.existingTestId);
+            console.log('existingTest?.existingTestStatus:', existingTest?.existingTestStatus);
+            console.log('shouldHideConfig:', shouldHideConfig);
+            console.log('=== FIN DÉCISION SECTION CONFIGURATION ===');
+            
+            console.log('shouldHideConfig:', shouldHideConfig);
+            console.log('Test envoyé? shouldHideConfig =', shouldHideConfig);
+            console.log('=== FIN DÉCISION SECTION CONFIGURATION ===');
+            return !shouldHideConfig;
+          })() && (
             <div className="glass-card p-6">
               <h3 className="text-lg font-semibold text-foreground mb-4">Configuration du test à générer</h3>
               
@@ -1171,7 +1323,7 @@ const GenerateTestPage = () => {
                 <div>
                   <Label className="text-sm font-medium">Poste ciblé</Label>
                   <div className="mt-1 p-3 bg-muted rounded-md">
-                    {candidateData?.position?.title || 'Poste non spécifié'}
+                    {candidateData?.position?.title || (candidateData as any).title || candidateData?.positionTitle || 'Poste non spécifié'}
                   </div>
                 </div>
                 
@@ -1269,10 +1421,16 @@ const GenerateTestPage = () => {
                     existingTest.existingTestStatus === 'IN_PROGRESS' ? 'bg-yellow-100 text-yellow-800' :
                     existingTest.existingTestStatus === 'SUBMITTED' ? 'bg-blue-100 text-blue-800' :
                     existingTest.existingTestStatus === 'EVALUATED' ? 'bg-purple-100 text-purple-800' :
+                    existingTest.existingTestStatus === 'DRAFT' ? 'bg-orange-100 text-orange-800' :
                     'bg-gray-100 text-gray-800'
                   }`}>
                     {getStatusLabel(existingTest.existingTestStatus)}
                   </span></p>
+                  {existingTest.existingTestStatus === 'DRAFT' && (
+                    <p className="mt-2 text-orange-700 font-medium">
+                      📝 Le test est en cours de traitement. Vous pouvez le modifier en cliquant sur "Revoir le test".
+                    </p>
+                  )}
                 </div>
               </div>
             )}
@@ -1280,6 +1438,17 @@ const GenerateTestPage = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {existingTest ? (
                 <>
+                  {existingTest.existingTestStatus === 'DRAFT' && (
+                    <Button 
+                      variant="default"
+                      onClick={() => navigate(`/manager/test-review/${existingTest.existingTestId}`)}
+                      className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700"
+                    >
+                      <Edit className="w-4 h-4" />
+                      Revoir le test
+                    </Button>
+                  )}
+                  
                   {existingTest.existingTestStatus === 'SUBMITTED' && (
                     <Button 
                       variant="default"

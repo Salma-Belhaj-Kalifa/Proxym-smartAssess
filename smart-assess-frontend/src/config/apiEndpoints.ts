@@ -23,6 +23,7 @@ export const API_ENDPOINTS = {
     CREATE: '/candidates',
     GET_BY_ID: (id: number) => `/candidates/${id}`,
     UPDATE: (id: number) => `/candidates/${id}`,
+    UPDATE_PROFILE: (id: number) => `/candidates/${id}/profile`,
     DELETE: (id: number) => `/candidates/${id}`,
     DELETE_ME: '/candidates/me',
     PROFILE: (id: number) => `/candidates/${id}/profile`,
@@ -57,6 +58,7 @@ export const API_ENDPOINTS = {
     CREATE: '/managers',
     GET_BY_ID: (id: number) => `/managers/${id}`,
     UPDATE: (id: number) => `/managers/${id}`,
+    UPDATE_PROFILE: (id: number) => `/managers/${id}/profile`,
     DELETE: (id: number) => `/managers/${id}`,
     DELETE_ME: '/managers/me'
   },

@@ -23,11 +23,34 @@ export const candidateService = {
     return response.data;
   },
 
+  updateProfile: async (id: number, profileData: Partial<Candidate>): Promise<Candidate> => {
+    const { firstName, lastName, phone } = profileData;
+    const response = await apiClient.put(API_ENDPOINTS.CANDIDATES.UPDATE_PROFILE(id), {
+      firstName,
+      lastName,
+      phone
+    });
+    return response.data;
+  },
+
+  uploadCV: async (candidateId: number, file: File): Promise<any> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('candidateId', candidateId.toString());
+    
+    const response = await apiClient.post('/api/candidates/cv', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data;
+  },
+
   delete: async (id: number): Promise<void> => {
     await apiClient.delete(API_ENDPOINTS.CANDIDATES.DELETE(id));
   },
 
   deleteMyProfile: async (): Promise<void> => {
-    await apiClient.delete('/candidates/my-profile');
+    await apiClient.delete(API_ENDPOINTS.CANDIDATES.DELETE_ME);
   },
 };

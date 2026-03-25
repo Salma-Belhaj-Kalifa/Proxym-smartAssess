@@ -12,6 +12,7 @@ public class ManagerDto {
     private String email;
     private String firstName;
     private String lastName;
+    private String phone;
     private String department;
     private LocalDateTime createdAt;
 }

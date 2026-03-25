@@ -325,7 +325,13 @@ export const useCreateCandidature = () => {
   
   return useMutation({
     mutationFn: async (candidatureData: any) => {
-      const response = await apiClient.post('/candidatures', candidatureData);
+      // Le backend attend 'internship_position_id' au lieu de 'positionId'
+      const requestData = {
+        candidateId: candidatureData.candidateId,
+        internship_position_id: candidatureData.positionId, // ← Nom correct du backend
+        status: candidatureData.status
+      };
+      const response = await apiClient.post('/candidatures', requestData);
       return response.data;
     },
     onSuccess: () => {
@@ -334,6 +340,8 @@ export const useCreateCandidature = () => {
     onError: (error: any) => {
       console.error('Erreur lors de la création de la candidature');
       console.error('Create candidature error:', error);
+      const errorMessage = error?.response?.data?.message || error?.response?.data?.error || 'Erreur lors de la création de la candidature';
+      toast.error(errorMessage);
     },
   });
 };
@@ -402,5 +410,40 @@ export const useUpdateCandidature = () => {
       queryClient.invalidateQueries({ queryKey: ['candidatures', 'candidate'] });
       queryClient.invalidateQueries({ queryKey: ['candidatures', 'position'] });
     },
+  });
+};
+
+export const useCheckExistingTest = () => {
+  return useMutation({
+    mutationFn: async (candidatureId: number) => {
+      const response = await apiClient.get(`/tests/check-existing/${candidatureId}`);
+      return response.data;
+    },
+  });
+};
+
+export const useCurrentUser = () => {
+  return useQuery({
+    queryKey: ['currentUser'],
+    queryFn: async () => {
+      const response = await apiClient.get('/auth/me');
+      return response.data;
+    },
+    ...queryOptions.stable,
+  });
+};
+
+export const useCurrentUserSafe = () => {
+  return useQuery({
+    queryKey: ['currentUser'],
+    queryFn: async () => {
+      try {
+        const response = await apiClient.get('/auth/me');
+        return response.data;
+      } catch (error) {
+        return null;
+      }
+    },
+    ...queryOptions.stable,
   });
 };

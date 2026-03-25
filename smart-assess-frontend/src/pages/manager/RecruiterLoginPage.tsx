@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useLogin, useRegister, useLogout } from '@/features/auth/authMutations';
-import { useCurrentUser } from '@/features/auth/authQueries';
+import { useCurrentUserSafe } from '@/features/auth/authQueries';
 
 export default function RecruiterLoginPage() {
   const navigate = useNavigate();
@@ -23,7 +23,7 @@ export default function RecruiterLoginPage() {
   const loginMutation = useLogin();
   const registerMutation = useRegister();
   const logoutMutation = useLogout();
-  const { data: user } = useCurrentUser();
+  const { data: user } = useCurrentUserSafe();
   const isLoading = loginMutation.isPending || registerMutation.isPending || logoutMutation.isPending;
 
   // Vérification si déjà connecté
@@ -48,15 +48,36 @@ export default function RecruiterLoginPage() {
 
     try {
       const result = await loginMutation.mutateAsync({ email, password });
+      
+      console.log('Login result:', result); // Debug pour voir la structure de la réponse
 
-      if (!result || !result.user || !result.user.role) {
+      // Validation flexible pour différents formats de réponse
+      let user = null;
+      if (result && typeof result === 'object' && 'user' in result && result.user) {
+        user = result.user;
+      } else if (result && typeof result === 'object' && 'id' in result && 'email' in result) {
+        // Si le résultat contient directement les données utilisateur
+        user = result;
+      } else if (result && typeof result === 'object' && 'token' in result) {
+        // Si seulement le token est retourné, utiliser les données du formulaire
+        user = {
+          id: (result as any).id,
+          email: email,
+          firstName: (result as any).firstName || 'Utilisateur',
+          lastName: (result as any).lastName || '',
+          role: (result as any).role || 'MANAGER'
+        };
+      }
+
+      if (!user || !user.role) {
+        console.error('Login validation failed:', { result, user, hasUser: !!user, hasRole: !!user?.role });
         setErrorMessage("Utilisateur introuvable ou rôle incorrect.");
         return;
       }
 
-      if (result.user.role === 'MANAGER') {
+      if (user.role === 'MANAGER') {
         navigate('/manager/dashboard');
-      } else if (result.user.role === 'HR') {
+      } else if (user.role === 'HR') {
         navigate('/hr/dashboard');
       } else {
         await logoutMutation.mutateAsync();
@@ -99,15 +120,36 @@ export default function RecruiterLoginPage() {
     try {
       const userData = { email, password, firstName, lastName, phone, role };
       const result = await registerMutation.mutateAsync(userData);
+      
+      console.log('Signup result:', result); // Debug pour voir la structure de la réponse
 
-      if (!result || !result.user || !result.user.role) {
-        setErrorMessage("Erreur lors de l'inscription");
+      // Validation flexible pour différents formats de réponse
+      let user = null;
+      if (result && typeof result === 'object' && 'user' in result && result.user) {
+        user = result.user;
+      } else if (result && typeof result === 'object' && 'id' in result && 'email' in result) {
+        // Si le résultat contient directement les données utilisateur
+        user = result;
+      } else if (result && typeof result === 'object' && 'token' in result) {
+        // Si seulement le token est retourné, utiliser les données du formulaire
+        user = {
+          id: (result as any).id,
+          email: email,
+          firstName: firstName,
+          lastName: lastName,
+          role: role
+        };
+      }
+
+      if (!user || !user.role) {
+        console.error('Signup validation failed:', { result, user, hasUser: !!user, hasRole: !!user?.role });
+        setErrorMessage("Erreur lors de l'inscription - réponse invalide du serveur");
         return;
       }
 
-      if (result.user.role === 'MANAGER') {
+      if (user.role === 'MANAGER') {
         navigate('/manager/dashboard');
-      } else if (result.user.role === 'HR') {
+      } else if (user.role === 'HR') {
         navigate('/hr/dashboard');
       } else {
         await logoutMutation.mutateAsync();
@@ -263,6 +305,8 @@ export default function RecruiterLoginPage() {
                       value={phone}
                       onChange={(e) => setPhone(e.target.value)}
                       required
+                      pattern="[+]?[0-9\s]{8,15}"
+                      title="Veuillez entrer un numéro de téléphone valide (8-15 chiffres, avec ou sans +)"
                     />
                   </div>
 

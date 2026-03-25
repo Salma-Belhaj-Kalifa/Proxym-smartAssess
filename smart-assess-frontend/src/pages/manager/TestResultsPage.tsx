@@ -71,6 +71,82 @@ const TestResultsPage: React.FC = () => {
   console.log('Test ID from URL:', testId);
   console.log('Is token:', isToken);
 
+  // Charger les données du test
+  useEffect(() => {
+    const loadTestData = async () => {
+      if (!testId) {
+        console.error('No test ID provided');
+        setLastError(new Error('ID de test manquant'));
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        setIsLoading(true);
+        setLastError(null);
+        
+        console.log('=== CHARGEMENT DES RÉSULTATS DU TEST ===');
+        console.log('Test ID:', testId);
+        console.log('Is token:', isToken);
+
+        let response;
+        if (isToken) {
+          console.log('Using public test endpoint with token');
+          response = await apiClient.get(`/tests/public/${testId}/results`);
+        } else {
+          console.log('Using test review endpoint with ID');
+          response = await apiClient.get(`/tests/${testId}/review`);
+        }
+
+        console.log('Response received:', response.data);
+        
+        if (response.data) {
+          const result = response.data;
+          
+          // Calculer les scores si nécessaire
+          const scoreData = calculateRealScore(result);
+          const sessionData = calculateResponseTime(result);
+          
+          const testResult: TestResult = {
+            id: result.id || parseInt(testId),
+            token: result.token || '',
+            candidateName: result.candidateName || result.candidate?.firstName + ' ' + result.candidate?.lastName || 'Candidat inconnu',
+            positionTitle: result.positionTitle || 'Poste non spécifié',
+            status: result.status || 'UNKNOWN',
+            createdAt: result.createdAt || new Date().toISOString(),
+            submittedAt: result.submittedAt || result.createdAt || new Date().toISOString(),
+            timeLimitMinutes: result.timeLimitMinutes || 30,
+            questions: result.questions || [],
+            candidate: result.candidate || {},
+            hasRealAnswers: scoreData.hasRealAnswers,
+            skillScores: scoreData.skillScores,
+            scores: {
+              totalScore: scoreData.testScore,
+              maxScore: scoreData.testScore + (result.questions?.length || 0),
+              finalScore: scoreData.score,
+              correctAnswers: scoreData.correctAnswers,
+              totalQuestions: scoreData.totalQuestions
+            },
+            session: sessionData
+          };
+
+          console.log('Final test result:', testResult);
+          setTestResult(testResult);
+        } else {
+          throw new Error('Aucune donnée reçue');
+        }
+        
+      } catch (error) {
+        console.error('Error loading test results:', error);
+        setLastError(error as Error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadTestData();
+  }, [testId, isToken]);
+
   const calculateRealScore = (testData: any) => {
     console.log('Test data structure:', Object.keys(testData));
     console.log('Test data:', testData);

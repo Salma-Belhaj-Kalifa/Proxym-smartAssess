@@ -16,7 +16,8 @@ export const useLogin = () => {
     onSuccess: (data) => {
       setAuthToken(data.token);
       setAuthUserData(data);
-      queryClient.invalidateQueries();
+      // Ne pas invalider les queries d'authentification pour éviter les appels à /api/auth/me
+      // queryClient.invalidateQueries();
     },
     onError: () => {
       removeAuthToken();
@@ -34,7 +35,8 @@ export const useRegister = () => {
     onSuccess: (data) => {
       setAuthToken(data.token);
       setAuthUserData(data);
-      queryClient.invalidateQueries();
+      // Ne pas invalider les queries d'authentification pour éviter les appels à /api/auth/me
+      // queryClient.invalidateQueries();
     },
   });
 };

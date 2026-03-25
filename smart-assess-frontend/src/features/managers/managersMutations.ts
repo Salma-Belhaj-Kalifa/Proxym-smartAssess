@@ -16,7 +16,8 @@ export const useCreateManager = () => {
     },
     onError: (error: any) => {
       console.error('Erreur lors de la création du manager:', error);
-      toast.error('Erreur lors de la création du manager');
+      const errorMessage = error?.response?.data?.message || error?.response?.data?.error || 'Erreur lors de la création du manager';
+      toast.error(errorMessage);
     },
   });
 };
@@ -35,7 +36,8 @@ export const useUpdateManager = () => {
     },
     onError: (error: any) => {
       console.error('Erreur lors de la mise à jour du manager:', error);
-      toast.error('Erreur lors de la mise à jour du manager');
+      const errorMessage = error?.response?.data?.message || error?.response?.data?.error || 'Erreur lors de la mise à jour du manager';
+      toast.error(errorMessage);
     },
   });
 };
@@ -51,7 +53,8 @@ export const useDeleteManager = () => {
     },
     onError: (error: any) => {
       console.error('Erreur lors de la suppression du manager:', error);
-      toast.error('Erreur lors de la suppression du manager');
+      const errorMessage = error?.response?.data?.message || error?.response?.data?.error || 'Erreur lors de la suppression du manager';
+      toast.error(errorMessage);
     },
   });
 };
@@ -69,7 +72,8 @@ export const useUpdateManagerProfile = () => {
     },
     onError: (error: any) => {
       console.error('Erreur lors de la mise à jour du profil manager:', error);
-      toast.error('Erreur lors de la mise à jour du profil manager');
+      const errorMessage = error?.response?.data?.message || error?.response?.data?.error || 'Erreur lors de la mise à jour du profil manager';
+      toast.error(errorMessage);
     },
   });
 };
@@ -85,7 +89,8 @@ export const useDeleteManagerProfile = () => {
     },
     onError: (error: any) => {
       console.error('Erreur lors de la suppression du profil:', error);
-      toast.error('Erreur lors de la suppression du profil');
+      const errorMessage = error?.response?.data?.message || error?.response?.data?.error || 'Erreur lors de la suppression du profil';
+      toast.error(errorMessage);
     },
   });
 };

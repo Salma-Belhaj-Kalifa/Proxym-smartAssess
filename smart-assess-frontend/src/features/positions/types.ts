@@ -1,5 +1,7 @@
 import { Candidate } from '../candidates/types';
 
+export type { Candidate };
+
 export interface Position {
   id: number;
   title: string;

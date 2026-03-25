@@ -33,7 +33,13 @@ export const managersService = {
   },
 
   updateProfile: async (userId: number, profileData: Partial<Manager>): Promise<Manager> => {
-    const response = await apiClient.put(API_ENDPOINTS.MANAGERS.UPDATE(userId), profileData);
+    const { firstName, lastName, phone, department } = profileData;
+    const response = await apiClient.put(API_ENDPOINTS.MANAGERS.UPDATE_PROFILE(userId), {
+      firstName,
+      lastName,
+      phone,
+      department
+    });
     return response.data;
   },
 

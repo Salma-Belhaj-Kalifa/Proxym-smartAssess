@@ -9,48 +9,14 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import apiClient from '@/lib/api';
-import apiService from '@/services/apiService';
-import { useTests } from '@/features/tests/testsQueries';
+import { useTests, useTestReview } from '@/features/tests/testsQueries';
 import { useUpdateTest } from '@/features/tests/testsMutations';
-
-interface Question {
-  id?: number;
-  questionText: string;
-  questionType: string;
-  options: string[];
-  correctAnswer: string;
-  skillTag: string;
-  maxScore: number;
-  orderIndex: number;
-}
-
-interface TestReviewData {
-  id: number;
-  testId?: number;
-  token: string;
-  status: string;
-  createdAt: string;
-  deadline: string;
-  timeLimitMinutes: number;
-  questions: Question[];
-  internshipPosition: {
-    id: number;
-    title: string;
-  };
-  candidate: {
-    id: number;
-    firstName: string;
-    lastName: string;
-    email: string;
-  };
-  isDraft?: boolean;
-}
+import { TestReviewData, Question } from '@/features/tests/types';
 
 const TestReviewPage: React.FC = () => {
   const { testId } = useParams<{ testId: string }>();
   const navigate = useNavigate();
   const [testData, setTestData] = useState<TestReviewData | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isGeneratingLink, setIsGeneratingLink] = useState(false);
   const [isSendingEmail, setIsSendingEmail] = useState(false);
@@ -58,50 +24,30 @@ const TestReviewPage: React.FC = () => {
   const [showLinkModal, setShowLinkModal] = useState(false);
   const [editingQuestion, setEditingQuestion] = useState<number | null>(null);
   
-  // Utiliser les hooks de la feature tests
-  const { data: tests, isLoading: testsLoading } = useTests();
-  const updateTestMutation = useUpdateTest(testId ? parseInt(testId) : 0);
+  // Utiliser le hook pour récupérer les données du test
+  const { data: reviewData, isLoading, error } = useTestReview(testId ? parseInt(testId) : 0);
+  const updateTestMutation = useUpdateTest();
+
+  // Synchroniser les données du hook avec l'état local
+  useEffect(() => {
+    if (reviewData) {
+      console.log('TestReviewPage - Review data from hook:', reviewData);
+      console.log('TestReviewData structure:', {
+        id: reviewData.id,
+        testId: reviewData.testId,
+        token: reviewData.token,
+        status: reviewData.status
+      });
+      setTestData(reviewData);
+    }
+  }, [reviewData]);
 
   useEffect(() => {
-    console.log('TestReviewPage - Component mounted with testId:', testId);
-    if (testId) {
-      console.log('TestReviewPage - Loading test data for ID:', testId);
-      loadTestData(parseInt(testId));
-    } else {
-      console.error('TestReviewPage - No testId provided in URL params');
-      toast.error('ID de test manquant dans l\'URL');
-    }
-  }, [testId]);
-
-  const loadTestData = async (id: number) => {
-    try {
-      setIsLoading(true);
-      console.log('TestReviewPage - Loading test data for ID:', id);
-      
-      // Chercher d'abord dans les tests existants
-      const existingTest = Array.isArray(tests) ? tests.find(test => test.id === id) : undefined;
-      
-      if (existingTest) {
-        console.log('TestReviewPage - Found existing test:', existingTest);
-        setTestData(existingTest as unknown as TestReviewData);
-      } else {
-        // Récupérer les données du test via apiClient
-        const response = await apiClient.get(`/tests/${id}/review`);
-        const data = response.data;
-        
-        console.log('TestReviewPage - API response received:', data);
-        
-        setTestData(data as unknown as TestReviewData);
-      }
-      
-    } catch (err: any) {
-      console.error('Error loading test data:', err);
+    if (error) {
+      console.error('Error loading test data:', error);
       toast.error('Failed to load test data');
-      setTestData(null);
-    } finally {
-      setIsLoading(false);
     }
-  };
+  }, [error]);
 
   const updateQuestion = (index: number, field: keyof Question, value: any) => {
     if (!testData) return;
@@ -164,8 +110,17 @@ const TestReviewPage: React.FC = () => {
   const saveQuestions = async () => {
     if (!testData) return;
     
+    // Ensure we have a valid testId
+    const testId = testData.id || testData.testId;
+    console.log('SaveQuestions - Using testId:', testId, 'from testData.id:', testData.id, 'from testData.testId:', testData.testId);
+    if (!testId || typeof testId !== 'number' || testId <= 0) {
+      console.error('SaveQuestions - Invalid testId:', testId);
+      toast.error('ID de test invalide');
+      return;
+    }
+    
     console.log('SaveQuestions - testData structure:', testData);
-    console.log('SaveQuestions - testData.id:', testData.id);
+    console.log('SaveQuestions - testData.id:', testId);
     
     try {
       setIsSaving(true);
@@ -176,14 +131,14 @@ const TestReviewPage: React.FC = () => {
       
       // Si le test est en DRAFT, sauvegarder uniquement dans le localStorage
       if (isDraft) {
-        console.log('SaveQuestions - Using testId:', testData.id);
-        localStorage.setItem(`test_questions_${testData.id}`, JSON.stringify(testData.questions));
+        console.log('SaveQuestions - Using testId:', testId);
+        localStorage.setItem(`test_questions_${testId}`, JSON.stringify(testData.questions));
         console.log('Questions saved to localStorage:', testData.questions);
         toast.success('Questions sauvegardées localement');
       } else {
         // Si le test n'est plus en DRAFT, sauvegarder en base
-        console.log('SaveQuestions - Using testId for API:', testData.id);
-        const response = await apiClient.put(`/tests/${testData.id}/questions`, {
+        console.log('SaveQuestions - Using testId for API:', testId);
+        const response = await apiClient.put(`/tests/${testId}/questions`, {
           questions: testData.questions
         });
         
@@ -201,8 +156,17 @@ const TestReviewPage: React.FC = () => {
   const generateTestLink = async () => {
     if (!testData) return;
     
+    // Ensure we have a valid testId
+    const testId = testData.id || testData.testId;
+    console.log('GenerateTestLink - Using testId:', testId, 'from testData.id:', testData.id, 'from testData.testId:', testData.testId);
+    if (!testId || typeof testId !== 'number' || testId <= 0) {
+      console.error('GenerateTestLink - Invalid testId:', testId);
+      toast.error('ID de test invalide');
+      return;
+    }
+    
     console.log('GenerateTestLink - testData structure:', testData);
-    console.log('GenerateTestLink - testData.id:', testData.id);
+    console.log('GenerateTestLink - testData.id:', testId);
     
     try {
       setIsGeneratingLink(true);
@@ -213,13 +177,13 @@ const TestReviewPage: React.FC = () => {
       
       // Si le test est en DRAFT, sauvegarder les questions en base pour la première fois
       if (isDraft) {
-        console.log('GenerateTestLink - Using testId for API:', testData.id);
-        const response = await apiClient.put(`/tests/${testData.id}/questions`, {
+        console.log('GenerateTestLink - Using testId for API:', testId);
+        const response = await apiClient.put(`/tests/${testId}/questions`, {
           questions: testData.questions
         });
         
         // Nettoyer le localStorage après la sauvegarde en base
-        localStorage.removeItem(`test_questions_${testData.id}`);
+        localStorage.removeItem(`test_questions_${testId}`);
         console.log('Questions saved to database and localStorage cleared');
         
         toast.success('Questions sauvegardées en base avec succès');
@@ -227,23 +191,28 @@ const TestReviewPage: React.FC = () => {
         // Mettre à jour le statut de la candidature à TEST_SENT
         try {
           // Récupérer l'ID de la candidature depuis les données du test
-          // Le champ candidatureId devrait être disponible dans les données du test
-          const candidatureId = (testData as any).candidatureId || 
-                              (testData as any).candidate?.id || 
-                              (testData as any).candidateId;
-          console.log('Updating candidature status - candidatureId:', candidatureId);
-          console.log('Test data structure:', testData);
+          // Le backend inclut maintenant candidatureId dans la réponse
+          const candidatureId = (testData as any).candidatureId;
           
-          if (candidatureId) {
-            await apiClient.put(`/candidatures/${candidatureId}/status`, {
+          console.log('Updating candidature status - candidatureId:', candidatureId);
+          
+          if (candidatureId && typeof candidatureId === 'number') {
+            console.log(`Updating candidature ${candidatureId} status to TEST_SENT`);
+            const response = await apiClient.put(`/candidatures/${candidatureId}/status`, {
               status: 'TEST_SENT'
             });
-            console.log('Candidature status updated to TEST_SENT');
+            console.log('Candidature status updated successfully:', response.data);
           } else {
-            console.error('Candidature ID not found in test data');
+            console.error('Invalid candidatureId:', candidatureId);
+            console.error('Available fields in testData:', Object.keys(testData));
+            toast.warning('Le lien a été généré mais le statut de la candidature n\'a pas pu être mis à jour.');
           }
-        } catch (error) {
+        } catch (error: any) {
           console.error('Error updating candidature status:', error);
+          console.error('Error response:', error.response?.data);
+          
+          // Don't fail the entire process if status update fails
+          toast.warning('Le lien a été généré mais la mise à jour du statut a échoué. Le candidat pourra toujours passer le test.');
         }
       } else {
         // Si le test n'est plus en DRAFT, utiliser la sauvegarde normale
@@ -254,18 +223,45 @@ const TestReviewPage: React.FC = () => {
       toast.info('Génération du lien du test en cours... Cette opération peut prendre quelques secondes.');
       
       // Générer le lien du test
-      console.log('GenerateTestLink - Using testId for generate-link API:', testData.id);
-      const response = await apiClient.post(`/tests/${testData.id}/generate-link`, {}, {
+      console.log('GenerateTestLink - Using testId for generate-link API:', testId);
+      const response = await apiClient.post(`/tests/${testId}/generate-link`, {}, {
         timeout: 30000 // 30 secondes au lieu de 10 secondes
       });
       const data = response.data;
       
-      const link = `${window.location.origin}/candidate/test/${testData.token}`;
+      console.log('GenerateTestLink - API response:', data);
+      console.log('GenerateTestLink - Full response structure:', JSON.stringify(data, null, 2));
+      
+      // Use the token from the API response with fallbacks
+      let token = data.token || testData.token;
+      
+      // If still no token, try to get it from the test data again
+      if (!token) {
+        console.warn('GenerateTestLink - No token in API response, checking testData...');
+        token = testData.token;
+      }
+      
+      // Final fallback - generate a temporary token
+      if (!token) {
+        console.error('GenerateTestLink - No token found anywhere, using fallback');
+        token = `temp-${testId}-${Date.now()}`;
+      }
+      
+      const link = `${window.location.origin}/candidate/test/${token}`;
+      
+      console.log('GenerateTestLink - Final token:', token);
+      console.log('GenerateTestLink - Generated link:', link);
       
       setTestLink(link);
       setShowLinkModal(true);
       
       toast.success('Lien du test généré avec succès');
+      
+      // Rediriger automatiquement vers la page des candidats après 3 secondes
+      setTimeout(() => {
+        toast.info('Redirection vers la page des candidats...');
+        navigate('/manager/candidats');
+      }, 3000);
     } catch (error: any) {
       console.error('Error generating test link:', error);
       
@@ -306,7 +302,7 @@ const TestReviewPage: React.FC = () => {
       };
       
       // Utiliser apiClient directement car testService.sendTestEmail n'existe pas
-      const response = await apiClient.post(`/tests/${testData.id}/send-email`, emailData);
+      const response = await apiClient.post(`/tests/${testId}/send-email`, emailData);
       
       toast.success('Email envoyé avec succès au candidat !');
       console.log('Email sent successfully:', response);
@@ -332,7 +328,7 @@ const TestReviewPage: React.FC = () => {
 
   const previewTest = () => {
     if (!testData) return;
-    window.open(`/manager/test-preview/${testData.testId}`, '_blank');
+    window.open(`/manager/test-preview/${testData.id}`, '_blank');
   };
 
   if (isLoading) {
@@ -416,7 +412,7 @@ const TestReviewPage: React.FC = () => {
 
         {/* Statistiques du test */}
         {testData && (
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-6 gap-4 mb-6">
             <Card>
               <CardContent className="p-4">
                 <div className="flex items-center gap-2">
@@ -462,12 +458,42 @@ const TestReviewPage: React.FC = () => {
             <Card>
               <CardContent className="p-4">
                 <div className="flex items-center gap-2">
+                  <div className="p-2 bg-yellow-100 rounded-lg">
+                    <span className="text-yellow-600 font-bold">🎯</span>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Niveau</p>
+                    <p className="font-semibold text-gray-900">{testData.level || 'JUNIOR'}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 bg-red-100 rounded-lg">
+                    <span className="text-red-600 font-bold">📅</span>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Date limite</p>
+                    <p className="font-semibold text-gray-900 text-xs">
+                      {testData.deadline ? new Date(testData.deadline).toLocaleDateString('fr-FR') : 'Non définie'}
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2">
                   <div className="p-2 bg-orange-100 rounded-lg">
                     <span className="text-orange-600 font-bold">👤</span>
                   </div>
                   <div>
                     <p className="text-sm text-gray-600">Candidat</p>
-                    <p className="font-semibold text-gray-900">
+                    <p className="font-semibold text-gray-900 text-xs">
                       {testData.candidate?.firstName} {testData.candidate?.lastName}
                     </p>
                     <p className="text-xs text-gray-500">{testData.candidate?.email}</p>
@@ -480,14 +506,36 @@ const TestReviewPage: React.FC = () => {
 
       {/* Questions */}
         <div className="space-y-6">
-          {!testData?.questions || testData.questions.length === 0 ? (
+          {(!testData.questions || testData.questions.length === 0) ? (
             <Card>
-              <CardContent className="text-center py-12">
-                <AlertCircle className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                <p className="text-gray-600">Aucune question générée</p>
-                <p className="text-sm text-gray-500 mt-2">
-                  Le test a été créé mais aucune question n'a été générée par l'IA.
-                </p>
+              <CardContent className="p-6">
+                <div className="text-center">
+                  <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <AlertCircle className="w-8 h-8 text-gray-400" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Aucune question générée</h3>
+                  <p className="text-gray-600 mb-4">
+                    Le test a été créé mais aucune question n'a été générée par l'IA.
+                  </p>
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                    <p className="text-sm text-blue-800">
+                      <strong>Possible cause:</strong> L'IA n'a pas pu générer les questions automatiquement.
+                    </p>
+                    <p className="text-sm text-blue-700 mt-2">
+                      <strong>Solution:</strong> Vous pouvez ajouter manuellement les questions ci-dessous ou régénérer le test.
+                    </p>
+                  </div>
+                  <div className="flex gap-2 justify-center">
+                    <Button 
+                      onClick={() => window.location.reload()} 
+                      variant="outline"
+                      className="flex items-center gap-2"
+                    >
+                      <ArrowLeft className="w-4 h-4" />
+                      Retour à la génération
+                    </Button>
+                  </div>
+                </div>
               </CardContent>
             </Card>
           ) : (
@@ -744,10 +792,11 @@ const TestReviewPage: React.FC = () => {
                 <div className="flex gap-2">
                   <Button
                     variant="outline"
-                    onClick={() => setShowLinkModal(false)}
-                    className="flex-1"
+                    onClick={() => navigate('/manager/candidats')}
+                    className="flex-1 flex items-center gap-2"
                   >
-                    Fermer
+                    <ArrowLeft className="w-4 h-4" />
+                    Retour aux candidats
                   </Button>
                   
                   <Button

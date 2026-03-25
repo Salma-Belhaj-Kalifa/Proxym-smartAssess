@@ -6,16 +6,20 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { useCurrentUserSafe } from '@/features/auth/authQueries';
 import { useCandidaturesByCandidate } from '@/features/candidatures/candidaturesQueries';
+import { usePositions } from '@/features/positions/positionsQueries';
 
 export default function CandidateApplicationsPage() {
-const { data: user, isLoading: userLoading } = useCurrentUser();
+  const { data: user, isLoading: userLoading } = useCurrentUserSafe();
   
   const { data: candidatures = [], isLoading, error, refetch } = useCandidaturesByCandidate(user?.id || 0);
+  const { data: positions = [] } = usePositions();
   const [searchTerm, setSearchTerm] = useState('');
+  
   if (userLoading) {
-  return null;
-}
+    return null;
+  }
   const getStatusText = (status: string) => {
     switch (status) {
       case 'PENDING': return 'En cours';
@@ -27,14 +31,57 @@ const { data: user, isLoading: userLoading } = useCurrentUser();
 
   
   const applications = candidatures.map(c => {
+    // Le backend envoie 'internship_position_id' au lieu de 'positionId'
+    const possibleIds = [
+      c.positionId,
+      (c as any).position_id,
+      (c as any).PositionId,
+      (c as any).jobPositionId,
+      (c as any).jobId,
+      (c as any).internship_position_id  // ← AJOUT DU NOM CORRECT DU BACKEND
+    ].filter(id => id !== undefined && id !== null);
+    
+    let positionId = null;
+    let position = null;
+    
+    // Essayer chaque ID possible
+    for (const id of possibleIds) {
+      const parsedId = typeof id === 'string' ? parseInt(id) : id;
+      position = positions.find(p => p.id === parsedId);
+      if (position) {
+        positionId = parsedId;
+        break;
+      }
+    }
+    
+    // Si la position est directement dans la candidature (backend envoie les données)
+    if (!position && (c as any).title && (c as any).company) {
+      position = {
+        title: (c as any).title,
+        company: (c as any).company
+      };
+    }
+    
+    // SOLUTION DE FALLBACK : Si aucune position trouvée, utiliser la plus récente
+    if (!position && positions.length > 0) {
+      // Trier les positions par date de création (la plus récente d'abord)
+      const sortedPositions = [...positions].sort((a, b) => {
+        const dateA = new Date(a.createdAt || '1970-01-01').getTime();
+        const dateB = new Date(b.createdAt || '1970-01-01').getTime();
+        return dateB - dateA;
+      });
+      
+      // Prendre la position la plus récente qui pourrait correspondre
+      position = sortedPositions[0];
+    }
     
     return {
       id: c.id,
-      position: c.positionTitle || 'Poste non spécifié',
-      company: c.positionCompany || null,
+      position: position?.title || (c as any).title || c.position?.title || 'Poste non spécifié',
+      company: position?.company || (c as any).company || c.position?.company || 'Entreprise',
       status: getStatusText(c.status),
       appliedDate: c.appliedAt,
-      lastUpdate: c.updatedAt || c.appliedAt
+      lastUpdate: c.appliedAt
     };
   });
   

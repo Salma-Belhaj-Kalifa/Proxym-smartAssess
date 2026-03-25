@@ -3,14 +3,41 @@ import { User, Briefcase, FileText, Clock, TrendingUp, Calendar, CheckCircle, Al
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { useCurrentUser, useCandidaturesByCandidate } from '@/features';
+import { useCurrentUserSafe } from '@/features/auth/authQueries';
+import { useCandidaturesByCandidate } from '@/features/candidatures/candidaturesQueries';
+import { usePositions } from '@/features/positions/positionsQueries';
+import { candidaturesService } from '@/features/candidatures/candidaturesService';
+import { useState, useEffect } from 'react';
 
 export default function CandidateDashboardPage() {
-  const { data: user } = useCurrentUser();
+  const { data: user } = useCurrentUserSafe();
   const { data: candidatures = [], isLoading: isLoadingCandidatures, error: candidaturesError } = useCandidaturesByCandidate(user?.id || 0);
   const { data: positions = [], isLoading: isLoadingPositions } = usePositions();
+  const [detailedCandidatures, setDetailedCandidatures] = useState<any[]>([]);
+  const [isLoadingDetails, setIsLoadingDetails] = useState(false);
   
-  const isLoading = isLoadingCandidatures || isLoadingPositions;
+  // Récupérer les détails complets de chaque candidature
+  useEffect(() => {
+    if (candidatures.length > 0) {
+      setIsLoadingDetails(true);
+      Promise.all(
+        candidatures.map(async (c) => {
+          try {
+            const details = await candidaturesService.getById(c.id);
+            return details;
+          } catch (error) {
+            console.warn(`Erreur lors de la récupération des détails de la candidature ${c.id}:`, error);
+            return c; // Retourner la candidature originale en cas d'erreur
+          }
+        })
+      ).then((detailed) => {
+        setDetailedCandidatures(detailed);
+        setIsLoadingDetails(false);
+      });
+    }
+  }, [candidatures]);
+  
+  const isLoading = isLoadingCandidatures || isLoadingPositions || isLoadingDetails;
   const error = candidaturesError;
 
   const getStatusText = (status: string) => {
@@ -24,22 +51,68 @@ export default function CandidateDashboardPage() {
 
   // Calculer les statistiques à partir des données
   const stats = {
-    totalApplications: candidatures.length,
-    pendingApplications: candidatures.filter(c => c.status === 'PENDING').length,
-    acceptedApplications: candidatures.filter(c => c.status === 'ACCEPTED').length,
-    rejectedApplications: candidatures.filter(c => c.status === 'REJECTED').length,
+    totalApplications: detailedCandidatures.length,
+    pendingApplications: detailedCandidatures.filter(c => c.status === 'PENDING').length,
+    acceptedApplications: detailedCandidatures.filter(c => c.status === 'ACCEPTED').length,
+    rejectedApplications: detailedCandidatures.filter(c => c.status === 'REJECTED').length,
     totalPositions: positions.length,
-    recentApplications: candidatures
+    recentApplications: detailedCandidatures
       .sort((a, b) => new Date(b.appliedAt).getTime() - new Date(a.appliedAt).getTime())
       .slice(0, 5)
-      .map(c => ({
-        id: c.id,
-        position: c.positionTitle || 'Poste non spécifié',
-        company: c.positionCompany || null,
-        status: getStatusText(c.status),
-        appliedDate: c.appliedAt,
-        lastUpdate: c.updatedAt || c.appliedAt
-      }))
+      .map(c => {
+        // Le backend envoie 'internship_position_id' au lieu de 'positionId'
+        const possibleIds = [
+          c.positionId,
+          (c as any).position_id,
+          (c as any).PositionId,
+          (c as any).jobPositionId,
+          (c as any).jobId,
+          (c as any).internship_position_id  // ← AJOUT DU NOM CORRECT DU BACKEND
+        ].filter(id => id !== undefined && id !== null);
+        
+        let positionId = null;
+        let position = null;
+        
+        // Essayer chaque ID possible
+        for (const id of possibleIds) {
+          const parsedId = typeof id === 'string' ? parseInt(id) : id;
+          position = positions.find(p => p.id === parsedId);
+          if (position) {
+            positionId = parsedId;
+            break;
+          }
+        }
+        
+        // Si la position est directement dans la candidature (backend envoie les données)
+        if (!position && (c as any).title && (c as any).company) {
+          position = {
+            title: (c as any).title,
+            company: (c as any).company
+          };
+        }
+        
+        // SOLUTION DE FALLBACK : Si aucune position trouvée, utiliser la plus récente
+        if (!position && positions.length > 0) {
+          // Trier les positions par date de création (la plus récente d'abord)
+          const sortedPositions = [...positions].sort((a, b) => {
+            const dateA = new Date(a.createdAt || '1970-01-01').getTime();
+            const dateB = new Date(b.createdAt || '1970-01-01').getTime();
+            return dateB - dateA;
+          });
+          
+          // Prendre la position la plus récente qui pourrait correspondre
+          position = sortedPositions[0];
+        }
+        
+        return {
+          id: c.id,
+          position: position?.title || (c as any).title || c.position?.title || 'Poste non spécifié',
+          company: position?.company || (c as any).company || c.position?.company || 'Entreprise',
+          status: getStatusText(c.status),
+          appliedDate: c.appliedAt,
+          lastUpdate: c.appliedAt
+        };
+      })
   };
 
   const formatDate = (dateString: string) => {

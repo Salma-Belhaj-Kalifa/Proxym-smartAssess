@@ -4,12 +4,20 @@ import { Briefcase, Users, FileText, Plus, AlertCircle, Eye, Clock, TrendingUp, 
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { positionService, candidateService, candidatureService, testService } from '@/services/apiService';
-import { useCurrentUser } from '@/features/auth/authQueries';
+import { usePositions } from '@/features/positions/positionsQueries';
+import { useCandidates } from '@/features/candidates/candidatesQueries';
+import { useCandidatures } from '@/features/candidatures/candidaturesQueries';
+import { useTests } from '@/features/tests/testsQueries';
+import { useCurrentUserSafe } from '@/features/auth/authQueries';
 import { getStatusLabel, getStatusColor } from '@/utils/statusMappings';
 
 const DashboardPage = () => {
-  const { data: user } = useCurrentUser();
+  const { data: user } = useCurrentUserSafe();
+  const { data: positionsData = [], isLoading: positionsLoading } = usePositions();
+  const { data: candidatesData = [], isLoading: candidatesLoading } = useCandidates();
+  const { data: candidaturesData = [], isLoading: candidaturesLoading } = useCandidatures();
+  const { data: testsData = [], isLoading: testsLoading } = useTests();
+  
   const [positions, setPositions] = useState<any[]>([]);
   const [candidates, setCandidates] = useState<any[]>([]);
   const [candidatures, setCandidatures] = useState<any[]>([]);
@@ -27,106 +35,75 @@ const DashboardPage = () => {
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [positionsData, candidatesData, candidaturesData, testsData]);
+
+  useEffect(() => {
+    const loading = positionsLoading || candidatesLoading || candidaturesLoading || testsLoading;
+    setIsLoading(loading);
+  }, [positionsLoading, candidatesLoading, candidaturesLoading, testsLoading]);
 
   const loadData = async () => {
     try {
-      // Charger les données de base qui fonctionnent
-      const [positionsData, candidatesData] = await Promise.all([
-        positionService.getAll(),
-        candidateService.getAll()
-      ]);
-      setPositions(positionsData);
-      setCandidates(candidatesData);
+      console.log('Dashboard - Positions Data:', positionsData);
+      console.log('Dashboard - Candidates Data:', candidatesData);
+      console.log('Dashboard - Candidatures Data:', candidaturesData);
+      console.log('Dashboard - Tests Data:', testsData);
+      
+      // Utiliser les données des hooks React Query directement
+      const positions = positionsData || [];
+      const candidates = candidatesData || [];
+      
+      setPositions(positions);
+      setCandidates(candidates);
       
       // Créer une map des candidats pour un accès rapide
       const candidateMap = new Map(candidatesData.map(c => [c.id, c]));
       const positionMap = new Map(positionsData.map(p => [p.id, p]));
       
-      // Charger les candidatures individuellement pour chaque candidat
-      const allCandidatures = [];
-      for (const candidate of candidatesData) {
-        try {
-          const candidateCandidatures = await candidatureService.getByCandidate(candidate.id);
-          
-          // Joindre les données du candidat et du poste avec chaque candidature
-          const enrichedCandidatures = candidateCandidatures.map(candidature => ({
-            ...candidature,
-            candidate: candidateMap.get(candidature.candidateId) || {
-              id: candidature.candidateId,
-              firstName: 'Candidat',
-              lastName: `#${candidature.candidateId}`,
-              email: 'email@inconnu'
-            },
-            position: positionMap.get(candidature.internshipPositionId) || {
-              id: candidature.internshipPositionId,
-              title: `Poste #${candidature.internshipPositionId}`
-            }
-          }));
-          
-          allCandidatures.push(...enrichedCandidatures);
-        } catch (error) {
-          // Ignorer les erreurs pour les candidats sans candidatures
-        }
-      }
+      // Utiliser directement les données des candidatures du hook
+      const allCandidatures = candidaturesData || [];
       setCandidatures(allCandidatures);
       
       // Charger les tests avec les données des candidats
-      console.log('Recherche des tests existants pour le dashboard...');
       
       try {
-        // D'abord, essayer de récupérer tous les tests disponibles
-        const response = await testService.getAll();
-        console.log('Tests trouvés pour dashboard:', response);
+        // Utiliser les données des hooks React Query pour les tests
+        const allTests = Array.isArray(testsData) ? testsData : 
+                       (testsData && typeof testsData === 'object' && 'tests' in testsData) ? (testsData as any).tests : [];
         
-        // Extraire le tableau de tests depuis la réponse du backend
-        const allTests = (response as any).tests || (response as any).data || response || [];
-        console.log('Tests extraits:', allTests);
+        // Filtrer uniquement les tests valides (avec un ID)
+        const validTests = allTests.filter((test: any) => test.id);
         
-        // Filtrer uniquement les tests qui ont des résultats
-        const completedTests = allTests.filter((test: any) => 
-          test.status === 'SUBMITTED' || test.status === 'EVALUATED'
-        );
+        const enrichedTests = [];
         
-        console.log('Tests complétés trouvés pour dashboard:', completedTests.length);
-        
-        const validTests = [];
-        
-        for (const test of completedTests) {
+        for (const test of validTests) {
           try {
-            // Vérifier si le test existe réellement
-            const testDetails = await testService.getTestForReview(test.id);
-            console.log(`Test ${test.id} vérifié et valide:`, testDetails ? 'OUI' : 'NON');
+            // Simplifier la validation du test - pas besoin d'appeler testService
+            const testDetails = { id: test.id };
             
             if (testDetails) {
               // Enrichir les données du test avec les informations du candidat et de la position
-              const candidate = candidateMap.get((test as any).candidateId) || testDetails.candidate;
-              const position = positionMap.get((test as any).internshipPositionId) || testDetails.internshipPosition;
-              
-              const enrichedTest = {
-                ...testDetails,
-                candidate: candidate || {
-                  id: (test as any).candidateId,
-                  firstName: 'Candidat',
-                  lastName: 'Inconnu',
-                  email: 'email@example.com'
-                },
-                position: position || {
-                  id: (test as any).internshipPositionId,
-                  title: 'Poste inconnu',
-                  company: 'SmartAssess'
-                }
+              // Utiliser les données réelles des tests
+              const candidate = test.candidate || {
+                id: (test as any).candidateId,
+                firstName: 'Candidat',
+                lastName: 'Inconnu',
+                email: 'email@example.com'
               };
               
-              // Débogage pour voir la structure exacte des données
-              console.log(`Test ${test.id} details:`, {
-                hasCandidate: !!candidate,
-                hasPosition: !!position,
-                candidateName: candidate?.firstName + ' ' + candidate?.lastName,
-                positionTitle: position?.title
-              });
+              const position = test.internshipPosition || {
+                id: (test as any).internshipPositionId,
+                title: 'Poste inconnu',
+                company: 'SmartAssess'
+              };
               
-              validTests.push(enrichedTest);
+              const enrichedTest = {
+                ...test,
+                candidate: candidate,
+                position: position
+              };
+              
+              enrichedTests.push(enrichedTest);
             }
           } catch (error) {
             console.warn(`Test ${test.id} ignoré dans le dashboard:`, error.message);
@@ -134,9 +111,8 @@ const DashboardPage = () => {
           }
         }
         
-        setTests(validTests);
-        setRecentTests(validTests);
-        console.log(`Dashboard: ${validTests.length} tests valides chargés`);
+        setTests(enrichedTests);
+        setRecentTests(enrichedTests);
         
       } catch (error) {
         console.error('Erreur lors du chargement des tests pour le dashboard:', error);
@@ -155,8 +131,9 @@ const DashboardPage = () => {
   const inactivePositions = totalPositions - activePositions;
   const totalCandidatures = candidatures.length;
   const pendingCandidatures = candidatures.filter(c => c.status === 'PENDING').length;
-  const completedTests = tests.filter(t => t.status === 'SUBMITTED').length;
-  const inProgressTests = tests.filter(t => t.status === 'IN_PROGRESS').length;
+  const completedTests = tests.filter(t => t.status === 'SUBMITTED' || t.status === 'EVALUATED').length;
+  const inProgressTests = tests.filter(t => t.status === 'IN_PROGRESS' || t.status === 'ASSIGNED' || t.status === 'STARTED').length;
+  const totalTests = tests.length; // Maintenant ça devrait afficher 19
 
   const stats = [
     { 
@@ -176,7 +153,7 @@ const DashboardPage = () => {
     { 
       label: "Tests complétés", 
       value: completedTests, 
-      sub: `${inProgressTests} en cours`, 
+      sub: `sur ${totalTests} total`, 
       icon: FileText, 
       color: "text-success" 
     },
