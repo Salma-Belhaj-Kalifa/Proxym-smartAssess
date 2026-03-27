@@ -18,14 +18,41 @@ export const cvAnalysisService = {
   },
 
   analyzeCV: async (candidateId: number, file: File): Promise<CVAnalysisResult> => {
+    console.log('=== CV ANALYSIS DEBUG ===');
+    console.log('Candidate ID:', candidateId);
+    console.log('File:', file);
+    console.log('File name:', file.name);
+    console.log('File size:', file.size);
+    console.log('File type:', file.type);
+    console.log('=== END CV ANALYSIS DEBUG ===');
+    
     const formData = new FormData();
     formData.append('file', file);
     
-    const response = await apiClient.post(`/ai-analysis/analyze-cv/${candidateId}`, formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
-    return response.data;
+    try {
+      const response = await apiClient.post(`/ai-analysis/analyze-cv/${candidateId}`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+        // Augmenter le timeout pour l'analyse IA qui peut prendre du temps
+        timeout: 120000, // 2 minutes
+      });
+      
+      console.log('CV Analysis Response:', response);
+      console.log('CV Analysis Data:', response.data);
+      
+      return response.data;
+    } catch (error: any) {
+      console.error('=== CV ANALYSIS ERROR ===');
+      console.error('Error:', error);
+      console.error('Error Response:', error.response);
+      console.error('Error Status:', error.response?.status);
+      console.error('Error Data:', error.response?.data);
+      console.error('Error Headers:', error.response?.headers);
+      console.error('=== END CV ANALYSIS ERROR ===');
+      
+      // Relancer l'erreur pour la gestion dans le composant
+      throw error;
+    }
   },
 };

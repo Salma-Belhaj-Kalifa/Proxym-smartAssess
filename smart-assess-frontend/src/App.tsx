@@ -5,31 +5,30 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { queryClient } from "./lib/queryClient";
 import HomePage from "./pages/common/HomePage";
-import RecruiterLoginPage from "./pages/manager/RecruiterLoginPage";
-import CandidateLoginPage from "./pages/candidate/CandidateLoginPage";
-import CandidatePositionsPage from "./pages/candidate/CandidatePositionsPage";
-import SubmissionPageSimple from './pages/candidate/SubmissionPageSimple';
-import TestInterfacePage from "./pages/common/TestInterfacePage";
-import CandidateTestPage from "./pages/candidate/CandidateTestPage";
-import TestSubmittedPage from "./pages/candidate/TestSubmittedPage";
-import CandidateLayout from "./components/CandidateLayout";
-import CandidateDashboardPage from "./pages/candidate/CandidateDashboardPage";
-import CandidateProfilePage from "./pages/candidate/CandidateProfilePage";
-import CandidateApplicationsPage from "./pages/candidate/ApplicationsPage";
-import ManagerLayout from "./components/ManagerLayout";
-import DashboardPage from "./pages/manager/DashboardPage";
-import ManagerPositionsPage from "./pages/manager/ManagerPositionsPage";
-import ManagerProfilePage from "./pages/manager/ManagerProfilePage";
-import ApplicationsPage from "./pages/manager/ApplicationsPage";
-import EvaluationReportPage from "./pages/manager/EvaluationReportPage";
-import AIResultsListPage from "./pages/manager/AIResultsListPage";
-import GenerateTestPage from "./pages/manager/GenerateTestPage";
-import TestReviewPage from "./pages/manager/TestReviewPage";
-import TestResultsPage from "./pages/manager/TestResultsPage";
-import TestResultsListPage from './pages/manager/TestResultsListPage';
-import QuestionValidationPage from "./pages/manager/QuestionValidationPage";
-import PositionApplicationsPage from "./pages/manager/PositionApplicationsPage";
-import PositionDetailPage from "./pages/manager/PositionDetailPage";
+import RecruiterLoginPage from "./pages/manager/auth/RecruiterLoginPage";
+import CandidateLoginPage from "./pages/candidate/auth/CandidateLoginPage";
+import CandidatePositionsPage from "./pages/candidate/positions/CandidatePositionsPage";
+import SubmissionPageSimple from './pages/candidate/candidature/SubmissionPageSimple';
+import CandidateTestPage from "./pages/candidate/tests/CandidateTestPage";
+import TestSubmittedPage from "./pages/candidate/tests/TestSubmittedPage";
+import CandidateLayout from "./components/Layout/CandidateLayout";
+import CandidateDashboardPage from "./pages/candidate/dashboard/CandidateDashboardPage";
+import CandidateProfilePage from "./pages/candidate/profile/CandidateProfilePage";
+import CandidateApplicationsPage from "./pages/candidate/applications/ApplicationsPage";
+import ManagerLayout from "./components/Layout/ManagerLayout";
+import DashboardPage from "./pages/manager/dashboard/DashboardPage";
+import ManagerPositionsPage from "./pages/manager/positions/ManagerPositionsPage";
+import ManagerProfilePage from "./pages/manager/profile/ManagerProfilePage";
+import ApplicationsPage from "./pages/manager/applications/ApplicationsPage";
+import EvaluationReportPage from "./pages/manager/reports/EvaluationReportPage";
+import AIResultsListPage from "./pages/manager/reports/AIResultsListPage";
+import GenerateTestPage from "./pages/manager/tests/GenerateTestPage";
+import TestReviewPage from "./pages/manager/tests/TestReviewPage";
+import TestResultsPage from "./pages/manager/tests/TestResultsPage";
+import TestResultsListPage from './pages/manager/tests/TestResultsListPage';
+import QuestionValidationPage from "./pages/manager/tests/QuestionValidationPage";
+import PositionApplicationsPage from "./pages/manager/positions/PositionApplicationsPage";
+import PositionDetailPage from "./pages/manager/positions/PositionDetailPage";
 import NotFound from "./pages/common/NotFound";
 
 const App = () => (
@@ -54,7 +53,6 @@ const App = () => (
           </Route>
           
           {/* Test Routes */}
-          <Route path="/test/:id" element={<TestInterfacePage />} />
           <Route path="/candidate/test/:token" element={<CandidateTestPage />} />
           <Route path="/candidate/test-submitted" element={<TestSubmittedPage />} />
           

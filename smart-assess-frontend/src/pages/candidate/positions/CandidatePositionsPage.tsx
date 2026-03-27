@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Search, Briefcase, MapPin, Building, Clock, Users, Check, Plus, ChevronRight, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -9,21 +9,26 @@ import { usePositions } from '@/features/positions/positionsQueries';
 import type { Position } from '@/features/positions/types';
 
 const CandidatePositionsPage: React.FC = () => {
-  const [positions, setPositions] = useState<Position[]>([]);
-  const [filteredPositions, setFilteredPositions] = useState<Position[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedPositions, setSelectedPositions] = useState<number[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
   // Utiliser le hook usePositions pour récupérer les positions
-  const { data: positionsData = [], isLoading: isLoadingPositions, error: errorPositions } = usePositions();
+  const { data: positionsData = [], isLoading, error } = usePositions();
 
-  useEffect(() => {
-    setPositions(positionsData);
-    setIsLoading(isLoadingPositions);
-    setError(errorPositions?.message || null);
-  }, [positionsData, isLoadingPositions, errorPositions]);
+  // Utiliser useMemo pour le filtrage - évite la boucle infinie
+  const filteredPositions = useMemo(() => {
+    if (!positionsData || positionsData.length === 0) {
+      return [];
+    }
+    
+    return positionsData.filter(position => {
+      return (
+        position.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        position.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        position.requiredSkills.some(skill => skill.toLowerCase().includes(searchTerm.toLowerCase()))
+      );
+    });
+  }, [positionsData, searchTerm]);
 
   useEffect(() => {
     // Charger les positions sélectionnées depuis localStorage
@@ -37,17 +42,6 @@ const CandidatePositionsPage: React.FC = () => {
     // Sauvegarder les positions sélectionnées dans localStorage
     localStorage.setItem('selectedPositions', JSON.stringify(selectedPositions));
   }, [selectedPositions]);
-
-  useEffect(() => {
-    const filtered = positions.filter(position => {
-      return (
-        position.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        position.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        position.requiredSkills.some(skill => skill.toLowerCase().includes(searchTerm.toLowerCase()))
-      );
-    });
-    setFilteredPositions(filtered);
-  }, [searchTerm, positions]);
 
   const togglePositionSelection = (positionId: number) => {
     if (selectedPositions.includes(positionId)) {
@@ -68,7 +62,7 @@ const CandidatePositionsPage: React.FC = () => {
   if (error) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="text-lg text-red-500">{error}</div>
+        <div className="text-lg text-red-500">{error?.message || 'Une erreur est survenue'}</div>
       </div>
     );
   }
@@ -118,7 +112,7 @@ const CandidatePositionsPage: React.FC = () => {
                   </h3>
                   <div className="flex flex-wrap gap-2">
                     {selectedPositions.map(id => {
-                      const position = positions.find(p => p.id === id);
+                      const position = positionsData.find(p => p.id === id);
                       return position ? (
                         <Badge key={id} variant="secondary" className="bg-blue-100 text-blue-800">
                           {position.title}

@@ -5,10 +5,14 @@ from app.services.extractor import extract_text_from_bytes
 from app.services.analyzer import CVAnalyzer
 from app.services.generator import QuestionGenerator
 from app.utils.cv_validator import validate_cv_text, validate_file_type
+from app.services.report_generator import ReportGenerator, CandidateReport
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import JSONResponse
 
 router = APIRouter()
 analyzer = CVAnalyzer()
 generator = QuestionGenerator()
+report_generator = ReportGenerator()
 
 class Skill(BaseModel):
     name: str
@@ -58,6 +62,12 @@ class GenerateRequest(BaseModel):
 class GenerateFromProfileRequest(BaseModel):
     candidate_profile: dict
     number_of_questions: int = 5
+class GenerateReportRequest(BaseModel):
+    candidate_profile: dict
+    test_results: List[Dict]          # Liste des résultats de test [{skill_name, score, max_score, comment}]
+    applied_position: str
+    test_start: str                   
+    test_end: str                     
 
 @router.get("/health")
 async def health_check():
@@ -92,4 +102,28 @@ async def analyze_cv(file: UploadFile = File(...)):
         data = await analyzer.analyze(text)
         return data
     except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/generate-report")
+async def generate_report(request: GenerateReportRequest):
+    try:
+        # Convertir dates ISO en datetime
+        from datetime import datetime
+        test_start_dt = datetime.fromisoformat(request.test_start)
+        test_end_dt = datetime.fromisoformat(request.test_end)
+
+        report: CandidateReport = await report_generator.generate_report(
+            candidate_profile=request.candidate_profile,
+            test_results=request.test_results,
+            applied_position=request.applied_position,
+            test_start=test_start_dt,
+            test_end=test_end_dt
+        )
+
+        # Retourner le JSON du rapport
+        return report_generator.generate_json(report)
+
+    except Exception as e:
+        from fastapi import HTTPException
         raise HTTPException(status_code=500, detail=str(e))

@@ -11,7 +11,6 @@ export const useCurrentUser = () => {
   };
 
   const hasToken = !!getToken();
-  console.log('useCurrentUser - token exists:', hasToken, 'token:', getToken()?.substring(0, 20) + '...');
 
   return useQuery({
     queryKey: authKeys.me,

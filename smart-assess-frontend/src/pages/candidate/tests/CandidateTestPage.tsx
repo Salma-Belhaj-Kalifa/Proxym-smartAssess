@@ -84,30 +84,28 @@ const CandidateTestPage: React.FC = () => {
       console.log('Test data from hook:', dataFromHook);
       console.log('Test data keys:', Object.keys(dataFromHook || {}));
       
-      // Backend returns {success: true, test: {...}} structure
-      const test = dataFromHook.test || dataFromHook;
-      console.log('Extracted test object:', test);
-      console.log('Questions:', test?.questions);
-      console.log('Questions type:', typeof test?.questions);
-      console.log('Questions length:', test?.questions?.length);
-      console.log('Is array:', Array.isArray(test?.questions));
-      console.log('=== FIN DONNÉES TEST ===');
       
       // Créer un objet testData compatible avec ce que le frontend attend
-      const testData = {
-        testId: test?.id,
-        duration: test?.timeLimitMinutes || 20,
-        questions: test?.questions || [],
-        positionTitle: 'Poste technique', // À améliorer si nécessaire
+      let duration = dataFromHook.test?.timeLimitMinutes || 20;
+      if (isNaN(duration) || duration === null || duration === undefined) {
+        console.warn('Invalid duration, using default 20 minutes');
+        duration = 20;
+      }
+      
+      const testData: TestData = {
+        testId: dataFromHook.test?.id || 0,
         token: token || '',
-        candidateName: 'Candidat', // À améliorer si nécessaire
-        deadline: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() // 24h from now
+        candidateName: dataFromHook.test?.candidateName || 'Candidat',
+        positionTitle: dataFromHook.test?.positionTitle || 'Poste technique',
+        duration: duration,
+        deadline: dataFromHook.test?.deadline || new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+        questions: dataFromHook.test?.questions || []
       };
       
       console.log('Processed test data:', testData);
       
       setTestData(testData);
-      setTimeRemaining(testData.duration * 60); // Convertir minutes en secondes
+      setTimeRemaining(duration * 60); // Convertir minutes en secondes
       setIsLoading(false); // ← Important: Set loading to false
       
       // Charger les réponses sauvegardées après avoir reçu les données du test
@@ -126,10 +124,7 @@ const CandidateTestPage: React.FC = () => {
     try {
       setIsLoading(true);
       console.log('Loading test data for token:', testToken);
-      
-      // Le hook useGetPublicTest est déjà appelé au niveau du composant
-      // Cette fonction sert principalement à logger et à gérer l'état de chargement
-      
+     
     } catch (error: any) {
       console.error('Error loading test data:', error);
       console.error('Error response:', error.response?.data);
@@ -222,21 +217,30 @@ const CandidateTestPage: React.FC = () => {
       }
     };
 
-    const handleKeyDown = (e: KeyboardEvent) => {
+    const handleCopyPasteKeyDown = (e: KeyboardEvent) => {
       if (testStarted && !testSubmitted) {
         // Bloquer TOUS les raccourcis clavier sans exception
         if ((e.ctrlKey || e.metaKey) && 
             (e.key === 'c' || e.key === 'v' || e.key === 'x' || e.key === 'a' || e.key === 'w' || e.key === 'q')) {
           e.preventDefault();
           e.stopPropagation();
-          toast.warning('Les raccourcis clavier sont désactivés pendant le test');
+          e.stopImmediatePropagation();
+          toast.error(`Le raccourci ${e.key} est désactivé pendant le test`);
         }
         
         // Bloquer TOUTES les touches de fonction et de navigation
-        if (e.key === 'F12' || e.key === 'F11' || e.key === 'F10' || e.key === 'F9' || e.key === 'F5' || e.key === 'F3' || e.key === 'F1') {
+        if (e.key === 'F12' || e.key === 'F11' || e.key === 'Escape' || e.key === 'F10' || e.key === 'F9' || e.key === 'F5' || e.key === 'F3' || e.key === 'F1') {
           e.preventDefault();
           e.stopPropagation();
-          toast.error(`La touche ${e.key} est désactivée pendant le test`);
+          e.stopImmediatePropagation();
+         
+          setTimeout(() => {
+            if (!document.fullscreenElement) {
+              document.documentElement.requestFullscreen().catch(() => {});
+            }
+          }, 0);
+
+          return false;
         }
         
         // Bloquer Ctrl+Shift+I/J/K/L, Alt+F4, etc.
@@ -245,6 +249,7 @@ const CandidateTestPage: React.FC = () => {
             (e.ctrlKey && (e.key === 'U' || e.key === 'W' || e.key === 'Q'))) {
           e.preventDefault();
           e.stopPropagation();
+          e.stopImmediatePropagation();
           toast.error('Les raccourcis de navigation sont désactivés');
         }
         
@@ -253,6 +258,13 @@ const CandidateTestPage: React.FC = () => {
           e.preventDefault();
           e.stopPropagation();
           e.stopImmediatePropagation();
+          
+          // Si le test est soumis, empêcher TOUTE navigation
+          if (testSubmitted) {
+            toast.error('🚨 TEST SOUMIS - Navigation désactivée!');
+            return false;
+          }
+          
           toast.error('La touche Échap est complètement désactivée pendant le test');
           return false;
         }
@@ -278,130 +290,123 @@ const CandidateTestPage: React.FC = () => {
       document.addEventListener('copy', handleCopy);
       document.addEventListener('paste', handlePaste);
       document.addEventListener('contextmenu', handleContextMenu);
-      document.addEventListener('keydown', handleKeyDown);
+      document.addEventListener('keydown', handleCopyPasteKeyDown);
       
-      // Ajouter un écouteur au niveau de la fenêtre pour capturer F11
+      // Ajouter un écouteur au niveau de la fenêtre pour capturer F11 et Échap
       const windowKeyDownHandler = (e: KeyboardEvent) => {
-        if (testStarted && !testSubmitted && e.key === 'F11') {
-          e.preventDefault();
-          e.stopPropagation();
-          e.stopImmediatePropagation();
-          toast.error('F11 est désactivé pendant le test');
-          return false;
+        if (testStarted && !testSubmitted) {
+          // Blocage agressif de F11 et Échap
+          if (e.key === 'F11' || e.key === 'Escape') {
+            e.preventDefault();
+            e.stopPropagation();
+            e.stopImmediatePropagation();
+            
+            // Empêcher le comportement par défaut du navigateur
+            if (e.preventDefault) e.preventDefault();
+            if (e.stopPropagation) e.stopPropagation();
+            if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+            
+            // Forcer immédiatement le retour en plein écran
+            if (!document.fullscreenElement) {
+              document.documentElement.requestFullscreen().catch(() => {});
+            }
+            
+            return false;
+          }
         }
       };
       
+      // Ajouter l'écouteur avec capture pour intercepter avant le navigateur
       window.addEventListener('keydown', windowKeyDownHandler, true);
+      
+      // Ajouter un deuxième écouteur pour plus de sécurité
+      const documentKeyDownHandler = (e: KeyboardEvent) => {
+        if (testStarted && !testSubmitted) {
+          if (e.key === 'F11' || e.key === 'Escape') {
+            e.preventDefault();
+            e.stopPropagation();
+            e.stopImmediatePropagation();
+            return false;
+          }
+        }
+      };
+      
+      document.addEventListener('keydown', documentKeyDownHandler, true);
       
       return () => {
         document.removeEventListener('copy', handleCopy);
         document.removeEventListener('paste', handlePaste);
         document.removeEventListener('contextmenu', handleContextMenu);
-        document.removeEventListener('keydown', handleKeyDown);
+        document.removeEventListener('keydown', handleCopyPasteKeyDown);
         window.removeEventListener('keydown', windowKeyDownHandler, true);
+        document.removeEventListener('keydown', documentKeyDownHandler, true);
       };
     }
   }, [testStarted, testSubmitted, copyAttempts]);
 
-  // Effet de sécurité : empêcher la sortie du mode plein écran
+  // Effet de sécurité : BLOCAGE ULTRA-AGRESSIF pour Échap et F11
   useEffect(() => {
-    const handleFullscreenChange = () => {
-      if (!document.fullscreenElement && testStarted && !testSubmitted) {
-        toast.error('Le mode plein écran est OBLIGATOIRE pendant le test');
-        
-        // Forcer immédiatement le retour en plein écran
-        const forceFullscreen = async () => {
-          try {
-            if (document.documentElement.requestFullscreen) {
-              await document.documentElement.requestFullscreen();
-            } else if ((document.documentElement as any).webkitRequestFullscreen) {
-              await (document.documentElement as any).webkitRequestFullscreen();
-            } else if ((document.documentElement as any).msRequestFullscreen) {
-              await (document.documentElement as any).msRequestFullscreen();
-            }
-          } catch (error) {
-            // Continuer d'essayer toutes les secondes
-            console.warn('Tentative de plein écran échouée, nouvel essai...', error);
-          }
-        };
-        
-        // Essayer immédiatement
-        forceFullscreen();
-        
-        // Réessayer toutes les secondes si toujours pas en plein écran
-        const retryInterval = setInterval(() => {
-          if (!document.fullscreenElement && testStarted && !testSubmitted) {
-            forceFullscreen();
-          } else {
-            clearInterval(retryInterval);
-          }
-        }, 1000);
-        
-        // Nettoyer l'intervalle après 10 secondes max
-        setTimeout(() => clearInterval(retryInterval), 10000);
-      }
-    };
+    if (!testStarted || testSubmitted) return;
 
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (testStarted && !testSubmitted) {
+    // Fonction de blocage ultime
+    const ultimateBlock = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' || e.key === 'F11') {
+        // Bloquer de toutes les manières possibles
         e.preventDefault();
-        e.returnValue = '🚨 ALERTE : Test en cours! Si vous quittez cette page, le test sera soumis automatiquement et vos réponses seront enregistrées. Voulez-vous vraiment continuer ?';
-        return e.returnValue;
-      }
-    };
-
-    const handlePageHide = (e: PageTransitionEvent) => {
-      if (testStarted && !testSubmitted) {
-        // Soumettre automatiquement le test si l'utilisateur essaie de quitter la page
-        console.log('Page hide detected - submitting test automatically');
-        submitTest();
-      }
-    };
-
-    // Bloquer les raccourcis clavier pour sortir
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (testStarted && !testSubmitted) {
-        // Bloquer Alt+Tab, Ctrl+W, Ctrl+T, F5, etc.
-        if (
-          e.key === 'F5' || 
-          (e.ctrlKey && (e.key === 'w' || e.key === 't' || e.key === 'Tab')) ||
-          (e.altKey && e.key === 'Tab')
-        ) {
-          e.preventDefault();
-          toast.error('🔒 Cette action est bloquée pendant le test!', { duration: 3000 });
-          return false;
-        }
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        e.cancelBubble = true;
+        e.returnValue = false;
         
-        // Bloquer la touche Échap pour sortir du plein écran
-        if (e.key === 'Escape') {
-          e.preventDefault();
-          toast.error('🔒 La touche Échap est bloquée pendant le test!', { duration: 3000 });
-          return false;
-        }
+        // Forcer immédiatement le plein écran
+        setTimeout(() => {
+          if (!document.fullscreenElement) {
+            document.documentElement.requestFullscreen().catch(() => {});
+          }
+        }, 0);
+        
+        setTimeout(() => {
+          if (!document.fullscreenElement) {
+            document.documentElement.requestFullscreen().catch(() => {});
+          }
+        }, 10);
+        
+        setTimeout(() => {
+          if (!document.fullscreenElement) {
+            document.documentElement.requestFullscreen().catch(() => {});
+          }
+        }, 100);
+        
+        return false;
       }
     };
 
-    const handleGlobalContextMenu = (e: MouseEvent) => {
-      if (testStarted && !testSubmitted) {
-        e.preventDefault();
-        toast.error('🔒 Le clic droit est bloqué pendant le test!', { duration: 3000 });
-      }
-    };
+    // Installer les écouteurs à TOUS les niveaux possibles
+    const listeners = [
+      () => window.addEventListener('keydown', ultimateBlock, true),
+      () => window.addEventListener('keydown', ultimateBlock, false),
+      () => document.addEventListener('keydown', ultimateBlock, true),
+      () => document.addEventListener('keydown', ultimateBlock, false),
+      () => document.body.addEventListener('keydown', ultimateBlock, true),
+      () => document.body.addEventListener('keydown', ultimateBlock, false),
+    ];
 
-    if (testStarted && !testSubmitted) {
-      document.addEventListener('fullscreenchange', handleFullscreenChange);
-      window.addEventListener('beforeunload', handleBeforeUnload);
-      window.addEventListener('pagehide', handlePageHide);
-      document.addEventListener('contextmenu', handleGlobalContextMenu);
-      window.addEventListener('keydown', handleKeyDown);
+    // Appliquer tous les écouteurs
+    listeners.forEach(add => add());
+
+    // Forcer le plein écran immédiatement
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch(() => {});
     }
 
     return () => {
-      document.removeEventListener('fullscreenchange', handleFullscreenChange);
-      window.removeEventListener('beforeunload', handleBeforeUnload);
-      window.removeEventListener('pagehide', handlePageHide);
-      document.removeEventListener('contextmenu', handleGlobalContextMenu);
-      window.removeEventListener('keydown', handleKeyDown);
+      // Nettoyer tous les écouteurs
+      window.removeEventListener('keydown', ultimateBlock, true);
+      window.removeEventListener('keydown', ultimateBlock, false);
+      document.removeEventListener('keydown', ultimateBlock, true);
+      document.removeEventListener('keydown', ultimateBlock, false);
+      document.body.removeEventListener('keydown', ultimateBlock, true);
+      document.body.removeEventListener('keydown', ultimateBlock, false);
     };
   }, [testStarted, testSubmitted]);
 
@@ -415,7 +420,55 @@ const CandidateTestPage: React.FC = () => {
       submitTest();
     }
   }, [timeRemaining, testStarted, testSubmitted]);
+    useEffect(() => {
+  if (!testStarted || testSubmitted) return;
 
+  let fullscreenViolations = 0;
+
+  const forceFullscreen = async () => {
+    try {
+      if (!document.fullscreenElement) {
+        await document.documentElement.requestFullscreen();
+      }
+    } catch (error) {
+      console.warn('Impossible de réactiver le plein écran');
+    }
+  };
+
+  const handleFullscreenChange = async () => {
+    if (!document.fullscreenElement && testStarted && !testSubmitted) {
+      fullscreenViolations++;
+
+      toast.error(
+        `⚠️ Sortie du mode plein écran détectée (${fullscreenViolations}/3)`
+      );
+
+      setSecurityWarnings(prev => [
+        ...prev,
+        `Sortie fullscreen détectée (${fullscreenViolations}/3)`
+      ]);
+
+      // Réentrée immédiate
+      setTimeout(() => {
+        forceFullscreen();
+      }, 50);
+
+      // Soumission auto après 3 violations
+      if (fullscreenViolations >= 3) {
+        toast.error('🚨 Trop de tentatives de sortie fullscreen. Soumission automatique.');
+        setTimeout(() => {
+          submitTest();
+        }, 1500);
+      }
+    }
+  };
+
+  document.addEventListener('fullscreenchange', handleFullscreenChange);
+
+  return () => {
+    document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  };
+}, [testStarted, testSubmitted]);
   const startTest = async () => {
     if (!token) {
       toast.error('Token de test invalide');
@@ -426,11 +479,18 @@ const CandidateTestPage: React.FC = () => {
       setIsLoading(true);
       console.log('Starting test with token:', token);
       
+      // Extraire la durée du test des données reçues
+      let testDuration = testData?.duration || 20;
+      if (isNaN(testDuration) || testDuration === null || testDuration === undefined) {
+        console.warn('Invalid duration, using default 20 minutes');
+        testDuration = 20;
+      }
+      
       // Activer le mode plein écran AVANT tout le reste
       const enterFullscreen = async () => {
         try {
           if (document.documentElement.requestFullscreen) {
-            await document.documentElement.requestFullscreen();
+            await document.documentElement.requestFullscreen({ navigationUI: "hide" });
           } else if ((document.documentElement as any).webkitRequestFullscreen) {
             await (document.documentElement as any).webkitRequestFullscreen();
           } else if ((document.documentElement as any).msRequestFullscreen) {
@@ -459,11 +519,21 @@ const CandidateTestPage: React.FC = () => {
       }
       
       // Appeler l'endpoint de démarrage du test via le hook
-      const startResponse = await startTestMutation.mutateAsync(Number(testData.testId));
+      // Utiliser la bonne structure de données depuis testDataFromHook
+      const testIdToUse = testDataFromHook?.test?.id || testData?.testId || testDataFromHook?.id;
+      console.log('Using testId for startTest:', testIdToUse);
+      
+      if (!testIdToUse) {
+        toast.error('ID du test non trouvé');
+        setIsLoading(false);
+        return;
+      }
+      
+      const startResponse = await startTestMutation.mutateAsync(Number(testIdToUse));
       console.log('Test started successfully:', startResponse);
       
       setTestStarted(true);
-      setTimeRemaining(testDataFromHook!.duration * 60);
+      setTimeRemaining((testDataFromHook?.duration || 20) * 60);
       loadSavedAnswers();
       
       toast.success('Test démarré en mode plein écran. Toute tentative de sortie sera bloquée.');
@@ -507,7 +577,8 @@ const CandidateTestPage: React.FC = () => {
       
       // Auto-save des réponses dans localStorage
       if (testData && token) {
-        const saveKey = `test_answers_${testData.testId}_${token}`;
+        const testIdToUse = testDataFromHook?.test?.id || testData?.testId || testDataFromHook?.id;
+        const saveKey = `test_answers_${testIdToUse}_${token}`;
         localStorage.setItem(saveKey, JSON.stringify(newAnswers));
         console.log(`Réponses sauvegardées dans localStorage avec clé: ${saveKey}`);
       }
@@ -519,7 +590,8 @@ const CandidateTestPage: React.FC = () => {
   // Charger les réponses sauvegardées au démarrage
   const loadSavedAnswers = () => {
     if (testData && token) {
-      const saveKey = `test_answers_${testData.testId}_${token}`;
+      const testIdToUse = testDataFromHook?.test?.id || testData?.testId || testDataFromHook?.id;
+      const saveKey = `test_answers_${testIdToUse}_${token}`;
       const saved = localStorage.getItem(saveKey);
       if (saved) {
         try {
@@ -536,7 +608,8 @@ const CandidateTestPage: React.FC = () => {
   // Nettoyer les réponses sauvegardées après soumission
   const clearSavedAnswers = () => {
     if (testData && token) {
-      const saveKey = `test_answers_${testData.testId}_${token}`;
+      const testIdToUse = testDataFromHook?.test?.id || testData?.testId || testDataFromHook?.id;
+      const saveKey = `test_answers_${testIdToUse}_${token}`;
       localStorage.removeItem(saveKey);
       console.log(`Réponses sauvegardées supprimées avec clé: ${saveKey}`);
     }
@@ -581,17 +654,18 @@ const CandidateTestPage: React.FC = () => {
       
       // Créer les données de soumission selon le format attendu par le backend
       const submissionData = {
-        testId: testData.testId,
+        testId: testDataFromHook?.test?.id || testData?.testId || testDataFromHook?.id,
         answers: formattedAnswers,
-        timeSpentMinutes: Math.floor(((testData.duration * 60) - timeRemaining) / 60),
+        timeSpentMinutes: Math.floor(((testData?.duration || 20) * 60 - timeRemaining) / 60),
         submittedAt: new Date().toISOString()
       };
       
       console.log('Données de soumission complètes:', JSON.stringify(submissionData, null, 2));
       
       // Utiliser le hook useSubmitTest déclaré au niveau du composant
+      const testIdToUse = testDataFromHook?.test?.id || testData?.testId || testDataFromHook?.id;
       const response = await submitTestMutation.mutateAsync({ 
-        testId: testData.testId, 
+        testId: testIdToUse, 
         answers: {
           token: token, // ← Required for backend validation
           answers: formattedAnswers, // ← Answers as Map
@@ -859,7 +933,7 @@ const CandidateTestPage: React.FC = () => {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                   <div className="text-center p-4 bg-blue-50 rounded-lg">
                     <Clock className="w-8 h-8 text-blue-600 mx-auto mb-2" />
-                    <div className="font-bold">{testData.duration} minutes</div>
+                    <div className="font-bold">{testData?.duration || 20} minutes</div>
                     <div className="text-sm text-gray-600">Durée</div>
                   </div>
                   

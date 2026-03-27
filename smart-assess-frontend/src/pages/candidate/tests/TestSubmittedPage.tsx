@@ -35,18 +35,6 @@ const TestSubmittedPage: React.FC = () => {
     return `${minutes}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const getScoreColor = (percentage: number) => {
-    if (percentage >= 80) return 'text-green-600';
-    if (percentage >= 60) return 'text-yellow-600';
-    return 'text-red-600';
-  };
-
-  const getScoreBadge = (percentage: number) => {
-    if (percentage >= 80) return 'default';
-    if (percentage >= 60) return 'secondary';
-    return 'destructive';
-  };
-
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center">
       <Card className="w-full max-w-lg">

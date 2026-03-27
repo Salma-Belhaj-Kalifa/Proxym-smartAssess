@@ -106,6 +106,22 @@ const SubmissionPageSimple: React.FC = () => {
         throw new Error('Aucune position sélectionnée');
       }
       
+      // Validation du fichier CV
+      if (file) {
+        const maxSize = 10 * 1024 * 1024; // 10MB
+        const allowedTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+        
+        if (file.size > maxSize) {
+          throw new Error('Le fichier CV est trop volumineux (max 10MB)');
+        }
+        
+        if (!allowedTypes.includes(file.type)) {
+          throw new Error('Format de fichier non supporté. Utilisez PDF ou DOCX');
+        }
+        
+        console.log('File validation passed:', file.name, file.size, file.type);
+      }
+      
       console.log('Creating candidatures for user:', user.id, 'positions:', selectedPositions);
       
       for (const positionId of selectedPositions) {
@@ -127,6 +143,16 @@ const SubmissionPageSimple: React.FC = () => {
         
         if (file) {
           try {
+            console.log('=== DÉBUT ANALYSE CV ===');
+            console.log('User ID:', user.id);
+            console.log('File:', file.name, file.size, file.type);
+            
+            // Informer l'utilisateur que l'analyse commence
+            toast.loading('Candidature créée ! Analyse de votre CV par l\'IA en cours...', {
+              duration: 0, // Ne pas auto-dismiss
+              id: 'cv-analysis'
+            });
+            
             // Utiliser le service d'analyse CV existant
             const analysisResult = await analyzeCVMutation.mutateAsync({
               candidateId: user.id,
@@ -134,28 +160,59 @@ const SubmissionPageSimple: React.FC = () => {
             });
             
             if (analysisResult) {
-              toast.success('CV analysé avec succès !');
               console.log('CV Analysis Result:', analysisResult);
             }
-          } catch (analysisError) {
+            
+            // Succès complet : candidature + analyse CV
+            clearInterval(progressInterval);
+            setUploadProgress(100);
+            setSubmitStatus('success');
+            localStorage.removeItem('selectedPositions');
+            
+            // Fermer le toast de chargement et afficher le succès
+            toast.dismiss('cv-analysis');
+            toast.success('Candidature soumise avec succès et CV analysé par l\'IA !');
+            
+            setTimeout(() => {
+              navigate('/candidat/candidatures');
+            }, 3000);
+            
+          } catch (analysisError: any) {
+            console.error('=== ERREUR ANALYSE CV DÉTAILLÉE ===');
             console.error('CV Analysis error:', analysisError);
-            toast.error('Erreur lors de l\'analyse du CV');
+            console.error('Error response:', analysisError.response);
+            console.error('Error status:', analysisError.response?.status);
+            console.error('Error data:', analysisError.response?.data);
+            console.error('=== FIN ERREUR ANALYSE CV ===');
+            
+            // Succès partiel : candidature soumise mais analyse échouée
+            clearInterval(progressInterval);
+            setUploadProgress(100);
+            setSubmitStatus('success');
+            localStorage.removeItem('selectedPositions');
+            
+            // Fermer le toast de chargement et afficher l'avertissement
+            toast.dismiss('cv-analysis');
+            toast.warning('Candidature soumise avec succès, mais l\'analyse IA du CV a échoué. Vous pourrez réessayer plus tard.');
+            
+            setTimeout(() => {
+              navigate('/candidat/candidatures');
+            }, 3000);
           }
+        } else {
+          // Pas de fichier CV : succès de la candidature seulement
+          clearInterval(progressInterval);
+          setUploadProgress(100);
+          setSubmitStatus('success');
+          localStorage.removeItem('selectedPositions');
+          
+          toast.success('Candidature soumise avec succès !');
+          
+          setTimeout(() => {
+            navigate('/candidat/candidatures');
+          }, 3000);
         }
       }
-
-      clearInterval(progressInterval);
-      setUploadProgress(100);
-      setSubmitStatus('success');
-
-      localStorage.removeItem('selectedPositions');
-
-      toast.success('Candidature soumise avec succès !');
-
-      setTimeout(() => {
-        navigate('/candidat/candidatures');
-      }, 3000);
-
     } catch (err: any) {
       console.error('Erreur lors de la soumission:', err);
       

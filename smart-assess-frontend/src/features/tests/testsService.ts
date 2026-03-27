@@ -41,8 +41,11 @@ export const testService = {
     candidatureId: number;
     level: string;
     questionCount: number;
-    focusAreas?: string[];
-    customInstructions?: string;
+    duration?: number;
+    deadline?: string;
+    note?: string;
+    focusAreas?: string[]; // Compétences du candidat pour générer des questions ciblées
+    customInstructions?: string; // Instructions supplémentaires pour l'IA
   }): Promise<any> => {
     const response = await apiClient.post('/tests/generate', data);
     return response.data;

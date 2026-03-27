@@ -117,7 +117,7 @@ public class CandidatureServiceImpl implements CandidatureService {
 
     @Override
     public List<CandidatureDto> getCandidaturesByPosition(Long positionId) {
-        return candidatureRepository.findByInternshipPosition_Id(positionId).stream()
+        return candidatureRepository.findByInternshipPosition_IdWithRelations(positionId).stream()
                 .map(this::toDto)
                 .collect(Collectors.toList());
     }

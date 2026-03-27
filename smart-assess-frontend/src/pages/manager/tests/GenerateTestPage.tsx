@@ -44,7 +44,7 @@ const GenerateTestPage = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { data: user } = useCurrentUserSafe();
-  const { data: candidatures = [] } = useCandidatures();
+  const { data: candidatures = [], isLoading: candidaturesLoading, error: candidaturesError } = useCandidatures();
   const checkExistingTestMutation = useCheckExistingTest();
   const generateTestMutation = useGenerateTest();
   const updateCandidatureStatusMutation = useUpdateCandidatureStatus();
@@ -70,7 +70,7 @@ const GenerateTestPage = () => {
     
     try {
       console.log('GenerateTestPage - ID reçu:', id);
-      console.log('GenerateTestPage - Candidatures disponibles:', candidatures.map(c => ({ id: c.id, firstName: (c as any).candidateFirstName, lastName: (c as any).candidateLastName })));
+      console.log('GenerateTestPage - Candidatures disponibles:', candidatures.map(c => ({ id: c.id, firstName: c.candidateFirstName, lastName: c.candidateLastName })));
         
       const storedCandidature = sessionStorage.getItem('selectedCandidature');
       let candidature;
@@ -79,12 +79,21 @@ const GenerateTestPage = () => {
         candidature = JSON.parse(storedCandidature);          
         sessionStorage.removeItem('selectedCandidature');
         console.log('GenerateTestPage - Candidature depuis sessionStorage:', candidature);
+        console.log('GenerateTestPage - Données complètes reçues:', {
+          candidateFirstName: candidature.candidateFirstName,
+          candidateLastName: candidature.candidateLastName,
+          candidateEmail: candidature.candidateEmail,
+          positionTitle: candidature.positionTitle,
+          positionCompany: candidature.positionCompany,
+          aiScore: candidature.aiScore,
+          hasParsedData: !!candidature.parsedData
+        });
       } else {
         // Chercher la candidature avec l'ID
         console.log('GenerateTestPage - Recherche candidature ID:', id, 'dans:', candidatures);
         console.log('GenerateTestPage - Détails des candidatures:');
         candidatures.forEach((c, index) => {
-          console.log(`  [${index}] ID: ${c.id}, Nom: ${(c as any).candidateFirstName} ${(c as any).candidateLastName}`);
+          console.log(`  [${index}] ID: ${c.id}, Nom: ${c.candidateFirstName} ${c.candidateLastName}`);
         });
         candidature = candidatures.find(c => c.id.toString() === id.toString());
         console.log('GenerateTestPage - Candidature trouvée:', candidature);
@@ -94,16 +103,15 @@ const GenerateTestPage = () => {
           
       // Si pas trouvé avec l'ID direct, essayer avec candidateId
       if (!candidature) {
-        candidature = candidatures.find(c => (c as any).candidateId === Number(id));
+        candidature = candidatures.find(c => c.candidateId === Number(id));
         console.log('GenerateTestPage - Candidature trouvée avec candidateId:', candidature ? 'OUI' : 'NON');
       }
           
       // Si toujours pas trouvé, essayer avec d'autres IDs possibles
       if (!candidature) {
         candidature = candidatures.find(c => 
-          (c as any).id === Number(id) || 
-          (c as any).candidateId === Number(id) ||
-          c.id === Number(id)
+          c.id === Number(id) || 
+          c.candidateId === Number(id)
         );
         console.log('GenerateTestPage - Candidature trouvée avec recherche multiple:', candidature ? 'OUI' : 'NON');
       }
@@ -116,25 +124,49 @@ const GenerateTestPage = () => {
         
       console.log('=== CANDIDATURE TROUVÉE ===');
       console.log('ID:', candidature.id);
+      console.log('PositionTitle:', candidature.positionTitle);
+      console.log('PositionCompany:', candidature.positionCompany);
+      console.log('InternshipPositionId:', candidature.internshipPositionId);
+      console.log('Candidature complète:', candidature);
       console.log('=== FIN CANDIDATURE ===');
 
       const candidateDataToSet = {
         id: candidature.id || Number(id),
-        firstName: (candidature as any).candidateFirstName || (candidature as any).firstName || '',
-        lastName: (candidature as any).candidateLastName || (candidature as any).lastName || '',
-        email: (candidature as any).candidateEmail || (candidature as any).email || '',
-        phone: (candidature as any).candidatePhone || (candidature as any).phone || '',
+        firstName: candidature.candidateFirstName || '',
+        lastName: candidature.candidateLastName || '',
+        email: candidature.candidateEmail || '',
+        phone: candidature.candidatePhone || '',
         position: {
-          id: (candidature as any).internshipPositionId || (candidature as any).positionId || (candidature as any).internship_position_id || 0,
-          title: (candidature as any).positionTitle || (candidature as any).title || (candidature as any).position?.title || 'Poste non spécifié',
-          company: (candidature as any).positionCompany || (candidature as any).company || (candidature as any).position?.company || 'Entreprise'
+          id: candidature.internshipPositionId || 0,
+          title: candidature.positionTitle || 'Poste non spécifié',
+          company: candidature.positionCompany || 'Entreprise'
         },
-        status: (candidature as any).status || 'PENDING',
-        appliedAt: (candidature as any).appliedAt,
-        cvUrl: (candidature as any).cvUrl,
-        aiScore: (candidature as any).aiScore,
-        aiAnalysis: (candidature as any).aiAnalysis
+        status: candidature.status || 'PENDING',
+        appliedAt: candidature.appliedAt,
+        cvUrl: candidature.cvUrl,
+        aiScore: candidature.aiScore,
+        aiAnalysis: candidature.aiAnalysis,
+        // Ajouter les données IA complètes si disponibles
+        parsedData: candidature.parsedData,
+        domain: candidature.domain,
+        technologies: candidature.technologies,
+        experienceYears: candidature.experienceYears,
+        skillLevel: candidature.skillLevel,
+        careerLevel: candidature.careerLevel,
+        certifications: candidature.certifications,
+        projects: candidature.projects,
+        education: candidature.education,
+        workExperience: candidature.workExperience,
+        experience: candidature.experience,
+        technicalProfile: candidature.technicalProfile,
+        candidateCVs: candidature.candidateCVs,
+        technicalProfiles: candidature.technicalProfiles
       };
+      
+      console.log('=== CANDIDATE DATA TO SET ===');
+      console.log('Position title:', candidateDataToSet.position.title);
+      console.log('Position company:', candidateDataToSet.position.company);
+      console.log('=== FIN CANDIDATE DATA TO SET ===');
    
       setCandidateData(candidateDataToSet);
       setIsLoading(false);
@@ -148,19 +180,50 @@ const GenerateTestPage = () => {
 
   // Charger les données du candidat quand les candidatures sont disponibles
   useEffect(() => {
+    console.log('=== DEBUG CANDIDATURES ===');
+    console.log('candidaturesLoading:', candidaturesLoading);
+    console.log('candidaturesError:', candidaturesError);
+    console.log('candidatures:', candidatures);
+    console.log('candidatures.length:', candidatures.length);
+    console.log('=== FIN DEBUG CANDIDATURES ===');
+    
+    // Si les candidatures sont chargées et qu'on a des données
     if (candidatures.length > 0 && !candidateData) {
       console.log('=== APPEL DE loadCandidateData ===');
       loadCandidateData();
     }
-  }, [candidatures, candidateData, id]);
+    // Solution de contournement: si pas de candidatures mais qu'on a un ID URL
+    else if (!candidaturesLoading && candidatures.length === 0 && id && !candidateData) {
+      console.log('=== CONTOURNEMENT: PAS DE CANDIDATURES MAIS ID URL DISPONIBLE ===');
+      console.log('ID URL:', id);
+      
+      // Créer un candidateData minimal avec juste l'ID
+      const minimalCandidateData = {
+        id: Number(id),
+        firstName: 'Candidat',
+        lastName: `#${id}`,
+        email: '',
+        phone: '',
+        position: {
+          id: 0,
+          title: 'Poste non spécifié',
+          company: 'Entreprise'
+        },
+        status: 'PENDING'
+      };
+      
+      console.log('Création candidateData minimal:', minimalCandidateData);
+      setCandidateData(minimalCandidateData);
+    }
+  }, [candidatures, candidateData, id, candidaturesLoading, candidaturesError]);
 
   // Vérifier si un test existe dès qu'on a un ID (URL ou candidateData)
   useEffect(() => {
-    console.log('=== USE EFFECT S\'EXÉCUTE ===');
+    console.log('=== USE EFFECT VÉRIFICATION TEST S\'EXÉCUTE ===');
     console.log('candidateData:', candidateData);
     console.log('candidateData?.id:', candidateData?.id);
     console.log('URL id:', id);
-    console.log('=== FIN USE EFFECT ===');
+    console.log('=== FIN USE EFFECT VÉRIFICATION TEST ===');
     
     // Utiliser soit candidateData.id soit l'ID de l'URL
     const candidateId = candidateData?.id || (id && !isNaN(Number(id)) ? Number(id) : null);
@@ -178,7 +241,10 @@ const GenerateTestPage = () => {
       
       return () => clearTimeout(timer);
     } else {
-      console.log('PAS DE CANDIDATE ID DISPONIBLE');
+      console.log('=== PAS DE CANDIDATE ID DISPONIBLE ===');
+      console.log('candidateData?.id:', candidateData?.id);
+      console.log('id:', id);
+      console.log('isNaN(Number(id)):', id ? isNaN(Number(id)) : 'id is null');
     }
   }, [candidateData?.id, id]);
 
@@ -195,7 +261,7 @@ const GenerateTestPage = () => {
       console.log('Nouveau CvId:', newCvId);
       console.log('Candidature trouvée:', candidature ? 'OUI' : 'NON');
       console.log('Candidature ID:', candidature?.id);
-      console.log('Candidature CandidateId:', (candidature as any)?.candidateId);
+      console.log('Candidature CandidateId:', candidature?.candidateId);
       console.log('URL ID:', id);
       console.log('=== FIN MISE À JOUR ===');
     }
@@ -207,7 +273,7 @@ const GenerateTestPage = () => {
   useEffect(() => {
     console.log('=== NOUVELLE ARCHITECTURE ===');
     console.log('CvId pour technical profile:', cvId);
-    console.log('CandidateId (candidature):', (candidature as any)?.candidateId);
+    console.log('CandidateId (candidature):', candidature?.candidateId);
     console.log('CandidateData ID:', candidateData?.id);
     console.log('ID from URL:', id);
     console.log('Candidatures chargées:', candidatures.length);
@@ -239,7 +305,8 @@ const GenerateTestPage = () => {
       console.log('Technical Profile Data:', technicalProfileData);
       console.log('ParsedData:', technicalProfileData?.parsedData);      console.log('Type:', typeof technicalProfileData);
       console.log('=== FIN TECHNICAL PROFILE ===');
-    } else {
+    } else if (technicalProfileLoading === false && candidateData) {
+      // N'afficher l'alerte que si le chargement est terminé ET qu'on a les données du candidat
       console.log('=== PAS DE DONNÉES IA TROUVÉES ===');
       console.log('Aucune donnée d\'analyse IA n\'a été trouvée pour ce candidat.');
       console.log('Veuillez contacter l\'administrateur système pour vérifier l\'analyse IA.');
@@ -248,7 +315,7 @@ const GenerateTestPage = () => {
       // Afficher un message d'erreur clair à l'utilisateur
       toast.error('Aucune donnée d\'analyse IA trouvée. Veuillez contacter l\'administrateur.');
     }
-  }, [technicalProfileData, candidateData, candidatures, id]);
+  }, [technicalProfileData, technicalProfileLoading, candidateData, candidatures, id]);
 
   // Créer un technical profile fallback à partir des données de la candidature
   const createFallbackTechnicalProfile = () => {
@@ -265,10 +332,10 @@ const GenerateTestPage = () => {
     if (candidature) {
       console.log('=== ANALYSE COMPLÈTE DE LA CANDIDATURE ===');
       console.log('ID:', candidature.id);
-      console.log('CandidateId:', (candidature as any).candidateId);
+      console.log('CandidateId:', candidature.candidateId);
       console.log('AI Score:', candidature.aiScore);
       console.log('AI Analysis:', candidature.aiAnalysis);
-      console.log('ParsedData:', (candidature as any).parsedData);
+      console.log('ParsedData:', candidature.parsedData);
       console.log('TechnicalProfile:', (candidature as any).technicalProfile);
       console.log('Domain:', (candidature as any).domain);
       console.log('Technologies:', (candidature as any).technologies);
@@ -286,9 +353,9 @@ const GenerateTestPage = () => {
     
     const fallbackProfile = {
       id: candidateData.id,
-      cvId: (candidature as any)?.candidateId || candidateData.id,
-      candidateId: (candidature as any)?.candidateId || candidateData.id,
-      parsedData: (candidature as any)?.aiAnalysis || (candidature as any)?.parsedData || (candidature as any)?.technicalProfile?.parsedData || {
+      cvId: candidature?.candidateId || candidateData.id,
+      candidateId: candidature?.candidateId || candidateData.id,
+      parsedData: candidature?.aiAnalysis || candidature?.parsedData || (candidature as any)?.technicalProfile?.parsedData || {
         "Basic Information": {
           "full_name": `${candidateData.firstName} ${candidateData.lastName}`,
           "email": candidateData.email,
@@ -520,6 +587,7 @@ const GenerateTestPage = () => {
         console.log(`Catégorie "${category}":`, categorySkills);
         
         if (Array.isArray(categorySkills)) {
+          // Si c'est un tableau (ancien format)
           categorySkills.forEach((skill, index) => {
             console.log(`  Skill ${index}:`, skill, typeof skill);
             
@@ -531,6 +599,18 @@ const GenerateTestPage = () => {
               skills.push({ name: skill.name.trim(), level: skill.level || "Intermédiaire" });
               hasRealSkills = true;
               console.log(`    → Ajouté (objet): ${skill.name.trim()}`);
+            }
+          });
+        } else if (typeof categorySkills === 'object' && categorySkills !== null) {
+          // Si c'est un objet (nouveau format: {GitLab: 'advanced', MySQL: 'intermediate'})
+          Object.entries(categorySkills).forEach(([skillName, skillLevel]) => {
+            console.log(`  Skill: ${skillName}, Level: ${skillLevel}`);
+            
+            if (typeof skillName === 'string' && skillName.trim()) {
+              const level = typeof skillLevel === 'string' ? skillLevel : "Intermédiaire";
+              skills.push({ name: skillName.trim(), level: level });
+              hasRealSkills = true;
+              console.log(`    → Ajouté: ${skillName.trim()} (${level})`);
             }
           });
         }
@@ -809,19 +889,40 @@ const GenerateTestPage = () => {
       return;
     }
 
+    // Extraire les compétences réelles du candidat
+    const skills = extractSkillsFromProfile();
+    console.log('=== GÉNÉRATION FORCÉE DE TEST AVEC COMPÉTENCES RÉELLES ===');
+    console.log('Compétences extraites:', skills);
+    console.log('Nombre de compétences:', skills.length);
+    console.log('=== FIN COMPÉTENCES POUR GÉNÉRATION FORCÉE ===');
+
     try {
-      // Appeler l'API pour générer le test directement
+      // Utiliser l'approche simple de l'ancien code backend
+      // Le backend utilise maintenant: technicalProfile.getParsedData() directement
+      // Plus besoin d'envoyer des customInstructions structurées
+      
+      // Afficher un message d'attente plus informatif
+      toast.loading('Génération forcée du test personnalisé en cours... Cela peut prendre jusqu\'à 60 secondes.', {
+        duration: 0, // Ne pas auto-dismiss
+        id: 'force-generate-test' // ID unique pour pouvoir le mettre à jour
+      });
+      
+      // Appeler l'API avec le format simple (ancienne approche)
       const testResponse = await generateTestMutation.mutateAsync({
         candidatureId: candidateData.id,
         level: testConfig.level,
         questionCount: testConfig.questionCount,
-        focusAreas: [], // Propriété existante dans le type
-        customInstructions: `Duration: ${testConfig.duration} minutes, Deadline: ${testConfig.deadline}, Note: ${testConfig.note || ""}` // Utiliser customInstructions
+        duration: testConfig.duration,
+        deadline: testConfig.deadline,
+        note: testConfig.note,
+        focusAreas: skills.map(skill => skill.name), // Garder pour compatibilité
+        // Plus besoin de customInstructions - le backend utilise technicalProfile.getParsedData()
       });
       
       console.log('Force generate - Test response received:', testResponse);
       console.log('Force generate - Test ID from response:', testResponse.testId);
       console.log('Force generate - Questions from response:', testResponse.questions);
+      console.log('Force generate - Backend utilisera: technicalProfile.getParsedData() directement');
       
       // Stocker les questions générées dans le localStorage pour la page de révision
       if (testResponse.questions && testResponse.questions.length > 0) {
@@ -843,7 +944,9 @@ const GenerateTestPage = () => {
       // Réinitialiser l'état du test existant
       setExistingTest(null);
       
-      toast.success('Test généré avec succès ! Redirection vers la révision...');
+      // Fermer le toast de chargement et afficher le succès
+      toast.dismiss('force-generate-test');
+      toast.success('Test personnalisé généré avec succès ! Redirection vers la révision...');
       
       // Rediriger vers la page de révision du test
       console.log('Force generate - Navigating to:', `/manager/test-review/${testResponse.testId}`);
@@ -857,9 +960,18 @@ const GenerateTestPage = () => {
       }
       
     } catch (error: any) {
+      // Fermer le toast de chargement
+      toast.dismiss('force-generate-test');
+      
       console.error('Error generating test:', error);
       console.error('Response data:', error.response?.data);
       console.error('Response status:', error.response?.status);
+      
+      // Gérer spécifiquement les erreurs de timeout
+      if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+        toast.error('La génération forcée du test a pris trop de temps. Veuillez réessayer avec moins de questions ou contacter l\'administrateur.');
+        return;
+      }
       
       if (error.response?.status === 409 && error.response?.data) {
         const errorData = error.response.data;
@@ -888,15 +1000,43 @@ const GenerateTestPage = () => {
       return;
     }
 
+    // Extraire les compétences réelles du candidat
+    const skills = extractSkillsFromProfile();
+    console.log('=== GÉNÉRATION DE TEST AVEC COMPÉTENCES RÉELLES ===');
+    console.log('Compétences extraites:', skills);
+    console.log('Nombre de compétences:', skills.length);
+    console.log('=== FIN COMPÉTENCES POUR GÉNÉRATION ===');
+
     try {
-      // Appeler l'API pour générer le test directement
+      // Utiliser l'approche simple de l'ancien code backend
+      // Le backend utilise maintenant: technicalProfile.getParsedData() directement
+      // Plus besoin d'envoyer des customInstructions structurées
+      
+      // Afficher un message d'attente plus informatif
+      toast.loading('Génération du test personnalisé en cours... Cela peut prendre jusqu\'à 60 secondes.', {
+        duration: 0, // Ne pas auto-dismiss
+        id: 'generate-test' // ID unique pour pouvoir le mettre à jour
+      });
+      
+      // Appeler l'API avec le format simple (ancienne approche)
       const testResponse = await generateTestMutation.mutateAsync({
         candidatureId: candidateData.id,
         level: testConfig.level,
         questionCount: testConfig.questionCount,
-        focusAreas: [], // Propriété existante dans le type
-        customInstructions: `Duration: ${testConfig.duration} minutes, Deadline: ${testConfig.deadline}, Note: ${testConfig.note || ""}` // Utiliser customInstructions
+        duration: testConfig.duration,
+        deadline: testConfig.deadline,
+        note: testConfig.note,
+        focusAreas: skills.map(skill => skill.name), // Garder pour compatibilité
+        // Plus besoin de customInstructions - le backend utilise technicalProfile.getParsedData()
       });
+      
+      console.log('=== DONNÉES ENVOYÉES À L\'API (Ancienne Approche) ===');
+      console.log('candidatureId:', candidateData.id);
+      console.log('level:', testConfig.level);
+      console.log('questionCount:', testConfig.questionCount);
+      console.log('focusAreas (compétences):', skills.map(skill => skill.name));
+      console.log('Backend utilisera: technicalProfile.getParsedData() directement');
+      console.log('=== FIN DONNÉES API ===');
       
       console.log('Normal generate - Test response received:', testResponse);
       console.log('Normal generate - Test ID from response:', testResponse.testId);
@@ -922,7 +1062,9 @@ const GenerateTestPage = () => {
       // Réinitialiser l'état du test existant
       setExistingTest(null);
       
-      toast.success('Test généré avec succès ! Redirection vers la révision...');
+      // Fermer le toast de chargement et afficher le succès
+      toast.dismiss('generate-test');
+      toast.success('Test personnalisé généré avec succès ! Redirection vers la révision...');
       
       // Rediriger vers la page de révision du test
       console.log('Normal generate - Navigating to:', `/manager/test-review/${testResponse.testId}`);
@@ -936,9 +1078,18 @@ const GenerateTestPage = () => {
       }
       
     } catch (error: any) {
+      // Fermer le toast de chargement
+      toast.dismiss('generate-test');
+      
       console.error('Error generating test:', error);
       console.error('Response data:', error.response?.data);
       console.error('Response status:', error.response?.status);
+      
+      // Gérer spécifiquement les erreurs de timeout
+      if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+        toast.error('La génération du test a pris trop de temps. Veuillez réessayer avec moins de questions ou contacter l\'administrateur.');
+        return;
+      }
       
       // Si c'est une erreur 409, gérer le cas du test existant
       if (error.response?.status === 409 && error.response?.data) {
@@ -1131,8 +1282,8 @@ const GenerateTestPage = () => {
             </p>
           </div>
         </div>
-        <Badge variant="outline" className={getStatusColor(candidateData.status)}>
-          {getStatusLabel(candidateData.status)}
+        <Badge variant="outline" className={getStatusColor(candidateData.status === 'REJECTED' ? candidateData.status : (existingTest?.existingTestStatus || candidateData.status))}>
+          {candidateData.status === 'REJECTED' ? getStatusLabel(candidateData.status) : (existingTest?.existingTestStatus ? getStatusLabel(existingTest.existingTestStatus) : getStatusLabel(candidateData.status))}
         </Badge>
       </div>
 
@@ -1299,21 +1450,23 @@ const GenerateTestPage = () => {
             console.log('existingTest?.existingTestStatus:', existingTest?.existingTestStatus);
             console.log('isCheckingExistingTest:', isCheckingExistingTest);
             
-            // Masquer la configuration si un test existe et N'EST PAS en statut DRAFT
-            // ET seulement si la vérification est terminée (pour éviter le clignotement)
+            // Masquer la configuration SEULEMENT si:
+            // 1. La vérification est terminée (isCheckingExistingTest === false)
+            // 2. ET un test existe avec un ID valide
+            // 3. ET le test a un statut (peu importe lequel - DRAFT, SUBMITTED, etc.)
             const shouldHideConfig = !isCheckingExistingTest && 
               existingTest?.existingTestId && 
-              existingTest.existingTestStatus !== 'DRAFT';
+              existingTest?.existingTestStatus;
             
-            console.log('=== DÉCISION SECTION CONFIGURATION ===');
-            console.log('existingTest?.existingTestId:', existingTest?.existingTestId);
-            console.log('existingTest?.existingTestStatus:', existingTest?.existingTestStatus);
-            console.log('shouldHideConfig:', shouldHideConfig);
+            console.log('shouldHideConfig calculé:', shouldHideConfig);
+            console.log('Détail calcul:');
+            console.log('  !isCheckingExistingTest:', !isCheckingExistingTest);
+            console.log('  existingTest?.existingTestId:', existingTest?.existingTestId);
+            console.log('  existingTest?.existingTestStatus (truthy):', !!existingTest?.existingTestStatus);
+            console.log('  shouldHideConfig (&& operation):', shouldHideConfig);
             console.log('=== FIN DÉCISION SECTION CONFIGURATION ===');
             
-            console.log('shouldHideConfig:', shouldHideConfig);
-            console.log('Test envoyé? shouldHideConfig =', shouldHideConfig);
-            console.log('=== FIN DÉCISION SECTION CONFIGURATION ===');
+            // Afficher la configuration si shouldHideConfig est false
             return !shouldHideConfig;
           })() && (
             <div className="glass-card p-6">
@@ -1399,7 +1552,9 @@ const GenerateTestPage = () => {
               <div>
                 <h3 className="text-lg font-semibold text-foreground">Décision du Manager</h3>
                 <p className="text-sm text-muted-foreground">
-                  {existingTest 
+                  {candidateData.status === 'REJECTED' 
+                    ? "Cette candidature a été refusée."
+                    : existingTest 
                     ? "Un test a déjà été généré pour ce candidat. Vous pouvez consulter les résultats ou refuser la candidature."
                     : "Générez un test technique personnalisé pour évaluer les compétences du candidat."
                   }
@@ -1436,7 +1591,23 @@ const GenerateTestPage = () => {
             )}
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {existingTest ? (
+              {candidateData.status === 'REJECTED' ? (
+                <div className="col-span-2 text-center py-4">
+                  <p className="text-sm text-muted-foreground mb-4">
+                    La candidature a été refusée.
+                  </p>
+                  {existingTest && existingTest.existingTestStatus === 'SUBMITTED' && (
+                    <Button 
+                      variant="outline"
+                      onClick={() => navigate(`/manager/test-results/${existingTest.existingTestId}`)}
+                      className="flex items-center gap-2 mx-auto"
+                    >
+                      <Check className="w-4 h-4" />
+                      Voir les résultats du test
+                    </Button>
+                  )}
+                </div>
+              ) : existingTest ? (
                 <>
                   {existingTest.existingTestStatus === 'DRAFT' && (
                     <Button 

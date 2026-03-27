@@ -61,7 +61,7 @@ export default function PositionDetailPage() {
   const { data: positions = [] } = usePositions();
   const position = positions.find(p => p.id === id);
   const { data: candidatures = [] } = useCandidaturesByPosition(id);
-  const updatePositionMutation = useUpdatePosition(0); // Sera mis à jour avec le bon ID
+  const updatePositionMutation = useUpdatePosition(); // Sera mis à jour avec le bon ID
   const deletePositionMutation = useDeletePosition();
   
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -314,8 +314,8 @@ export default function PositionDetailPage() {
                     <div key={candidature.id} className="flex items-center justify-between p-3 border rounded-lg">
                       <div className="flex items-center gap-3">
                         <div>
-                          <p className="font-medium">{candidature.candidate?.firstName} {candidature.candidate?.lastName}</p>
-                          <p className="text-sm text-gray-500">{candidature.candidate?.email}</p>
+                          <p className="font-medium">{candidature.candidateFirstName} {candidature.candidateLastName}</p>
+                          <p className="text-sm text-gray-500">{candidature.candidateEmail}</p>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
@@ -330,12 +330,39 @@ export default function PositionDetailPage() {
                             const candidatureData = {
                               id: candidature.id,
                               candidateId: candidature.candidateId,
-                              positionId: candidature.positionId,
+                              positionId: candidature.internshipPositionId,
                               status: candidature.status,
-                              appliedAt: candidature.appliedAt
+                              appliedAt: candidature.appliedAt,
+                              // Ajouter les informations complètes du candidat pour l'affichage
+                              candidateFirstName: candidature.candidateFirstName,
+                              candidateLastName: candidature.candidateLastName,
+                              candidateEmail: candidature.candidateEmail,
+                              candidatePhone: candidature.candidatePhone,
+                              positionTitle: candidature.positionTitle,
+                              positionCompany: candidature.positionCompany,
+                              positionDescription: candidature.positionDescription,
+                              // Ajouter les données IA si disponibles
+                              aiScore: candidature.aiScore,
+                              aiAnalysis: candidature.aiAnalysis,
+                              parsedData: candidature.parsedData,
+                              domain: candidature.domain,
+                              technologies: candidature.technologies,
+                              experienceYears: candidature.experienceYears,
+                              skillLevel: candidature.skillLevel,
+                              careerLevel: candidature.careerLevel,
+                              certifications: candidature.certifications,
+                              projects: candidature.projects,
+                              education: candidature.education,
+                              workExperience: candidature.workExperience,
+                              experience: candidature.experience,
+                              technicalProfile: candidature.technicalProfile,
+                              candidateCVs: candidature.candidateCVs,
+                              technicalProfiles: candidature.technicalProfiles
                             };
                             
-                            // Stocker les données du candidat dans sessionStorage pour la page de génération de test
+                            console.log('PositionDetailPage - Données complètes envoyées:', candidatureData);
+                            
+                            // Stocker les données complètes du candidat dans sessionStorage pour la page de génération de test
                             sessionStorage.setItem('selectedCandidature', JSON.stringify(candidatureData));
                             
                             // Naviguer vers la page de génération de test

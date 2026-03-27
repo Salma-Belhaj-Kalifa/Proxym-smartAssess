@@ -5,26 +5,20 @@ import com.example.smart_assess.enums.*;
 import com.example.smart_assess.repository.*;
 import com.example.smart_assess.service.TechnicalProfileService;
 import com.example.smart_assess.service.EmailService;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.reactive.function.client.WebClient;
 
 import java.time.LocalDateTime;
 import java.util.*;
-import java.util.UUID;
 import java.util.stream.Collectors;
-
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.JsonNodeFactory;
-import org.springframework.http.MediaType;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.client.RestTemplate;
 
 @RestController
 @RequestMapping("/api/tests")
@@ -38,6 +32,8 @@ public class GeneratedTestController {
     private final AnswerRepository answerRepository;
     private final TechnicalProfileService technicalProfileService;
     private final EmailService emailService;
+    private final WebClient.Builder webClientBuilder;
+    private final ObjectMapper objectMapper;
 
     @Value("${app.frontend.url}")
     private String frontendUrl;
@@ -102,113 +98,170 @@ public class GeneratedTestController {
     // GENERATE TEST
     // =========================
     @PostMapping("/generate")
-    public ResponseEntity<Map<String, Object>> generateTest(@RequestBody Map<String, Object> request) {
+    @PreAuthorize("hasRole('MANAGER')")
+    public ResponseEntity<Map<String, Object>> generateTest(@RequestBody Map<String, Object> testData) {
         try {
-            log.info("=== GENERATE TEST CALLED ===");
-            log.info("Test data: {}", request);
-            
-            Integer candidatureId = (Integer) request.get("candidatureId");
-            String level = (String) request.get("level");
-            Integer questionCount = (Integer) request.get("questionCount");
-            Integer duration = (Integer) request.get("duration");
-            String deadline = (String) request.get("deadline");
-            String note = (String) request.get("note");
-            
-            log.info("Extracted parameters - candidatureId: {}, level: {}, questionCount: {}, duration: {}, deadline: {}", 
-                candidatureId, level, questionCount, duration, deadline);
-            
-            // Vérifier si un test existe déjà pour cette candidature
-            Optional<GeneratedTest> existingTestOpt = generatedTestRepository.findByCandidature_Id(candidatureId.longValue());
-            if (existingTestOpt.isPresent()) {
-                GeneratedTest existingTest = existingTestOpt.get();
-                log.info("Test already exists for candidature {}: testId={}, status={}", 
-                    candidatureId, existingTest.getId(), existingTest.getStatus());
-                
-                // Si le test est en DRAFT, retourner les informations du test existant
-                if (existingTest.getStatus() == TestStatus.DRAFT) {
-                    List<TestQuestion> questions = testQuestionRepository.findByTestId(existingTest.getId());
-                    
-                    return ResponseEntity.ok(Map.of(
-                        "success", true,
-                        "testId", existingTest.getId(),
-                        "token", existingTest.getToken(),
-                        "status", existingTest.getStatus().toString(),
-                        "message", "Test already exists in DRAFT status",
-                        "questions", questions.stream().map(q -> {
-                            Map<String, Object> questionMap = new HashMap<>();
-                            questionMap.put("id", q.getId());
-                            questionMap.put("questionText", q.getQuestionText());
-                            questionMap.put("questionType", q.getQuestionType());
-                            questionMap.put("options", q.getOptions());
-                            questionMap.put("correctAnswer", q.getCorrectAnswer());
-                            questionMap.put("skillTag", q.getSkillTag());
-                            questionMap.put("maxScore", q.getMaxScore());
-                            return questionMap;
-                        }).collect(Collectors.toList())
-                    ));
-                } else {
-                    // Si le test n'est plus en DRAFT, retourner une erreur
-                    return ResponseEntity.status(400).body(Map.of(
-                        "success", false,
-                        "error", "Test already exists for this candidature with status: " + existingTest.getStatus()
-                    ));
-                }
-            }
-            
-            // Récupérer la candidature
-            Candidature candidature = candidatureRepository.findById(candidatureId.longValue())
+            Long candidatureId = Long.valueOf(testData.get("candidatureId").toString());
+            Integer questionCount = Integer.valueOf(testData.get("questionCount").toString());
+            Integer duration = Integer.valueOf(testData.get("duration").toString());
+            String deadline = testData.get("deadline").toString();
+
+            Candidature candidature = candidatureRepository.findById(candidatureId)
                     .orElseThrow(() -> new RuntimeException("Candidature not found"));
+
+            Optional<GeneratedTest> existingTest = generatedTestRepository.findByCandidature_Id(candidatureId);
+            if (existingTest.isPresent()) {
+                return ResponseEntity.status(409).body(Map.of(
+                        "success", false,
+                        "message", "Un test existe déjà"
+                ));
+            }
+
+            TechnicalProfile technicalProfile = technicalProfileService
+                    .getByCandidateId(candidature.getCandidate().getId());
             
-            // Créer le test généré
+            if (technicalProfile == null) {
+                return ResponseEntity.status(404).body(Map.of(
+                        "success", false,
+                        "error", "Technical profile not found for candidate"
+                ));
+            }
+
+            Map<String, Object> aiPayload = new HashMap<>();
+            
+            // Convertir ObjectNode en Map en utilisant ObjectMapper
+            ObjectNode profileData = (ObjectNode) technicalProfile.getParsedData();
+            Map<String, Object> profileMap = objectMapper.convertValue(profileData, Map.class);
+            
+            aiPayload.put("candidate_profile", profileMap);
+            aiPayload.put("number_of_questions", questionCount);
+
+            log.info("=== AI PAYLOAD (WebClient Approach) ===");
+            log.info("candidate_profile keys: {}", profileMap != null ? profileMap.keySet() : "null");
+            log.info("number_of_questions: {}", questionCount);
+
+            // Utiliser WebClient comme l'ancien code fonctionnel
+            Map aiResponse = webClientBuilder.build()
+                    .post()
+                    .uri("http://localhost:8000/api/v1/generate-from-profile")
+                    .bodyValue(aiPayload)
+                    .retrieve()
+                    .bodyToMono(Map.class)
+                    .block();
+
+            log.info("=== FASTAPI RESPONSE RECEIVED ===");
+            log.info("AI Response: {}", aiResponse);
+            log.info("AI Response keys: {}", aiResponse != null ? aiResponse.keySet() : "null");
+
+            if (aiResponse == null || !aiResponse.containsKey("questions")) {
+                log.error("❌ AI Response is null or missing 'questions' key");
+                return ResponseEntity.status(500).body(Map.of(
+                        "success", false,
+                        "error", "Failed to generate questions from AI service"
+                ));
+            }
+
+            List<Map<String, Object>> apiQuestions = (List<Map<String, Object>>) aiResponse.get("questions");
+            log.info("✅ Questions received from AI: {}", apiQuestions != null ? apiQuestions.size() : 0);
+            
+            if (apiQuestions != null && !apiQuestions.isEmpty()) {
+                log.info("First question sample: {}", apiQuestions.get(0));
+            } else {
+                log.error("❌ No questions received from AI service");
+                return ResponseEntity.status(500).body(Map.of(
+                        "success", false,
+                        "error", "AI service returned empty questions list"
+                ));
+            }
+
             GeneratedTest test = GeneratedTest.builder()
                     .candidature(candidature)
                     .internshipPosition(candidature.getInternshipPosition())
-                    .status(TestStatus.DRAFT)
-                    .timeLimitMinutes(duration != null ? duration : 20) // Utiliser la durée configurée
                     .token(UUID.randomUUID().toString())
-                    .deadline(deadline != null ? LocalDateTime.parse(deadline) : LocalDateTime.now().plusDays(7))
+                    .status(TestStatus.DRAFT)
+                    .createdAt(LocalDateTime.now())
+                    .assignedAt(LocalDateTime.now())
+                    .deadline(LocalDateTime.parse(deadline + "T23:59:59"))
+                    .timeLimitMinutes(duration)
                     .build();
-            
+
             generatedTestRepository.save(test);
+
+            // ✅ SAUVEGARDER LES QUESTIONS RETOURNÉES PAR L'API FASTAPI
+            log.info("=== STARTING QUESTION SAVING PROCESS ===");
+            log.info("Number of questions to save: {}", apiQuestions.size());
             
-            // Générer les questions basées sur le profil technique
-            List<TestQuestion> questions = generateQuestionsForTest(test, level, questionCount);
-            testQuestionRepository.saveAll(questions);
-            log.info("Saved {} questions to database for test {}", questions.size(), test.getId());
+            List<TestQuestion> savedQuestions = new ArrayList<>();
             
-            // Log des questions sauvegardées avec leurs réponses correctes
-            for (TestQuestion q : questions) {
-                log.info("Saved question - ID: {}, Text: '{}', Correct: '{}', Options: {}", 
-                    q.getId(), q.getQuestionText(), q.getCorrectAnswer(), q.getOptions());
+            if (apiQuestions != null && !apiQuestions.isEmpty()) {
+                for (int i = 0; i < apiQuestions.size(); i++) {
+                    Map<String, Object> apiQuestion = apiQuestions.get(i);
+                    log.info("=== PROCESSING QUESTION {} ===", i + 1);
+                    log.info("Question data: {}", apiQuestion);
+                    
+                    try {
+                        String questionText = (String) apiQuestion.get("question");
+                        String technology = (String) apiQuestion.get("technology");
+                        String level = (String) apiQuestion.get("level");
+                        String correctAnswer = (String) apiQuestion.get("correct_answer");
+                        List<String> options = (List<String>) apiQuestion.get("options");
+                        
+                        log.info("Extracted - Question: '{}', Technology: '{}', Level: '{}'", 
+                            questionText, technology, level);
+                        log.info("Extracted - Correct Answer: '{}', Options: {}", correctAnswer, options);
+                        
+                        // Convertir les options en ArrayNode
+                        ArrayNode optionsNode = objectMapper.valueToTree(options);
+                        log.info("Options converted to ArrayNode successfully");
+                        
+                        TestQuestion question = TestQuestion.builder()
+                                .test(test)
+                                .questionText(questionText)
+                                .questionType(QuestionType.MCQ)
+                                .options(optionsNode)
+                                .correctAnswer(correctAnswer)
+                                .maxScore(10.0)
+                                .skillTag(technology)
+                                .orderIndex(i)
+                                .build();
+                        
+                        log.info("TestQuestion object created successfully");
+                        
+                        TestQuestion savedQuestion = testQuestionRepository.save(question);
+                        savedQuestions.add(savedQuestion);
+                        
+                        log.info("✅ Successfully saved question {} to database with ID: {}", 
+                            i + 1, savedQuestion.getId());
+                        
+                    } catch (Exception e) {
+                        log.error("❌ Error saving question {}: {}", i + 1, e.getMessage(), e);
+                    }
+                }
+                
+                log.info("=== QUESTION SAVING COMPLETED ===");
+                log.info("Successfully saved {} questions out of {} received", 
+                    savedQuestions.size(), apiQuestions.size());
+                
+            } else {
+                log.error("❌ No questions to save - apiQuestions is null or empty");
             }
-            
-            log.info("Generated {} questions for test {}", questions.size(), test.getId());
-            
+
+            candidature.setStatus(CandidatureStatus.TEST_SENT);
+            candidatureRepository.save(candidature);
+
+            log.info("Generated test with {} questions for test {}", 
+                savedQuestions.size(), test.getId());
+
             return ResponseEntity.ok(Map.of(
-                "success", true,
-                "testId", test.getId(),
-                "token", test.getToken(),
-                "status", test.getStatus().toString(),
-                "questions", questions.stream().map(q -> {
-                    Map<String, Object> questionMap = new HashMap<>();
-                    questionMap.put("id", q.getId());
-                    questionMap.put("questionText", q.getQuestionText());
-                    questionMap.put("questionType", q.getQuestionType());
-                    questionMap.put("options", q.getOptions());
-                    questionMap.put("correctAnswer", q.getCorrectAnswer());
-                    questionMap.put("maxScore", q.getMaxScore());
-                    questionMap.put("skillTag", q.getSkillTag());
-                    return questionMap;
-                }).collect(Collectors.toList()),
-                "message", "Test generated successfully with " + questions.size() + " questions"
+                    "success", true,
+                    "testId", test.getId(),
+                    "token", test.getToken(),
+                    "questions", aiResponse.get("questions")
             ));
-            
+
         } catch (Exception e) {
-            log.error("Error generating test", e);
-            return ResponseEntity.status(500).body(Map.of(
-                "success", false,
-                "message", "Error generating test: " + e.getMessage()
-            ));
+            log.error("Generate test error", e);
+            return ResponseEntity.status(500).body(Map.of("error", e.getMessage()));
         }
     }
 
@@ -331,14 +384,9 @@ public class GeneratedTestController {
             for (int i = 0; i < questionsData.size(); i++) {
                 Map<String, Object> questionData = questionsData.get(i);
                 
-                // Convertir les options en ArrayNode
+                // Convertir les options en ArrayNode en utilisant ObjectMapper
                 List<String> optionsList = (List<String>) questionData.get("options");
-                ArrayNode optionsNode = JsonNodeFactory.instance.arrayNode();
-                if (optionsList != null) {
-                    for (String option : optionsList) {
-                        optionsNode.add(option);
-                    }
-                }
+                ArrayNode optionsNode = objectMapper.valueToTree(optionsList);
                 
                 TestQuestion question = TestQuestion.builder()
                         .test(test)
@@ -788,271 +836,6 @@ public class GeneratedTestController {
             log.error("Error calculating test results: {}", e.getMessage(), e);
             return null;
         }
-    }
-    
-    // =========================
-    // GENERATE QUESTIONS HELPER
-    // =========================
-    private List<TestQuestion> generateQuestionsForTest(GeneratedTest test, String level, Integer questionCount) {
-        try {
-            // Récupérer le profil réel du candidat
-            Map<String, Object> candidateProfile = getCandidateProfileFromCandidature(test.getCandidature());
-            
-            // Appeler l'API FastAPI
-            return callFastAPIForQuestions(candidateProfile, test, questionCount);
-            
-        } catch (Exception e) {
-            log.error("Error generating questions via AI: {}", e.getMessage(), e);
-            // Retourner une liste vide en cas d'erreur
-            return new ArrayList<>();
-        }
-    }
-    
-    private Map<String, Object> getCandidateProfileFromCandidature(Candidature candidature) {
-        Map<String, Object> candidateProfile = new HashMap<>();
-        
-        try {
-            // Informations de base du candidat
-            Map<String, String> basicInfo = new HashMap<>();
-            if (candidature.getCandidate() != null) {
-                basicInfo.put("name", 
-                    (candidature.getCandidate().getFirstName() != null ? candidature.getCandidate().getFirstName() : "") + 
-                    " " + 
-                    (candidature.getCandidate().getLastName() != null ? candidature.getCandidate().getLastName() : ""));
-                basicInfo.put("email", candidature.getCandidate().getEmail() != null ? candidature.getCandidate().getEmail() : "");
-                basicInfo.put("phone", candidature.getCandidate().getPhone() != null ? candidature.getCandidate().getPhone() : "");
-                basicInfo.put("address", "");
-            }
-            candidateProfile.put("basic_information", basicInfo);
-            
-            // Récupérer le profil technique réel depuis le CV du candidat
-            Map<String, Object> realTechnicalProfile = getRealTechnicalProfile(candidature.getCandidate().getId());
-            
-            // Utiliser UNIQUEMENT le profil technique réel
-            Map<String, String> summary = new HashMap<>();
-            Map<String, Object> technicalInfo = new HashMap<>();
-            
-            if (realTechnicalProfile != null && !realTechnicalProfile.isEmpty()) {
-                // Utiliser le profil technique réel
-                log.info("Using real technical profile from CV parsing");
-                
-                // Extraire les informations du profil réel
-                Map<String, Object> parsedData = (Map<String, Object>) realTechnicalProfile.get("parsed_data");
-                if (parsedData != null) {
-                    // Résumé depuis le CV
-                    String careerSummary = (String) parsedData.get("career_summary");
-                    String professionalExperience = (String) parsedData.get("professional_experience");
-                    summary.put("career_summary", careerSummary != null ? careerSummary : "");
-                    summary.put("professional_experience", professionalExperience != null ? professionalExperience : "");
-                    
-                    // Informations techniques depuis le CV
-                    Map<String, Object> technicalFromCV = (Map<String, Object>) parsedData.get("technical_information");
-                    if (technicalFromCV != null) {
-                        List<String> programmingLanguages = (List<String>) technicalFromCV.get("programming_languages");
-                        List<String> webFrameworks = (List<String>) technicalFromCV.get("web_frameworks");
-                        List<String> databases = (List<String>) technicalFromCV.get("databases");
-                        List<String> tools = (List<String>) technicalFromCV.get("tools");
-                        
-                        // N'utiliser que les données réelles, pas de valeurs par défaut
-                        technicalInfo.put("programming_languages", programmingLanguages != null ? programmingLanguages : new ArrayList<>());
-                        technicalInfo.put("web_frameworks", webFrameworks != null ? webFrameworks : new ArrayList<>());
-                        technicalInfo.put("databases", databases != null ? databases : new ArrayList<>());
-                        technicalInfo.put("tools", tools != null ? tools : new ArrayList<>());
-                    } else {
-                        // Aucune information technique trouvée
-                        technicalInfo.put("programming_languages", new ArrayList<>());
-                        technicalInfo.put("web_frameworks", new ArrayList<>());
-                        technicalInfo.put("databases", new ArrayList<>());
-                        technicalInfo.put("tools", new ArrayList<>());
-                    }
-                    
-                    // Soft skills depuis le CV
-                    Map<String, List<String>> softSkillsFromCV = (Map<String, List<String>>) parsedData.get("soft_skills");
-                    if (softSkillsFromCV != null) {
-                        candidateProfile.put("soft_skills", softSkillsFromCV);
-                    } else {
-                        // Aucun soft skill trouvé
-                        candidateProfile.put("soft_skills", new HashMap<>());
-                    }
-                    
-                    // Projets depuis le CV
-                    List<Map<String, Object>> projectsFromCV = (List<Map<String, Object>>) parsedData.get("projects_list");
-                    if (projectsFromCV != null) {
-                        candidateProfile.put("projects_list", projectsFromCV);
-                    } else {
-                        // Aucun projet trouvé
-                        candidateProfile.put("projects_list", new ArrayList<>());
-                    }
-                } else {
-                    // Aucune donnée parsée trouvée
-                    log.warn("No parsed data found in technical profile");
-                    summary.put("career_summary", "");
-                    summary.put("professional_experience", "");
-                    technicalInfo.put("programming_languages", new ArrayList<>());
-                    technicalInfo.put("web_frameworks", new ArrayList<>());
-                    technicalInfo.put("databases", new ArrayList<>());
-                    technicalInfo.put("tools", new ArrayList<>());
-                    candidateProfile.put("soft_skills", new HashMap<>());
-                    candidateProfile.put("projects_list", new ArrayList<>());
-                }
-            } else {
-                // Aucun profil technique disponible - retourner un profil vide
-                log.warn("No technical profile available for candidate");
-                summary.put("career_summary", "");
-                summary.put("professional_experience", "");
-                technicalInfo.put("programming_languages", new ArrayList<>());
-                technicalInfo.put("web_frameworks", new ArrayList<>());
-                technicalInfo.put("databases", new ArrayList<>());
-                technicalInfo.put("tools", new ArrayList<>());
-                candidateProfile.put("soft_skills", new HashMap<>());
-                candidateProfile.put("projects_list", new ArrayList<>());
-            }
-            
-            candidateProfile.put("summary", summary);
-            candidateProfile.put("technical_information", technicalInfo);
-            
-            // Logging pour débogage
-            log.info("Generated candidate profile from CV parsing only:");
-            log.info("- Name: {}", basicInfo.get("name"));
-            log.info("- Using CV-based technical profile: {}", realTechnicalProfile != null && !realTechnicalProfile.isEmpty());
-            log.info("- Programming languages: {}", technicalInfo.get("programming_languages"));
-            log.info("- Frameworks: {}", technicalInfo.get("web_frameworks"));
-            log.info("- Databases: {}", technicalInfo.get("databases"));
-            log.info("- Tools: {}", technicalInfo.get("tools"));
-            
-        } catch (Exception e) {
-            log.error("Error creating candidate profile: {}", e.getMessage(), e);
-            // Retourner un profil vide en cas d'erreur
-            Map<String, String> basicInfo = new HashMap<>();
-            basicInfo.put("name", "Candidate");
-            basicInfo.put("email", "");
-            basicInfo.put("phone", "");
-            basicInfo.put("address", "");
-            candidateProfile.put("basic_information", basicInfo);
-            candidateProfile.put("summary", new HashMap<>());
-            candidateProfile.put("technical_information", new HashMap<>());
-            candidateProfile.put("soft_skills", new HashMap<>());
-            candidateProfile.put("projects_list", new ArrayList<>());
-        }
-        
-        return candidateProfile;
-    }
-    
-    private Map<String, Object> getRealTechnicalProfile(Long candidateId) {
-        try {
-            // Récupérer le profil technique depuis la base de données
-            TechnicalProfile technicalProfile = technicalProfileService.getByCandidateId(candidateId);
-            if (technicalProfile != null) {
-                // Convertir le TechnicalProfile en Map
-                Map<String, Object> profileMap = new HashMap<>();
-                profileMap.put("id", technicalProfile.getId());
-                profileMap.put("parsed_data", technicalProfile.getParsedData());
-                return profileMap;
-            }
-            return null;
-        } catch (Exception e) {
-            log.warn("Could not retrieve technical profile for candidate {}: {}", candidateId, e.getMessage());
-            return null;
-        }
-    }
-    
-    private List<TestQuestion> callFastAPIForQuestions(Map<String, Object> candidateProfile, GeneratedTest test, Integer questionCount) {
-        try {
-            // Préparer la requête pour l'API FastAPI
-            Map<String, Object> request = new HashMap<>();
-            request.put("candidate_profile", candidateProfile);
-            request.put("number_of_questions", questionCount);
-            
-            // Appeler l'API FastAPI
-            String apiUrl = "http://localhost:8000/api/v1/generate-from-profile";
-            log.info("Calling FastAPI at: {} with {} questions", apiUrl, questionCount);
-            log.info("Request payload: {}", request);
-            
-            RestTemplate restTemplate = new RestTemplate();
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            
-            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(request, headers);
-            
-            try {
-                ResponseEntity<Map> response = restTemplate.postForEntity(apiUrl, entity, Map.class);
-                
-                log.info("FastAPI response status: {}", response.getStatusCode());
-                log.info("FastAPI response body: {}", response.getBody());
-                
-                if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
-                    Map<String, Object> responseBody = response.getBody();
-                    log.info("Raw FastAPI response: {}", responseBody);
-                    
-                    if (responseBody.containsKey("questions")) {
-                        List<Map<String, Object>> apiQuestions = (List<Map<String, Object>>) responseBody.get("questions");
-                        log.info("Successfully retrieved {} questions from FastAPI", apiQuestions.size());
-                        
-                        // Log first question structure
-                        if (!apiQuestions.isEmpty()) {
-                            log.info("First question structure: {}", apiQuestions.get(0));
-                        }
-                        
-                        return convertAPIToTestQuestions(apiQuestions, test);
-                    } else {
-                        log.warn("FastAPI response doesn't contain 'questions' key");
-                    }
-                } else {
-                    log.warn("FastAPI returned non-2xx status: {}", response.getStatusCode());
-                }
-            } catch (Exception e) {
-                log.error("Failed to call FastAPI: {}", e.getMessage(), e);
-            }
-            
-        } catch (Exception e) {
-            log.error("Error in FastAPI integration: {}", e.getMessage(), e);
-        }
-        
-        // Retourner une liste vide en cas d'échec de l'API
-        log.warn("Returning empty list due to FastAPI failure");
-        return new ArrayList<>();
-    }
-    
-    private List<TestQuestion> convertAPIToTestQuestions(List<Map<String, Object>> apiQuestions, GeneratedTest test) {
-        List<TestQuestion> questions = new ArrayList<>();
-        
-        for (Map<String, Object> apiQuestion : apiQuestions) {
-            try {
-                String technology = (String) apiQuestion.get("technology");
-                String level = (String) apiQuestion.get("level");
-                String questionText = (String) apiQuestion.get("question");
-                List<String> options = (List<String>) apiQuestion.get("options");
-                String correctAnswer = (String) apiQuestion.get("correct_answer");
-                
-                log.info("Processing API question - technology: {}, level: {}, question: '{}', options: {}, correct: '{}'", 
-                    technology, level, questionText, options, correctAnswer);
-                
-                // Convertir les options en JsonNode
-                ArrayNode optionsNode = JsonNodeFactory.instance.arrayNode();
-                if (options != null) {
-                    for (String option : options) {
-                        optionsNode.add(option);
-                    }
-                }
-                
-                TestQuestion question = TestQuestion.builder()
-                        .test(test)
-                        .questionText(questionText)
-                        .questionType(QuestionType.MCQ)
-                        .options(optionsNode)
-                        .correctAnswer(correctAnswer)
-                        .maxScore(10.0)
-                        .skillTag(technology != null ? technology : "General")
-                        .build();
-                
-                questions.add(question);
-                
-            } catch (Exception e) {
-                log.warn("Failed to convert API question: {}", e.getMessage(), e);
-            }
-        }
-        
-        return questions;
     }
     
     // =========================

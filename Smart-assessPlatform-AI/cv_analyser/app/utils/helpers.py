@@ -14,11 +14,11 @@ def extract_json_from_response(response_text: str) -> dict:
     if not isinstance(response_text, str):
         response_text = str(response_text)
 
-    # 1️⃣ Remove markdown ```json ``` wrappers
+    # Remove markdown ```json ``` wrappers
     response_text = re.sub(r"```json", "", response_text, flags=re.IGNORECASE)
     response_text = re.sub(r"```", "", response_text)
 
-    # 2️⃣ Find the first complete JSON object
+    # Find the first complete JSON object
     start = response_text.find("{")
     if start == -1:
         raise ValueError("No JSON object found in LLM response")
@@ -58,7 +58,7 @@ def extract_json_from_response(response_text: str) -> dict:
 
     json_str = response_text[start:end]
 
-    # 3️⃣ Clean formatting issues while preserving structure
+    # Clean formatting issues while preserving structure
     # Remove trailing commas in objects/arrays
     json_str = re.sub(r",\s*}", "}", json_str)
     json_str = re.sub(r",\s*]", "]", json_str)

@@ -90,7 +90,7 @@ const TestInterfacePage: React.FC = () => {
       id: parseInt(id || '1'),
       title: "Test Technique Développeur Frontend",
       description: "Évaluation des compétences en développement web",
-      duration: 60, // minutes
+      duration: 20, // minutes par défaut
       totalPoints: 100
     };
     

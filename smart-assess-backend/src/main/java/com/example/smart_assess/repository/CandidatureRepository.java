@@ -21,6 +21,9 @@ public interface CandidatureRepository extends JpaRepository<Candidature, Long> 
     @Query("SELECT c FROM Candidature c JOIN FETCH c.candidate JOIN FETCH c.internshipPosition WHERE c.candidate.id = :candidateId")
     List<Candidature> findByCandidate_IdWithRelations(Long candidateId);
     
+    @Query("SELECT c FROM Candidature c JOIN FETCH c.candidate JOIN FETCH c.internshipPosition WHERE c.internshipPosition.id = :positionId")
+    List<Candidature> findByInternshipPosition_IdWithRelations(Long positionId);
+    
     @Query("SELECT c FROM Candidature c JOIN FETCH c.candidate JOIN FETCH c.internshipPosition")
     List<Candidature> findAllWithRelations();
     

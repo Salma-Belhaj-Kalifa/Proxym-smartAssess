@@ -18,6 +18,14 @@ export const getStatusLabel = (status: string): string => {
       return 'Validé';
     case 'SUBMITTED':
       return 'Test soumis';
+    case 'DRAFT':
+      return 'En préparation';
+    case 'ASSIGNED':
+      return 'Assigné';
+    case 'EVALUATED':
+      return 'Évalué';
+    case 'EXPIRED':
+      return 'Expiré';
     default:
       return status;
   }
@@ -43,6 +51,14 @@ export const getStatusColor = (status: string): string => {
       return 'bg-orange-100 text-orange-800 border-orange-300 font-semibold';
     case 'VALIDATED':
       return 'text-blue-600 border-blue-200';
+    case 'DRAFT':
+      return 'bg-orange-100 text-orange-800 border-orange-300';
+    case 'ASSIGNED':
+      return 'text-blue-600 border-blue-200';
+    case 'EVALUATED':
+      return 'text-emerald-700 border-emerald-300 bg-emerald-50';
+    case 'EXPIRED':
+      return 'bg-red-100 text-red-800 border-red-300 font-semibold';
     default:
       return 'text-gray-600 border-gray-200';
   }
@@ -68,6 +84,14 @@ export const getStatusVariant = (status: string): 'default' | 'secondary' | 'des
       return 'destructive';
     case 'VALIDATED':
       return 'default';
+    case 'DRAFT':
+      return 'secondary';
+    case 'ASSIGNED':
+      return 'secondary';
+    case 'EVALUATED':
+      return 'default';
+    case 'EXPIRED':
+      return 'destructive';
     default:
       return 'outline';
   }

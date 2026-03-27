@@ -49,7 +49,7 @@ const TestReviewPage: React.FC = () => {
     }
   }, [error]);
 
-  const updateQuestion = (index: number, field: keyof Question, value: any) => {
+  const updateQuestion = (index: number, field: string, value: any) => {
     if (!testData) return;
     
     const updatedQuestions = [...testData.questions];
@@ -62,7 +62,7 @@ const TestReviewPage: React.FC = () => {
     if (!testData) return;
     
     const updatedQuestions = [...testData.questions];
-    const currentOptions = updatedQuestions[questionIndex].options || [];
+    const currentOptions = [...(updatedQuestions[questionIndex].options || [])];
     updatedQuestions[questionIndex] = {
       ...updatedQuestions[questionIndex],
       options: [...currentOptions, '']
@@ -75,7 +75,7 @@ const TestReviewPage: React.FC = () => {
     if (!testData) return;
     
     const updatedQuestions = [...testData.questions];
-    const currentOptions = [...updatedQuestions[questionIndex].options];
+    const currentOptions = [...(updatedQuestions[questionIndex].options || [])];
     currentOptions[optionIndex] = value;
     updatedQuestions[questionIndex] = {
       ...updatedQuestions[questionIndex],
@@ -104,7 +104,39 @@ const TestReviewPage: React.FC = () => {
     const updatedQuestions = testData.questions.filter((_, i) => i !== index);
     setTestData({ ...testData, questions: updatedQuestions });
     
+    // Réinitialiser l'état d'édition si nécessaire
+    if (editingQuestion === index) {
+      setEditingQuestion(null);
+    } else if (editingQuestion !== null && editingQuestion > index) {
+      setEditingQuestion(editingQuestion - 1);
+    }
+    
     toast.success('Question supprimée');
+  };
+
+  const addNewQuestion = () => {
+    if (!testData) return;
+    
+    const newQuestion: Question = {
+      id: Date.now(), // ID temporaire
+      questionText: '',
+      questionType: 'MCQ',
+      options: ['', '', '', ''],
+      correctAnswer: '',
+      skillTag: '',
+      maxScore: 10.0,
+      orderIndex: testData.questions.length
+    };
+    
+    setTestData({ 
+      ...testData, 
+      questions: [...testData.questions, newQuestion] 
+    });
+    
+    // Ovrir automatiquement l'édition de la nouvelle question
+    setEditingQuestion(testData.questions.length);
+    
+    toast.success('Nouvelle question ajoutée');
   };
 
   const saveQuestions = async () => {
@@ -119,8 +151,36 @@ const TestReviewPage: React.FC = () => {
       return;
     }
     
+    // Valider et nettoyer les questions avant sauvegarde
+    const cleanedQuestions = testData.questions.map((question, index) => {
+      // Nettoyer les options vides
+      const cleanedOptions = question.options.filter(option => option.trim() !== '');
+      
+      // Valider que la question a un texte et au moins 2 options
+      if (!question.questionText.trim()) {
+        toast.error(`La question ${index + 1} n'a pas de texte`);
+        throw new Error(`Question ${index + 1} vide`);
+      }
+      
+      if (cleanedOptions.length < 2) {
+        toast.error(`La question ${index + 1} doit avoir au moins 2 options`);
+        throw new Error(`Question ${index + 1} avec options insuffisantes`);
+      }
+      
+      if (!question.correctAnswer || !cleanedOptions.includes(question.correctAnswer)) {
+        toast.error(`La question ${index + 1} n'a pas de réponse correcte valide`);
+        throw new Error(`Question ${index + 1} avec réponse correcte invalide`);
+      }
+      
+      return {
+        ...question,
+        options: cleanedOptions
+      };
+    });
+    
     console.log('SaveQuestions - testData structure:', testData);
     console.log('SaveQuestions - testData.id:', testId);
+    console.log('SaveQuestions - Cleaned questions:', cleanedQuestions);
     
     try {
       setIsSaving(true);
@@ -132,14 +192,14 @@ const TestReviewPage: React.FC = () => {
       // Si le test est en DRAFT, sauvegarder uniquement dans le localStorage
       if (isDraft) {
         console.log('SaveQuestions - Using testId:', testId);
-        localStorage.setItem(`test_questions_${testId}`, JSON.stringify(testData.questions));
-        console.log('Questions saved to localStorage:', testData.questions);
+        localStorage.setItem(`test_questions_${testId}`, JSON.stringify(cleanedQuestions));
+        console.log('Questions saved to localStorage:', cleanedQuestions);
         toast.success('Questions sauvegardées localement');
       } else {
         // Si le test n'est plus en DRAFT, sauvegarder en base
         console.log('SaveQuestions - Using testId for API:', testId);
         const response = await apiClient.put(`/tests/${testId}/questions`, {
-          questions: testData.questions
+          questions: cleanedQuestions
         });
         
         toast.success('Questions sauvegardées avec succès');
@@ -379,22 +439,22 @@ const TestReviewPage: React.FC = () => {
               
               <div className="flex items-center gap-3">
                 <Button
-                  variant="outline"
-                  onClick={previewTest}
-                  className="flex items-center gap-2"
-                  disabled={testData?.questions?.length === 0}
-                >
-                  <Eye className="w-4 h-4" />
-                  Aperçu
-                </Button>
-                
-                <Button
                   onClick={saveQuestions}
                   disabled={isSaving || testData?.questions?.length === 0}
                   className="flex items-center gap-2"
                 >
                   <Save className="w-4 h-4" />
                   {isSaving ? 'Sauvegarde...' : 'Sauvegarder'}
+                </Button>
+                
+                <Button
+                  onClick={addNewQuestion}
+                  disabled={isSaving}
+                  variant="outline"
+                  className="flex items-center gap-2"
+                >
+                  <Plus className="w-4 h-4" />
+                  Ajouter une question
                 </Button>
                 
                 <Button

@@ -98,10 +98,10 @@ export default function PositionApplicationsPage() {
       id: c.id,
       candidate: {
         id: c.candidateId || c.candidate?.id || c.id,
-        firstName: c.candidate?.firstName || c.firstName || c.candidateFirstName || '',
-        lastName: c.candidate?.lastName || c.lastName || c.candidateLastName || '',
-        email: c.candidate?.email || c.email || c.candidateEmail || '',
-        phone: c.candidate?.phone || c.phone || c.candidatePhone || ''
+        firstName: c.candidate?.firstName,
+        lastName: c.candidate?.lastName,
+        email: c.candidate?.email,
+        phone: c.candidate?.phone
       },
       position: {
         id: foundPosition?.id || c.positionId || id,

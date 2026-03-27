@@ -116,7 +116,6 @@ export default function CandidateLoginPage() {
       const userData = { email, password, firstName, lastName, phone, role };
       const result = await registerMutation.mutateAsync(userData);
       
-      console.log('Signup result:', result); // Debug pour voir la structure de la réponse
 
       // Validation flexible pour différents formats de réponse
       let user = null;
