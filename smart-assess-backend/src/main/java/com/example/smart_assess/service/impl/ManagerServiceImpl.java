@@ -91,7 +91,7 @@ public class ManagerServiceImpl implements ManagerService {
             int candidatureCount = 0;
             
             for (InternshipPosition position : positions) {
-                candidatureCount += candidatureRepository.findByInternshipPosition_Id(position.getId()).size();
+                candidatureCount += candidatureRepository.findByInternshipPosition_IdWithRelations(position.getId()).size();
             }
             
             log.info("Données qui seront supprimées : {} position(s), {} candidature(s) et leurs données associées", 
@@ -132,7 +132,7 @@ public class ManagerServiceImpl implements ManagerService {
             int candidatureCount = 0;
             
             for (InternshipPosition position : positions) {
-                candidatureCount += candidatureRepository.findByInternshipPosition_Id(position.getId()).size();
+                candidatureCount += candidatureRepository.findByInternshipPosition_IdWithRelations(position.getId()).size();
             }
             
             log.info("Données qui seront supprimées : {} position(s), {} candidature(s) et leurs données associées", 

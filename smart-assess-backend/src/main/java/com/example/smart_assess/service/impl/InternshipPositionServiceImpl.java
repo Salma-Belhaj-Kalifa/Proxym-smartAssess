@@ -131,7 +131,7 @@ public class InternshipPositionServiceImpl implements InternshipPositionService 
                 .orElseThrow(() -> new RuntimeException("Position not found"));
         
         // Récupérer et supprimer toutes les candidatures associées
-        List<Candidature> candidatures = candidatureRepository.findByInternshipPosition_Id(id);
+        List<Candidature> candidatures = candidatureRepository.findByInternshipPosition_IdWithRelations(id);
         log.info("Found {} candidatures associated with position {}", candidatures.size(), id);
         
         if (!candidatures.isEmpty()) {

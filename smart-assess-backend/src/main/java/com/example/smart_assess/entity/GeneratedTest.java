@@ -19,13 +19,9 @@ public class GeneratedTest {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @OneToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "candidature_id", nullable = false)
-    private Candidature candidature;
-
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "internship_position_id", nullable = false)
-    private InternshipPosition internshipPosition;
+    @JoinColumn(name = "candidate_id")
+    private Candidate candidate;
 
     @Column(unique = true)
     private String token;

@@ -122,27 +122,21 @@ const SubmissionPageSimple: React.FC = () => {
         console.log('File validation passed:', file.name, file.size, file.type);
       }
       
-      console.log('Creating candidatures for user:', user.id, 'positions:', selectedPositions);
+      console.log('Creating candidature for user:', user.id, 'positions:', selectedPositions);
       
-      for (const positionId of selectedPositions) {
-        if (!positionId || isNaN(positionId)) {
-          console.error('Invalid position ID:', positionId);
-          throw new Error(`ID de position invalide: ${positionId}`);
-        }
-        
-        const candidatureData = {
-          candidateId: user.id,
-          positionId: positionId,
-          status: 'PENDING'
-        };
-        
-        console.log('Creating candidature with data:', candidatureData);
-        await createCandidatureMutation.mutateAsync(candidatureData);
-      }        
-        queryClient.invalidateQueries({ queryKey: ['candidatures', 'candidate', user.id] });
-        
-        if (file) {
-          try {
+      // ✅ NOUVELLE STRUCTURE: créer une seule candidature avec plusieurs postes
+      const candidatureData = {
+        candidateId: user.id,
+        positionIds: selectedPositions, // ✅ Plusieurs postes dans une seule candidature
+        status: 'PENDING'
+      };
+      
+      console.log('Creating candidature with data:', candidatureData);
+      await createCandidatureMutation.mutateAsync(candidatureData);
+      queryClient.invalidateQueries({ queryKey: ['candidatures', 'candidate', user.id] });
+      
+      if (file) {
+        try {
             console.log('=== DÉBUT ANALYSE CV ===');
             console.log('User ID:', user.id);
             console.log('File:', file.name, file.size, file.type);

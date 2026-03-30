@@ -10,9 +10,14 @@ import java.util.Optional;
 @Repository
 public interface GeneratedTestRepository extends JpaRepository<GeneratedTest, Long> {
     Optional<GeneratedTest> findByToken(String token);
-    Optional<GeneratedTest> findByCandidature_Id(Long candidatureId);
-    Optional<GeneratedTest> findByCandidatureCandidateEmail(String email);
+    // Supprimé: Optional<GeneratedTest> findByCandidature_Id(Long candidatureId);
+    Optional<GeneratedTest> findByCandidate_Id(Long candidateId);  // ✅ Ajouté
+    Optional<GeneratedTest> findByCandidateEmail(String email);  // ✅ Corrigé
     List<GeneratedTest> findByStatusIn(List<String> statuses);
-    List<GeneratedTest> findByCandidature_IdOrderByCreatedAtDesc(Long candidatureId);
+    // Supprimé: List<GeneratedTest> findByCandidature_IdOrderByCreatedAtDesc(Long candidatureId);
+    List<GeneratedTest> findByCandidate_IdOrderByCreatedAtDesc(Long candidateId);  // ✅ Ajouté
     List<GeneratedTest> findAllByOrderByCreatedAtDesc();
+    
+    // ✅ Ajouté pour la suppression
+    void deleteAllByCandidate_Id(Long candidateId);
 }

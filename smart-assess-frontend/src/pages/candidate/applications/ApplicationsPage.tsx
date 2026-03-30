@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft, Upload, FileText, Search, Briefcase, User, CheckCircle, Clock, Loader2, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -30,65 +30,93 @@ export default function CandidateApplicationsPage() {
   };
 
   
-  const applications = candidatures.map(c => {
-    // Le backend envoie 'internship_position_id' au lieu de 'positionId'
-    const possibleIds = [
-      c.positionId,
-      (c as any).position_id,
-      (c as any).PositionId,
-      (c as any).jobPositionId,
-      (c as any).jobId,
-      (c as any).internship_position_id  // ← AJOUT DU NOM CORRECT DU BACKEND
-    ].filter(id => id !== undefined && id !== null);
+  const applications = useMemo(() => {
+    // Regrouper les candidatures par candidat (une candidature = plusieurs postes)
+    const groupedByCandidate: Record<number, any> = {};
     
-    let positionId = null;
-    let position = null;
-    
-    // Essayer chaque ID possible
-    for (const id of possibleIds) {
-      const parsedId = typeof id === 'string' ? parseInt(id) : id;
-      position = positions.find(p => p.id === parsedId);
-      if (position) {
-        positionId = parsedId;
-        break;
-      }
-    }
-    
-    // Si la position est directement dans la candidature (backend envoie les données)
-    if (!position && (c as any).title && (c as any).company) {
-      position = {
-        title: (c as any).title,
-        company: (c as any).company
-      };
-    }
-    
-    // SOLUTION DE FALLBACK : Si aucune position trouvée, utiliser la plus récente
-    if (!position && positions.length > 0) {
-      // Trier les positions par date de création (la plus récente d'abord)
-      const sortedPositions = [...positions].sort((a, b) => {
-        const dateA = new Date(a.createdAt || '1970-01-01').getTime();
-        const dateB = new Date(b.createdAt || '1970-01-01').getTime();
-        return dateB - dateA;
-      });
+    candidatures.forEach(c => {
+      const candidateId = c.candidateId;
       
-      // Prendre la position la plus récente qui pourrait correspondre
-      position = sortedPositions[0];
-    }
+      if (!groupedByCandidate[candidateId]) {
+        // Initialiser la candidature du candidat
+        groupedByCandidate[candidateId] = {
+          id: c.id,
+          candidateId: c.candidateId,
+          candidateFirstName: c.candidateFirstName,
+          candidateLastName: c.candidateLastName,
+          candidateEmail: c.candidateEmail,
+          status: c.status,
+          appliedAt: c.appliedAt,
+          updatedAt: c.updatedAt,
+          // Collecter tous les postes de cette candidature
+          allPositions: []
+        };
+      }
+      
+      // Ajouter les postes de cette candidature
+      if (c.positions && Array.isArray(c.positions) && c.positions.length > 0) {
+        // ✅ Utiliser les postes de la nouvelle structure backend
+        c.positions.forEach((pos: any) => {
+          if (pos.title && !groupedByCandidate[candidateId].allPositions.find((p: any) => p.title === pos.title)) {
+            groupedByCandidate[candidateId].allPositions.push({
+              id: pos.id,
+              title: pos.title,
+              company: pos.company || c.positionCompany || 'Entreprise',
+              createdAt: c.appliedAt
+            });
+          }
+        });
+      } else if (c.internshipPositions && Array.isArray(c.internshipPositions) && c.internshipPositions.length > 0) {
+        // Compatibilité avec l'ancienne structure frontend
+        c.internshipPositions.forEach((pos: any) => {
+          if (pos.title && !groupedByCandidate[candidateId].allPositions.find((p: any) => p.title === pos.title)) {
+            groupedByCandidate[candidateId].allPositions.push({
+              id: pos.id,
+              title: pos.title,
+              company: pos.company || c.positionCompany || 'Entreprise',
+              createdAt: c.appliedAt
+            });
+          }
+        });
+      } else if (c.positionTitle && c.internshipPositionId) {
+        // Utiliser le poste de l'ancienne structure (compatibilité)
+        if (!groupedByCandidate[candidateId].allPositions.find((p: any) => p.id === c.internshipPositionId)) {
+          groupedByCandidate[candidateId].allPositions.push({
+            id: c.internshipPositionId,
+            title: c.positionTitle,
+            company: c.positionCompany || 'Entreprise',
+            createdAt: c.appliedAt
+          });
+        }
+      }
+    });
     
-    return {
+    // Convertir en tableau et ajouter les propriétés manquantes
+    return Object.values(groupedByCandidate).map(c => ({
       id: c.id,
-      position: position?.title || (c as any).title || c.position?.title || 'Poste non spécifié',
-      company: position?.company || (c as any).company || c.position?.company || 'Entreprise',
+      positions: c.allPositions, // Tous les postes de la candidature
       status: getStatusText(c.status),
       appliedDate: c.appliedAt,
       lastUpdate: c.appliedAt
-    };
-  });
-  
+    }));
+  }, [candidatures]);
+
   const filteredApplications = applications.filter(app => 
-    app.position.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (app.company && app.company.toLowerCase().includes(searchTerm.toLowerCase()))
+    app.positions.some(pos => pos.title.toLowerCase().includes(searchTerm.toLowerCase())) ||
+    app.positions.some(pos => pos.company && pos.company.toLowerCase().includes(searchTerm.toLowerCase()))
   );
+
+  if (filteredApplications.length === 0 && searchTerm) {
+    return (
+      <div className="text-center py-12">
+        <Search className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+        <h3 className="text-lg font-medium text-gray-900 mb-2">Aucune candidature trouvée</h3>
+        <p className="text-gray-600">
+          Aucune candidature ne correspond à votre recherche "{searchTerm}".
+        </p>
+      </div>
+    );
+  }
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -181,10 +209,10 @@ export default function CandidateApplicationsPage() {
                 <CardHeader>
                   <div className="flex justify-between items-start">
                     <div>
-                      <CardTitle className="text-lg">{application.position}</CardTitle>
-                      {application.company && (
-                        <p className="text-sm text-gray-600 mb-2">{application.company}</p>
-                      )}
+                      <CardTitle className="text-lg">Ma Candidature</CardTitle>
+                      <p className="text-sm text-gray-600 mb-2">
+                        {application.positions.length} poste{application.positions.length > 1 ? 's' : ''}
+                      </p>
                     </div>
                     <Badge className={getStatusColor(application.status)}>
                       <div className="flex items-center gap-2">
@@ -196,6 +224,22 @@ export default function CandidateApplicationsPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
+                    {/* Afficher tous les postes */}
+                    <div>
+                      <span className="text-sm text-gray-500">Poste{application.positions.length > 1 ? 's' : ''}:</span>
+                      <div className="mt-1 space-y-1">
+                        {application.positions.map((position, index) => (
+                          <div key={position.id} className="flex items-center gap-2">
+                            <Briefcase className="w-4 h-4 text-gray-400" />
+                            <span className="font-medium">{position.title}</span>
+                            {position.company && (
+                              <span className="text-sm text-gray-600">({position.company})</span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    
                     <div className="flex justify-between text-sm">
                       <span className="text-gray-500">Date de candidature:</span>
                       <span className="font-medium">{formatDate(application.appliedDate)}</span>

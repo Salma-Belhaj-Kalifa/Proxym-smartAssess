@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.reactive.function.client.WebClient;
 
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -59,21 +60,23 @@ public class GeneratedTestController {
                         testMap.put("startedAt", test.getStartedAt());
                         
                         // Informations du candidat
-                        if (test.getCandidature() != null) {
+                        if (test.getCandidate() != null) {
                             Map<String, Object> candidateMap = new HashMap<>();
-                            candidateMap.put("id", test.getCandidature().getCandidate().getId());
-                            candidateMap.put("firstName", test.getCandidature().getCandidate().getFirstName());
-                            candidateMap.put("lastName", test.getCandidature().getCandidate().getLastName());
-                            candidateMap.put("email", test.getCandidature().getCandidate().getEmail());
+                            candidateMap.put("id", test.getCandidate().getId());
+                            candidateMap.put("firstName", test.getCandidate().getFirstName());
+                            candidateMap.put("lastName", test.getCandidate().getLastName());
+                            candidateMap.put("email", test.getCandidate().getEmail());
                             testMap.put("candidate", candidateMap);
                         }
                         
-                        // Informations du poste
-                        if (test.getInternshipPosition() != null) {
+                        // Informations du poste (récupérées depuis la candidature)
+                        List<Candidature> candidateCandidatures = candidatureRepository.findByCandidate_Id(test.getCandidate().getId());
+                        if (!candidateCandidatures.isEmpty() && candidateCandidatures.get(0).getInternshipPositions() != null && !candidateCandidatures.get(0).getInternshipPositions().isEmpty()) {
+                            InternshipPosition firstPosition = candidateCandidatures.get(0).getInternshipPositions().iterator().next();
                             Map<String, Object> positionMap = new HashMap<>();
-                            positionMap.put("id", test.getInternshipPosition().getId());
-                            positionMap.put("title", test.getInternshipPosition().getTitle());
-                            positionMap.put("company", test.getInternshipPosition().getCompany());
+                            positionMap.put("id", firstPosition.getId());
+                            positionMap.put("title", firstPosition.getTitle());
+                            positionMap.put("company", firstPosition.getCompany());
                             testMap.put("internshipPosition", positionMap);
                         }
                         
@@ -109,7 +112,7 @@ public class GeneratedTestController {
             Candidature candidature = candidatureRepository.findById(candidatureId)
                     .orElseThrow(() -> new RuntimeException("Candidature not found"));
 
-            Optional<GeneratedTest> existingTest = generatedTestRepository.findByCandidature_Id(candidatureId);
+            Optional<GeneratedTest> existingTest = generatedTestRepository.findByCandidate_Id(candidature.getCandidate().getId());
             if (existingTest.isPresent()) {
                 return ResponseEntity.status(409).body(Map.of(
                         "success", false,
@@ -175,8 +178,7 @@ public class GeneratedTestController {
             }
 
             GeneratedTest test = GeneratedTest.builder()
-                    .candidature(candidature)
-                    .internshipPosition(candidature.getInternshipPosition())
+                    .candidate(candidature.getCandidate())
                     .token(UUID.randomUUID().toString())
                     .status(TestStatus.DRAFT)
                     .createdAt(LocalDateTime.now())
@@ -282,7 +284,7 @@ public class GeneratedTestController {
             }
             
             Candidature candidature = candidatureOpt.get();
-            GeneratedTest existingTest = candidature.getGeneratedTest();
+            GeneratedTest existingTest = generatedTestRepository.findByCandidate_Id(candidature.getCandidate().getId()).orElse(null);
             
             if (existingTest != null) {
                 return ResponseEntity.ok(Map.of(
@@ -523,8 +525,10 @@ public class GeneratedTestController {
             response.put("deadline", test.getDeadline());
             // Ajouter le niveau basé sur la complexité des questions ou le poste
             String level = "JUNIOR"; // Par défaut
-            if (test.getInternshipPosition() != null && test.getInternshipPosition().getTitle() != null) {
-                String title = test.getInternshipPosition().getTitle().toLowerCase();
+            // Récupérer le poste depuis la candidature du candidat
+            List<Candidature> candidateCandidatures = candidatureRepository.findByCandidate_Id(test.getCandidate().getId());
+            if (!candidateCandidatures.isEmpty() && candidateCandidatures.get(0).getInternshipPositions() != null && !candidateCandidatures.get(0).getInternshipPositions().isEmpty()) {
+                String title = candidateCandidatures.get(0).getInternshipPositions().iterator().next().getTitle().toLowerCase();
                 if (title.contains("senior") || title.contains("expert")) {
                     level = "SENIOR";
                 } else if (title.contains("middle") || title.contains("intermédiaire")) {
@@ -538,35 +542,26 @@ public class GeneratedTestController {
             response.put("scores", scores);
             response.put("questions", enrichedQuestions);
             
-            log.info("=== RESPONSE READY FOR TEST {} ===", test.getId());
-            log.info("Scores in response: {}", scores);
-            log.info("Final score in response: {}", scores.get("finalScore"));
-            
             // Informations du candidat
-            if (test.getCandidature() != null) {
+            if (test.getCandidate() != null) {
                 Map<String, Object> candidate = new HashMap<>();
-                candidate.put("id", test.getCandidature().getCandidate().getId());
-                candidate.put("firstName", test.getCandidature().getCandidate().getFirstName());
-                candidate.put("lastName", test.getCandidature().getCandidate().getLastName());
-                candidate.put("email", test.getCandidature().getCandidate().getEmail());
+                candidate.put("id", test.getCandidate().getId());
+                candidate.put("firstName", test.getCandidate().getFirstName());
+                candidate.put("lastName", test.getCandidate().getLastName());
+                candidate.put("email", test.getCandidate().getEmail());
                 response.put("candidate", candidate);
-                
-                // Ajouter l'ID de la candidature pour le frontend
-                response.put("candidatureId", test.getCandidature().getId());
-                log.info("Added candidatureId to response: {}", test.getCandidature().getId());
             }
             
-            // Informations du poste
-            if (test.getInternshipPosition() != null) {
+            // Informations du poste (récupérées depuis la candidature)
+            if (!candidateCandidatures.isEmpty() && candidateCandidatures.get(0).getInternshipPositions() != null && !candidateCandidatures.get(0).getInternshipPositions().isEmpty()) {
+                InternshipPosition firstPosition = candidateCandidatures.get(0).getInternshipPositions().iterator().next();
                 Map<String, Object> position = new HashMap<>();
-                position.put("id", test.getInternshipPosition().getId());
-                position.put("title", test.getInternshipPosition().getTitle());
-                position.put("company", test.getInternshipPosition().getCompany());
+                position.put("id", firstPosition.getId());
+                position.put("title", firstPosition.getTitle());
+                position.put("company", firstPosition.getCompany());
                 response.put("internshipPosition", position);
             }
             
-            // Ajouter l'ID du test pour le frontend
-            response.put("id", test.getId());
             response.put("testId", test.getId()); // Pour compatibilité
             
             return ResponseEntity.ok(response);
@@ -711,18 +706,26 @@ public class GeneratedTestController {
             test.setSubmittedAt(LocalDateTime.now());
             generatedTestRepository.save(test);
             
-            // Mettre à jour le statut de la candidature pour cohérence
-            if (test.getCandidature() != null) {
-                test.getCandidature().setStatus(CandidatureStatus.COMPLETED);
-                candidatureRepository.save(test.getCandidature());
+            // Mettre à jour le statut de la candidature si nécessaire
+            List<Candidature> candidateCandidatures = candidatureRepository.findByCandidate_Id(test.getCandidate().getId());
+            if (!candidateCandidatures.isEmpty()) {
+                Candidature candidature = candidateCandidatures.get(0);
+                candidature.setStatus(CandidatureStatus.COMPLETED);
+                candidatureRepository.save(candidature);
                 log.info("Updated candidature status to COMPLETED for test submission");
             }
             
             // Envoyer l'email de notification
             try {
-                String candidateEmail = test.getCandidature().getCandidate().getEmail();
-                String candidateName = test.getCandidature().getCandidate().getFirstName() + " " + test.getCandidature().getCandidate().getLastName();
-                String positionTitle = test.getInternshipPosition().getTitle();
+                String candidateEmail = test.getCandidate().getEmail();
+                String candidateName = test.getCandidate().getFirstName() + " " + test.getCandidate().getLastName();
+                
+                // Récupérer le titre du poste depuis la candidature
+                String positionTitle = "Poste technique";
+                if (!candidateCandidatures.isEmpty() && candidateCandidatures.get(0).getInternshipPositions() != null && !candidateCandidatures.get(0).getInternshipPositions().isEmpty()) {
+                    positionTitle = candidateCandidatures.get(0).getInternshipPositions().iterator().next().getTitle();
+                }
+                
                 String testUrl = frontendUrl + "/test-results/" + test.getToken();
                 
                 emailService.sendTestCompletedNotification(candidateEmail, candidateName, positionTitle, testUrl);
@@ -864,42 +867,83 @@ public class GeneratedTestController {
                 ));
             }
             
-            // Envoyer l'email avec le service EmailService
             String candidateFirstName = null;
             String candidateLastName = null;
             String candidateName = "Candidat";
             String positionTitle = "Poste technique";
             
-            if (test.getCandidature() != null && test.getCandidature().getCandidate() != null) {
-                candidateFirstName = test.getCandidature().getCandidate().getFirstName();
-                candidateLastName = test.getCandidature().getCandidate().getLastName();
+            if (test.getCandidate() != null) {
+                candidateFirstName = test.getCandidate().getFirstName();
+                candidateLastName = test.getCandidate().getLastName();
                 if (candidateFirstName != null && candidateLastName != null) {
                     candidateName = candidateFirstName + " " + candidateLastName;
                 }
             }
             
-            if (test.getInternshipPosition() != null) {
-                positionTitle = test.getInternshipPosition().getTitle();
+            // Récupérer la candidature du candidat pour obtenir les postes
+            List<Candidature> candidateCandidatures = candidatureRepository.findByCandidate_Id(test.getCandidate().getId());
+            String positions = "Poste technique";
+            if (!candidateCandidatures.isEmpty() && candidateCandidatures.get(0).getInternshipPositions() != null && !candidateCandidatures.get(0).getInternshipPositions().isEmpty()) {
+                // ✅ Récupérer TOUS les postes maintenant
+                positions = candidateCandidatures.get(0).getInternshipPositions().stream()
+                    .map(position -> position.getTitle())
+                    .collect(Collectors.joining(", "));
             }
             
             String testLink = frontendUrl + "/candidate/test/" + test.getToken();
             LocalDateTime expirationDate = test.getDeadline();
             
-            emailService.sendTestEmail(
-                recipientEmail,
-                candidateName != null ? candidateName : "Candidat",
-                test.getToken(),
-                positionTitle != null ? positionTitle : "Poste technique",
-                expirationDate != null ? expirationDate : LocalDateTime.now().plusHours(24)
-            );
-            
-            log.info("Test email sent successfully to: {}", recipientEmail);
-            
-            return ResponseEntity.ok(Map.of(
-                "success", true,
-                "message", "Email sent successfully",
-                "recipient", recipientEmail
-            ));
+            // ✅ UTILISER LE VRAI SERVICE D'EMAIL
+            try {
+                // Récupérer la durée du test
+                Integer timeLimitMinutes = test.getTimeLimitMinutes();
+                String duration = timeLimitMinutes != null ? timeLimitMinutes.toString() + " minutes" : "45-60 minutes";
+                
+                emailService.sendTestEmail(
+                    recipientEmail,
+                    candidateName,
+                    test.getToken(),
+                    positions,
+                    expirationDate,
+                    duration
+                );
+                
+                log.info("Test email sent successfully to: {} with duration: {}", recipientEmail, duration);
+                
+                return ResponseEntity.ok(Map.of(
+                    "success", true,
+                    "message", "Email sent successfully",
+                    "recipient", recipientEmail
+                ));
+                
+            } catch (Exception emailError) {
+                log.error("Error sending email via EmailService: {}", emailError.getMessage(), emailError);
+                // En cas d'erreur avec l'email HTML, essayer avec l'email simple
+                try {
+                    String simpleMessage = customMessage != null ? customMessage : 
+                        String.format("Bonjour %s,\n\nVous êtes invité à passer un test technique pour le poste suivant : %s\n\nVoici votre lien personnel : %s\n\nDate d'expiration : %s\n\nCordialement,\nL'équipe de recrutement",
+                        candidateName, positions, testLink, 
+                        expirationDate != null ? expirationDate.format(DateTimeFormatter.ofPattern("dd/MM/yyyy à HH:mm")) : "Non définie");
+                    
+                    emailService.sendSimpleEmail(
+                        recipientEmail,
+                        "📋 Test technique - PROXYM SmartAssess",
+                        simpleMessage
+                    );
+                    
+                    log.info("Simple email sent successfully to: {}", recipientEmail);
+                    
+                    return ResponseEntity.ok(Map.of(
+                        "success", true,
+                        "message", "Email sent successfully (simple format)",
+                        "recipient", recipientEmail
+                    ));
+                    
+                } catch (Exception simpleEmailError) {
+                    log.error("Error sending simple email: {}", simpleEmailError.getMessage(), simpleEmailError);
+                    throw new RuntimeException("Impossible d'envoyer l'email: " + simpleEmailError.getMessage());
+                }
+            }
             
         } catch (Exception e) {
             log.error("Error sending test email: {}", e.getMessage(), e);
@@ -1151,12 +1195,9 @@ public class GeneratedTestController {
                     "timeLimitMinutes", test.getTimeLimitMinutes(),
                     "questions", questionsData,
                     "scores", scores,
-                    "candidate", test.getCandidature() != null ? Map.of(
-                        "firstName", test.getCandidature().getCandidate().getFirstName(),
-                        "lastName", test.getCandidature().getCandidate().getLastName()
-                    ) : null,
-                    "internshipPosition", test.getInternshipPosition() != null ? Map.of(
-                        "title", test.getInternshipPosition().getTitle()
+                    "candidate", test.getCandidate() != null ? Map.of(
+                        "firstName", test.getCandidate().getFirstName(),
+                        "lastName", test.getCandidate().getLastName()
                     ) : null
                 )
             ));

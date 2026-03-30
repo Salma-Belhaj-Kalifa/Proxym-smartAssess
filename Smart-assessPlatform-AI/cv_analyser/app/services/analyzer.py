@@ -31,13 +31,13 @@ Return a STRICT JSON with the following sections:
 - specializations: 2-3 key areas of expertise (e.g., "Full-Stack Development", "Cloud Architecture", "AI/ML Integration")
 
 3) Technical Information
-- domain: Identify candidate's PRIMARY professional domain (e.g., Software Engineering, Data Science, DevOps, etc.)
+- domain: Identify candidate's PRIMARY professional domain based on the education and the projects/skills
 - technologies: Group ALL mentioned technologies and skills into logical categories inferred from CV. Use categories dynamically based on context.
 - Capture every technology mentioned anywhere in the CV.
 - If a technology appears multiple times, include it once with the highest skill level observed.
 - skill_level: Assign beginner/intermediate/advanced based on contextual proficiency.
 - Consider context from all sections (projects, experience, education, certifications).
-
+- DO not include languages in this section
 4) Certifications
 - Extract ONLY explicitly mentioned certifications.
 - Include certification_name, issuing_organization (if mentioned, or empty string if not found), issue_date (if mentioned, or empty string if not found), if any info missing, leave it empty.
@@ -46,7 +46,7 @@ Return a STRICT JSON with the following sections:
 5) Soft Skills
 - Extract ONLY explicitly mentioned complete soft skills.
 - Dynamically group into categories: communication_skills, leadership_skills, problem_solving, teamwork, time_management, adaptability.
-- If none mentioned, leave arrays empty.
+- If none mentioned explicitly,DO NOT HALLUCINATE and leave arrays empty.
 
 6) Projects
 - For each project in CV, extract following JSON fields:
@@ -70,7 +70,17 @@ CRITICAL RULES:
 - Include every technology at least once in tech_stack.
 - Use conservative skill levels if unsure.
 - Avoid overfitting; do not use pre-defined role labels.
-
+ANTI-HALLUCINATION RULES:
+- Extract ONLY information explicitly written in the CV.
+- Do NOT invent missing experience, technologies, certifications, or professional domains.
+- Do NOT convert school years into professional experience.
+- If candidate is a student or minor, do NOT describe them as a professional.
+- If no professional experience exists, set years_of_experience to "0".
+- If domain is unclear, use "Unknown".
+- If a skill is not explicitly mentioned, do not add it.
+- Do NOT infer programming languages from spoken languages.
+- Do NOT infer leadership, problem-solving, or communication unless explicitly stated.
+- Use empty string "" or empty array [] when information is missing.
 IMPORTANT: ALWAYS include a comprehensive Summary section with career_level, years_of_experience, key_skills, strengths, and specializations. The summary should be unique, compelling, and highlight the candidate's professional value and potential.
 
 CV TEXT:

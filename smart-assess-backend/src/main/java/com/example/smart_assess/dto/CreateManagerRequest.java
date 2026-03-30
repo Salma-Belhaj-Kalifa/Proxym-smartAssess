@@ -26,5 +26,5 @@ public class CreateManagerRequest {
 
     private String department;
     
-    private Role role;
+    private Role role= Role.MANAGER;
 }

@@ -5,10 +5,31 @@ export interface Candidature {
   candidateLastName: string;
   candidateEmail: string;
   candidatePhone?: string;
-  internshipPositionId: number;
-  positionTitle: string;
-  positionCompany: string;
+  
+  // Propriétés pour compatibilité (premier poste)
+  internshipPositionId?: number;
+  positionTitle?: string;
+  positionCompany?: string;
   positionDescription?: string;
+  
+  // Nouvelles propriétés pour plusieurs postes
+  positions?: Array<{
+    id: number;
+    title: string;
+    company: string;
+    description?: string;
+    acceptedDomains?: string[];
+    requiredSkills?: string[];
+    isActive: boolean;
+  }>;
+  internshipPositions?: Array<{
+    id: number;
+    title: string;
+    company: string;
+    description?: string;
+  }>; // ✅ Compatibilité ascendante
+  positionIds?: number[];  // Pour la création/modification
+  
   status: string;
   rejectionReason?: string;
   appliedAt: string;

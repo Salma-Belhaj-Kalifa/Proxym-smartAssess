@@ -15,15 +15,24 @@ export const candidaturesService = {
 
   create: async (candidatureData: {
     candidateId: number;
-    positionId: number;
-    status: string;
+    positionId?: number;
+    positionIds?: number[];
+    status?: string;
   }): Promise<Candidature> => {
-    // Le backend attend 'internshipPositionId' et définit le status automatiquement à PENDING
-    const requestData = {
-      candidateId: candidatureData.candidateId,
-      internshipPositionId: candidatureData.positionId // ← Nom correct du backend
-      // status non envoyé car le backend le définit automatiquement à PENDING
+    // Support pour plusieurs postes
+    const requestData: any = {
+      candidateId: candidatureData.candidateId
     };
+    
+    if (candidatureData.positionIds && candidatureData.positionIds.length > 0) {
+      // Nouvelle structure: plusieurs postes
+      requestData.positionIds = candidatureData.positionIds;
+    } else if (candidatureData.positionId) {
+      // Compatibilité avec l'ancienne structure
+      requestData.internshipPositionId = candidatureData.positionId;
+    }
+    
+    // status non envoyé car le backend le définit automatiquement à PENDING
     const response = await apiClient.post(API_ENDPOINTS.CANDIDATURES.CREATE, requestData);
     return response.data;
   },

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -50,6 +50,17 @@ const GenerateTestPage = () => {
   const updateCandidatureStatusMutation = useUpdateCandidatureStatus();
   
   const [candidateData, setCandidateData] = useState<any>(null);
+  
+  // Calculer candidateId au niveau du composant (ID de la candidature)
+  const candidateId = useMemo(() => {
+    return candidateData?.id || (id && !isNaN(Number(id)) ? Number(id) : null);
+  }, [candidateData?.id, id]);
+  
+  // Calculer separateCandidateId pour l'ID du candidat
+  const separateCandidateId = useMemo(() => {
+    return candidateData?.candidateId || (candidatures.find(c => c.id === Number(id))?.candidateId) || null;
+  }, [candidateData?.candidateId, candidatures, id]);
+  
   const [existingTest, setExistingTest] = useState<any>(null);
   const [isCheckingExistingTest, setIsCheckingExistingTest] = useState(false);
   const [testConfig, setTestConfig] = useState({
@@ -223,12 +234,8 @@ const GenerateTestPage = () => {
     console.log('candidateData:', candidateData);
     console.log('candidateData?.id:', candidateData?.id);
     console.log('URL id:', id);
+    console.log('candidateId calculé:', candidateId);
     console.log('=== FIN USE EFFECT VÉRIFICATION TEST ===');
-    
-    // Utiliser soit candidateData.id soit l'ID de l'URL
-    const candidateId = candidateData?.id || (id && !isNaN(Number(id)) ? Number(id) : null);
-    
-    console.log('Candidate ID calculé:', candidateId);
     
     if (candidateId) {
       console.log('=== CANDIDATE ID DISPO, VÉRIFICATION TEST ===');
@@ -246,7 +253,7 @@ const GenerateTestPage = () => {
       console.log('id:', id);
       console.log('isNaN(Number(id)):', id ? isNaN(Number(id)) : 'id is null');
     }
-  }, [candidateData?.id, id]);
+  }, [candidateData?.id, id, candidateId]);
 
   // Utiliser le hook pour récupérer le technical profile du candidat
   const candidature = candidatures.find(c => c.id === Number(id));
@@ -407,20 +414,16 @@ const GenerateTestPage = () => {
   }, [candidateData]);
 
   const checkExistingTest = async () => {
-    // Utiliser soit candidateData.id soit l'ID de l'URL
-    const candidateId = candidateData?.id || (id && !isNaN(Number(id)) ? Number(id) : null);
-    
-    if (!candidateId) {
+    if (!separateCandidateId) {
       console.log('No candidate ID available');
       return;
     }
-        
+    
     try {
-      setIsCheckingExistingTest(true);
       console.log('=== CHECKING EXISTING TEST ===');
-      console.log('Candidate ID utilisé:', candidateId);
+      console.log('Candidate ID utilisé:', separateCandidateId);
       
-      const response = await checkExistingTestMutation.mutateAsync(candidateId);
+      const response = await checkExistingTestMutation.mutateAsync(separateCandidateId);
       
       console.log('=== RESPONSE DU BACKEND ===');
       console.log('Response brute:', response);
@@ -441,7 +444,7 @@ const GenerateTestPage = () => {
         };
         console.log('Setting existingTest:', testInfo);
         setExistingTest(testInfo);
-        toast.info("Un test existe déjà pour cette candidature");
+        toast.info("Un test existe déjà pour ce candidat");
       } else {
         console.log('No existing test found');
         setExistingTest(null);
@@ -708,6 +711,53 @@ const GenerateTestPage = () => {
     return 'DÉBUTANT';
   };
 
+  // ✅ Déplacer useMemo en dehors de la fonction pour respecter les règles des hooks
+  const candidatePositions = useMemo(() => {
+    if (!separateCandidateId) return [];
+    
+    // Récupérer toutes les candidatures du candidat
+    const allCandidateCandidatures = candidatures.filter(c => c.candidateId === separateCandidateId);
+    
+    // ✅ Extraire TOUS les postes de la nouvelle structure positions
+    const allPositions: any[] = [];
+    
+    allCandidateCandidatures.forEach(candidature => {
+      // Priorité 1: Utiliser le nouveau champ positions du backend
+      if (candidature.positions && Array.isArray(candidature.positions) && candidature.positions.length > 0) {
+        candidature.positions.forEach((position: any) => {
+          allPositions.push({
+            title: position.title,
+            company: position.company,
+            appliedAt: candidature.appliedAt,
+            candidatureId: candidature.id
+          });
+        });
+      }
+      // Priorité 2: Compatibilité avec internshipPositions
+      else if (candidature.internshipPositions && Array.isArray(candidature.internshipPositions) && candidature.internshipPositions.length > 0) {
+        candidature.internshipPositions.forEach((position: any) => {
+          allPositions.push({
+            title: position.title,
+            company: position.company,
+            appliedAt: candidature.appliedAt,
+            candidatureId: candidature.id
+          });
+        });
+      }
+      // Priorité 3: Ancienne structure pour compatibilité
+      else if (candidature.positionTitle && candidature.positionTitle.trim() !== '') {
+        allPositions.push({
+          title: candidature.positionTitle.trim(),
+          company: candidature.positionCompany,
+          appliedAt: candidature.appliedAt,
+          candidatureId: candidature.id
+        });
+      }
+    });
+    
+    return allPositions;
+  }, [candidatures, separateCandidateId]);
+
   const getEligibilityChecks = () => {
     const checks = [];
     const data = technicalProfile?.parsedData;
@@ -761,20 +811,20 @@ const GenerateTestPage = () => {
       })
     );
     
-    // Informations du poste
-    if (candidateData?.position.title) {
+    // Informations des postes du candidat (utiliser candidatePositions du composant)
+    candidatePositions.forEach((position, index) => {
       checks.push({ 
-        label: ` Poste : ${candidateData.position.title}`, 
+        label: ` Poste ${index + 1} : ${position.title}`, 
         ok: true 
       });
-    }
-    
-    if (candidateData?.position.company) {
-      checks.push({ 
-        label: ` Entreprise : ${candidateData.position.company}`, 
-        ok: true 
-      });
-    }
+      
+      if (position.company) {
+        checks.push({ 
+          label: ` Entreprise : ${position.company}`, 
+          ok: true 
+        });
+      }
+    });  
     
     // Analyse du CV
     if (data) {
@@ -907,9 +957,10 @@ const GenerateTestPage = () => {
         id: 'force-generate-test' // ID unique pour pouvoir le mettre à jour
       });
       
-      // Appeler l'API avec le format simple (ancienne approche)
+      // Appeler l'API avec le format simple (nouvelle structure)
       const testResponse = await generateTestMutation.mutateAsync({
-        candidatureId: candidateData.id,
+        candidatureId: candidateData.id, // Garder pour compatibilité backend
+        candidateId: separateCandidateId, // ✅ Nouveau: ID du candidat
         level: testConfig.level,
         questionCount: testConfig.questionCount,
         duration: testConfig.duration,
@@ -1018,9 +1069,10 @@ const GenerateTestPage = () => {
         id: 'generate-test' // ID unique pour pouvoir le mettre à jour
       });
       
-      // Appeler l'API avec le format simple (ancienne approche)
+      // Appeler l'API avec le format simple (nouvelle structure)
       const testResponse = await generateTestMutation.mutateAsync({
-        candidatureId: candidateData.id,
+        candidatureId: candidateData.id, // Garder pour compatibilité backend
+        candidateId: separateCandidateId, // ✅ Nouveau: ID du candidat
         level: testConfig.level,
         questionCount: testConfig.questionCount,
         duration: testConfig.duration,
@@ -1030,8 +1082,9 @@ const GenerateTestPage = () => {
         // Plus besoin de customInstructions - le backend utilise technicalProfile.getParsedData()
       });
       
-      console.log('=== DONNÉES ENVOYÉES À L\'API (Ancienne Approche) ===');
+      console.log('=== DONNÉES ENVOYÉES À L\'API (Nouvelle Structure) ===');
       console.log('candidatureId:', candidateData.id);
+      console.log('candidateId:', separateCandidateId);
       console.log('level:', testConfig.level);
       console.log('questionCount:', testConfig.questionCount);
       console.log('focusAreas (compétences):', skills.map(skill => skill.name));
@@ -1278,7 +1331,10 @@ const GenerateTestPage = () => {
           <div>
             <h1 className="text-3xl font-bold text-foreground">Décision — Génération du test</h1>
             <p className="text-sm text-muted-foreground mt-1">
-              Candidature #{candidateData.id} · {candidateData.firstName} {candidateData.lastName} · {candidateData.position.title}
+              Candidature #{candidateData.id} · {candidateData.firstName} {candidateData.lastName} · 
+              {candidatePositions.map((pos, index) => 
+                `${pos.title}${index < candidatePositions.length - 1 ? ', ' : ''}`
+              ).join('')}
             </p>
           </div>
         </div>
@@ -1442,7 +1498,7 @@ const GenerateTestPage = () => {
 
         {/* Right: Test Config */}
         <div className="space-y-6">
-          {/* Configuration du test - Masquer si un test existe déjà ET si la vérification est terminée */}
+          {/* Configuration du test - Masquer SEULEMENT si un test existe en statut DRAFT */}
           {(() => {
             console.log('=== DÉCISION SECTION CONFIGURATION ===');
             console.log('existingTest:', existingTest);
@@ -1453,16 +1509,16 @@ const GenerateTestPage = () => {
             // Masquer la configuration SEULEMENT si:
             // 1. La vérification est terminée (isCheckingExistingTest === false)
             // 2. ET un test existe avec un ID valide
-            // 3. ET le test a un statut (peu importe lequel - DRAFT, SUBMITTED, etc.)
+            // 3. ET le test est en statut DRAFT (en préparation)
             const shouldHideConfig = !isCheckingExistingTest && 
               existingTest?.existingTestId && 
-              existingTest?.existingTestStatus;
+              existingTest?.existingTestStatus === 'DRAFT';
             
             console.log('shouldHideConfig calculé:', shouldHideConfig);
             console.log('Détail calcul:');
             console.log('  !isCheckingExistingTest:', !isCheckingExistingTest);
             console.log('  existingTest?.existingTestId:', existingTest?.existingTestId);
-            console.log('  existingTest?.existingTestStatus (truthy):', !!existingTest?.existingTestStatus);
+            console.log('  existingTest?.existingTestStatus === DRAFT:', existingTest?.existingTestStatus === 'DRAFT');
             console.log('  shouldHideConfig (&& operation):', shouldHideConfig);
             console.log('=== FIN DÉCISION SECTION CONFIGURATION ===');
             
@@ -1474,9 +1530,14 @@ const GenerateTestPage = () => {
               
               <div className="space-y-4">
                 <div>
-                  <Label className="text-sm font-medium">Poste ciblé</Label>
+                  <Label className="text-sm font-medium">Postes du candidat</Label>
                   <div className="mt-1 p-3 bg-muted rounded-md">
-                    {candidateData?.position?.title || (candidateData as any).title || candidateData?.positionTitle || 'Poste non spécifié'}
+                    {candidatePositions
+                      .map((pos, index) => (
+                        <div key={`${pos.candidatureId}-${pos.title}-${index}`} className="mb-1">
+                          <span className="font-medium">Poste {index + 1}:</span> {pos.title || 'Poste non spécifié'}
+                        </div>
+                      ))}
                   </div>
                 </div>
                 

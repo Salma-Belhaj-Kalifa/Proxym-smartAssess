@@ -31,6 +31,17 @@ export const useCheckExistingTest = () => {
   });
 };
 
+export const useCheckExistingTestByCandidate = () => {
+  return useMutation({
+    mutationFn: testService.checkExistingTestByCandidate,
+    onError: (error: any) => {
+      const errorMessage = error?.response?.data?.message || error?.response?.data?.error || 'Erreur lors de la vérification du test';
+      toast.error(errorMessage);
+      console.error(error);
+    },
+  });
+};
+
 export const useGenerateTest = () => {
   const queryClient = useQueryClient();
   return useMutation({

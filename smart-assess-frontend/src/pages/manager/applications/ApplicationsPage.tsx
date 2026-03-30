@@ -1,15 +1,16 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { Search, Eye, CheckCircle, XCircle, Clock, AlertCircle, MoreVertical, Calendar, FileText } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { Search, Eye, Calendar, Building2, Briefcase, CheckCircle, XCircle, Clock, AlertCircle, MoreVertical, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { toast } from 'sonner';
 import { useCandidatures, usePositions } from '@/features';
+import { Candidature } from '@/features/candidatures/types';
 import { getStatusLabel, getStatusBadgeClass, getStatusVariant } from '@/utils/statusMappings';
 import { useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 
 interface Candidate {
   id: number;
@@ -27,8 +28,19 @@ interface Position {
 
 interface Application {
   id: number;
-  candidate: Candidate;
-  position: Position;
+  candidateId: number;
+  candidate: {
+    id: number;
+    firstName: string;
+    lastName: string;
+    email: string;
+    phone?: string;
+  };
+  position: {
+    id: number;
+    title: string;
+    company: string;
+  };
   status: string;
   appliedAt: string;
   cvUrl?: string;
@@ -36,6 +48,13 @@ interface Application {
   aiAnalysis?: any;
   testGenerated?: boolean;
   testCompleted?: boolean;
+  allPositions?: Array<{
+    id: number;
+    title: string;
+    company: string;
+    status: string;
+    appliedAt: string;
+  }>;
 }
 
 export default function ApplicationsPage() {
@@ -54,76 +73,56 @@ export default function ApplicationsPage() {
     toast.success('Données actualisées');
   };
 
-  // Mapper les données pour l'affichage
-  const applications: Application[] = candidatures.map((c: any) => {
-    // Le backend envoie 'internship_position_id' au lieu de 'positionId'
-    const possibleIds = [
-      c.positionId,
-      (c as any).position_id,
-      (c as any).PositionId,
-      (c as any).jobPositionId,
-      (c as any).jobId,
-      (c as any).internship_position_id  // ← AJOUT DU NOM CORRECT DU BACKEND
-    ].filter(id => id !== undefined && id !== null);
+  // Regrouper les candidatures par candidat (une candidature = plusieurs postes)
+  const applications = useMemo(() => {
+    const groupedByCandidate: Record<number, Application> = {};
     
-    let positionId = null;
-    let position = null;
-    
-    // Essayer chaque ID possible
-    for (const id of possibleIds) {
-      const parsedId = typeof id === 'string' ? parseInt(id) : id;
-      position = positions.find(p => p.id === parsedId);
-      if (position) {
-        positionId = parsedId;
-        break;
-      }
-    }
-    
-    // Si la position est directement dans la candidature (backend envoie les données)
-    if (!position && (c as any).title && (c as any).company) {
-      position = {
-        id: (c as any).internship_position_id,
-        title: (c as any).title,
-        company: (c as any).company
-      };
-    }
-    
-    // SOLUTION DE FALLBACK : Si aucune position trouvée, utiliser la plus récente
-    if (!position && positions.length > 0) {
-      // Trier les positions par date de création (la plus récente d'abord)
-      const sortedPositions = [...positions].sort((a, b) => {
-        const dateA = new Date(a.createdAt || '1970-01-01').getTime();
-        const dateB = new Date(b.createdAt || '1970-01-01').getTime();
-        return dateB - dateA;
-      });
+    candidatures.forEach(candidature => {
+      const candidateId = candidature.candidateId;
       
-      // Prendre la position la plus récente qui pourrait correspondre
-      position = sortedPositions[0];
-    }
+      // Initialiser l'objet candidat si nécessaire
+      if (!groupedByCandidate[candidateId]) {
+        groupedByCandidate[candidateId] = {
+          id: candidature.id,
+          candidateId: candidature.candidateId,
+          candidate: {
+            id: candidature.candidateId,
+            firstName: candidature.candidateFirstName || '',
+            lastName: candidature.candidateLastName || '',
+            email: candidature.candidateEmail || '',
+            phone: candidature.candidatePhone || '',
+          },
+          position: {
+            id: candidature.internshipPositionId || 0,
+            title: candidature.positionTitle || 'Poste non spécifié',
+            company: candidature.positionCompany || 'Entreprise',
+          },
+          status: candidature.status || 'PENDING',
+          appliedAt: candidature.appliedAt,
+          cvUrl: '', // cvUrl n'existe pas dans le type
+          aiScore: candidature.aiScore,
+          aiAnalysis: candidature.aiAnalysis,
+          testGenerated: false, // À implémenter plus tard
+          testCompleted: false, // À implémenter plus tard
+          allPositions: [] // Initialiser vide
+        };
+      }
+      
+      // Ajouter cette candidature comme un poste individuel
+      const currentPosition = {
+        id: candidature.internshipPositionId || 0,
+        title: candidature.positionTitle?.trim() || 'Poste non spécifié',
+        company: candidature.positionCompany || 'Entreprise',
+        status: candidature.status || 'PENDING',
+        appliedAt: candidature.appliedAt
+      };
+      
+      // Ajouter à allPositions (sans dédoublonnage pour voir les données réelles)
+      groupedByCandidate[candidateId].allPositions.push(currentPosition);
+    });
     
-    return {
-      id: c.id,
-      candidate: {
-        id: c.candidate?.id || c.id || c.candidateId,
-        firstName: c.candidateFirstName || c.candidate?.firstName || c.firstName || '',
-        lastName: c.candidateLastName || c.candidate?.lastName || c.lastName || '',
-        email: c.candidateEmail || c.candidate?.email || c.email || '',
-        phone: c.candidatePhone || c.candidate?.phone || c.phone || '',
-      },
-      position: {
-        id: position?.id || c.position?.id || c.positionId || 0,
-        title: position?.title || (c as any).title || c.position?.title || 'Poste non spécifié',
-        company: position?.company || (c as any).company || c.position?.company || 'Entreprise',
-      },
-      status: c.status || 'PENDING',
-      appliedAt: c.createdAt || new Date().toISOString(),
-      cvUrl: c.cvUrl,
-      aiScore: c.aiScore,
-      aiAnalysis: c.aiAnalysis,
-      testGenerated: c.testGenerated,
-      testCompleted: c.testCompleted,
-    };
-  });
+    return Object.values(groupedByCandidate);
+  }, [candidatures]);
 
   const filteredApplications = applications.filter(app => {
     const matchesSearch =
@@ -133,7 +132,7 @@ export default function ApplicationsPage() {
       app.position.title.toLowerCase().includes(searchTerm.toLowerCase());
 
     const matchesStatus = statusFilter === 'all' || app.status === statusFilter;
-    const matchesPosition = positionFilter === 'all' || app.position.id === positionFilter;
+    const matchesPosition = positionFilter === 'all' || (app.position.id && app.position.id === positionFilter);
 
     return matchesSearch && matchesStatus && matchesPosition;
   });
@@ -277,28 +276,41 @@ export default function ApplicationsPage() {
                 <div className="flex-1">
                   <div className="flex items-center gap-3 mb-2">
                     <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center text-sm font-bold text-primary">
-                      {application.candidate.firstName?.[0] || ''}{application.candidate.lastName?.[0] || ''}
+                      {application.candidate?.firstName?.[0] || ''}{application.candidate?.lastName?.[0] || ''}
                     </div>
                     <div>
                       <h3 className="font-semibold text-foreground">
-                        {application.candidate.firstName || ''} {application.candidate.lastName || ''}
+                        {application.candidate?.firstName || ''} {application.candidate?.lastName || ''}
                       </h3>
-                      <p className="text-sm text-muted-foreground">{application.candidate.email || 'Email non disponible'}</p>
-                      {application.candidate.phone && (
+                      <p className="text-sm text-muted-foreground">{application.candidate?.email || 'Email non disponible'}</p>
+                      {application.candidate?.phone && (
                         <p className="text-sm text-muted-foreground">{application.candidate.phone}</p>
                       )}
                     </div>
                   </div>
 
                   <div className="flex flex-wrap items-center gap-2 mb-2">
-                    <Badge variant="outline">{application.position.title}</Badge>
-                    <Badge variant="secondary">{application.position.company}</Badge>
-                    {application.aiScore && (
-                      <Badge className="bg-yellow-100 text-yellow-800 border-yellow-300">
-                        Score IA: {application.aiScore}/10
+                    {/* Afficher tous les postes du candidat avec la même couleur */}
+                    {application.allPositions?.map((position, index) => (
+                      <Badge key={position.id} variant="outline" className="bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100 transition-colors">
+                        {position.title}
                       </Badge>
-                    )}
+                    ))}
                   </div>
+                  
+                  {/* Afficher l'entreprise en dessous des postes */}
+                  {application.allPositions && application.allPositions.length > 0 && (
+                    <div className="flex items-center gap-1 text-sm text-muted-foreground mb-2">
+                      <Building2 className="w-4 h-4" />
+                      <span>{application.position?.company}</span>
+                    </div>
+                  )}
+                  
+                  {application.aiScore && (
+                    <Badge className="bg-yellow-100 text-yellow-800 border-yellow-300">
+                      Score IA: {application.aiScore}/10
+                    </Badge>
+                  )}
 
                   <div className="flex items-center gap-4 text-sm text-muted-foreground">
                     <div className="flex items-center gap-1">

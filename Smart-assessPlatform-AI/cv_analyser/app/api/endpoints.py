@@ -19,10 +19,8 @@ class Skill(BaseModel):
     skill_level: str
 
 class TechnicalInfo(BaseModel):
-    programming_languages: List[Skill] = []
-    web_frameworks: List[Skill] = []
-    databases: List[Skill] = []
-    tools: List[Skill] = []
+    domain: str = ""
+    technologies: Dict = {}
 
 class Certification(BaseModel):
     certification_name: str

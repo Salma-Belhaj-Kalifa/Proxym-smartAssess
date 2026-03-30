@@ -17,11 +17,8 @@ interface TestResult {
     lastName: string;
     email: string;
   };
-  internshipPosition: {
-    id: number;
-    title: string;
-    company: string;
-  };
+  // ✅ Nouvelle structure: plus de internshipPosition direct
+  // Les postes sont récupérés via les candidatures du candidat
   status: 'SUBMITTED' | 'IN_PROGRESS' | 'PENDING' | 'EXPIRED';
   createdAt: string;
   submittedAt?: string;
@@ -87,11 +84,8 @@ const TestResultsListPage: React.FC = () => {
               lastName: reviewData.candidate?.lastName || test.candidate?.lastName || 'Inconnu',
               email: reviewData.candidate?.email || test.candidate?.email || 'email@example.com'
             },
-            internshipPosition: {
-              id: reviewData.internshipPosition?.id || test.internshipPosition?.id || 0,
-              title: reviewData.internshipPosition?.title || test.internshipPosition?.title || 'Poste non spécifié',
-              company: reviewData.internshipPosition?.company || test.internshipPosition?.company || 'Entreprise'
-            },
+            // ✅ Nouvelle structure: plus de internshipPosition direct
+            // Les postes seront récupérés via les candidatures du candidat
             status: reviewData.status || 'SUBMITTED',
             createdAt: reviewData.createdAt || test.createdAt || new Date().toISOString(),
             submittedAt: reviewData.session?.submittedAt,
@@ -116,11 +110,7 @@ const TestResultsListPage: React.FC = () => {
               lastName: test.candidate?.lastName || 'Inconnu',
               email: test.candidate?.email || 'email@example.com'
             },
-            internshipPosition: {
-              id: test.internshipPosition?.id || 0,
-              title: test.internshipPosition?.title || 'Poste non spécifié',
-              company: test.internshipPosition?.company || 'Entreprise'
-            },
+            // ✅ Nouvelle structure: plus de internshipPosition direct
             status: test.status || 'SUBMITTED',
             createdAt: test.createdAt || new Date().toISOString(),
             submittedAt: test.session?.submittedAt,
@@ -226,7 +216,14 @@ const TestResultsListPage: React.FC = () => {
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8" key={renderKey}>
           {testResults.map((test) => {
-            const position = test.internshipPosition || {
+            // ✅ Nouvelle structure: récupérer les postes via les candidatures du candidat
+            const candidateCandidatures = candidatures.filter(c => c.candidateId === test.candidate.id);
+            const positions = candidateCandidatures.map(c => ({
+              title: c.positionTitle || 'Poste non spécifié',
+              company: c.positionCompany || 'Entreprise'
+            }));
+            
+            const position = positions[0] || {
               title: 'Poste non spécifié',
               company: 'Entreprise'
             };

@@ -17,10 +17,16 @@ public class CandidatureDto {
     private String candidateLastName;
     private String candidateEmail;
     private String candidatePhone;
+    
+    // Anciens champs pour compatibilité (premier poste)
     private Long internshipPositionId;
     private String positionTitle;
     private String positionCompany;
     private String positionDescription;
+    
+    // ✅ Nouveaux champs pour plusieurs postes
+    private List<PositionDto> positions;
+    
     private CandidatureStatus status;
     private String rejectionReason;
     private LocalDateTime appliedAt;
@@ -52,5 +58,19 @@ public class CandidatureDto {
         private Long cvId;
         private LocalDateTime createdAt;
         private Map<String, Object> parsedData; // Données IA analysées
+    }
+    
+    // ✅ DTO pour les postes
+    @Data
+    @Getter @Setter @NoArgsConstructor @AllArgsConstructor
+    @Builder
+    public static class PositionDto {
+        private Long id;
+        private String title;
+        private String company;
+        private String description;
+        private List<String> acceptedDomains;
+        private List<String> requiredSkills;
+        private boolean isActive;
     }
 }

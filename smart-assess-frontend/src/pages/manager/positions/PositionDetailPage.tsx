@@ -330,7 +330,7 @@ export default function PositionDetailPage() {
                             const candidatureData = {
                               id: candidature.id,
                               candidateId: candidature.candidateId,
-                              positionId: candidature.internshipPositionId,
+                              positionId: candidature.internshipPositionId || 0,
                               status: candidature.status,
                               appliedAt: candidature.appliedAt,
                               // Ajouter les informations complètes du candidat pour l'affichage

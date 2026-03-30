@@ -225,13 +225,28 @@ export const candidateService = {
   
   createCandidature: async (candidatureData: {
   candidateId: number;
-  internshipPositionId: number;
-  status: string;
+  internshipPositionId?: number;
+  positionIds?: number[];
+  status?: string;
 }): Promise<any> => {
 
   try {
     console.log('Creating candidature with data:', candidatureData);
-    const response = await apiClient.post('/candidatures', candidatureData);
+    
+    // Adapter les données pour le backend
+    const requestData: any = {
+      candidateId: candidatureData.candidateId
+    };
+    
+    if (candidatureData.positionIds && candidatureData.positionIds.length > 0) {
+      // Nouvelle structure: plusieurs postes
+      requestData.positionIds = candidatureData.positionIds;
+    } else if (candidatureData.internshipPositionId) {
+      // Compatibilité avec l'ancienne structure
+      requestData.internshipPositionId = candidatureData.internshipPositionId;
+    }
+    
+    const response = await apiClient.post('/candidatures', requestData);
     console.log('Candidature created successfully:', response.data);
     return response.data;
   } catch (error: any) {

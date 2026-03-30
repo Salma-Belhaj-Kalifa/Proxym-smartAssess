@@ -46,7 +46,7 @@ const DashboardPage = () => {
           };
           
           const position = test.internshipPosition || {
-            id: (test as any).internshipPositionId,
+            id: (test as any).internshipPositionId || 0,
             title: 'Poste inconnu',
             company: 'SmartAssess'
           };

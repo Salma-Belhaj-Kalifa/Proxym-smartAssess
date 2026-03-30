@@ -44,17 +44,27 @@ public class EmailService {
     public void sendTestEmail(String toEmail,
                               String candidateName,
                               String testToken,
-                              String positionTitle,
+                              String positions,
                               LocalDateTime expirationDate) {
+        sendTestEmail(toEmail, candidateName, testToken, positions, expirationDate, null);
+    }
+    
+    public void sendTestEmail(String toEmail,
+                              String candidateName,
+                              String testToken,
+                              String positions,
+                              LocalDateTime expirationDate,
+                              String duration) {
         try {
             log.info("Envoi email test à {}", toEmail);
 
             Context context = new Context();
             context.setVariable("candidateName", candidateName);
             context.setVariable("testLink", frontendUrl + "/candidate/test/" + testToken);
-            context.setVariable("positionTitle", positionTitle);
+            context.setVariable("positions", positions);
             context.setVariable("expirationDate",
                     expirationDate.format(DateTimeFormatter.ofPattern("dd/MM/yyyy à HH:mm")));
+            context.setVariable("duration", duration != null ? duration : "45-60 minutes");
             context.setVariable("companyName", "PROXYM SmartAssess");
 
             MimeMessage message = mailSender.createMimeMessage();
@@ -62,7 +72,7 @@ public class EmailService {
 
             helper.setFrom(fromEmail);
             helper.setTo(toEmail);
-            helper.setSubject("📋 Test technique - " + positionTitle + " | PROXYM SmartAssess");
+            helper.setSubject("📋 Test technique - PROXYM SmartAssess");
 
             String htmlContent = templateEngine.process("test-email", context);
 

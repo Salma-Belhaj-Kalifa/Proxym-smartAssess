@@ -13,6 +13,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -25,6 +26,7 @@ public class CandidateServiceImpl implements CandidateService {
     private final CandidateRepository candidateRepository;
     private final PasswordEncoder passwordEncoder;
     private final CandidatureRepository candidatureRepository;
+    private final GeneratedTestRepository generatedTestRepository;
 
     @Override
     public CandidateDto createCandidate(CreateCandidateRequest request) {
@@ -104,6 +106,7 @@ public class CandidateServiceImpl implements CandidateService {
     }
 
     @Override
+    @Transactional
     public void deleteMyProfile() {
         // Récupérer l'email de l'utilisateur authentifié
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
@@ -122,12 +125,19 @@ public class CandidateServiceImpl implements CandidateService {
         try {
             // Compter les données qui seront supprimées par cascade
             int candidatureCount = candidatureRepository.findByCandidate_Id(candidate.getId()).size();
+            int generatedTestCount = generatedTestRepository.findByCandidate_IdOrderByCreatedAtDesc(candidate.getId()).size();
             CandidateCV cv = candidate.getCv();
             boolean hasCV = cv != null;
             boolean hasTechnicalProfile = hasCV && cv.getTechnicalProfile() != null;
             
-            log.info("Données qui seront supprimées : {} candidature(s), CV: {}, Profil technique: {}", 
-                candidatureCount, hasCV, hasTechnicalProfile);
+            log.info("Données qui seront supprimées : {} candidature(s), {} test(s), CV: {}, Profil technique: {}", 
+                candidatureCount, generatedTestCount, hasCV, hasTechnicalProfile);
+            
+            // Supprimer d'abord les GeneratedTest pour éviter les contraintes
+            if (generatedTestCount > 0) {
+                log.info("Suppression de {} GeneratedTest(s)...", generatedTestCount);
+                generatedTestRepository.deleteAllByCandidate_Id(candidate.getId());
+            }
             
             // La suppression du candidat déclenchera les cascades automatiquement grâce à CascadeType.ALL
             candidateRepository.delete(candidate);

@@ -7,6 +7,8 @@ import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.LocalDateTime;
+import java.util.HashSet;
+import java.util.Set;
 
 @Entity
 @Table(name = "candidatures")
@@ -24,10 +26,15 @@ public class Candidature {
     @JsonIgnore
     private Candidate candidate;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "internship_position_id", nullable = false)
+    // MODIFIÉ: Plusieurs postes par candidature
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+        name = "candidature_positions",
+        joinColumns = @JoinColumn(name = "candidature_id"),
+        inverseJoinColumns = @JoinColumn(name = "position_id")
+    )
     @JsonIgnore
-    private InternshipPosition internshipPosition;
+    private Set<InternshipPosition> internshipPositions = new HashSet<>();
 
     @Enumerated(EnumType.STRING)
     @Builder.Default
@@ -44,9 +51,28 @@ public class Candidature {
     @Builder.Default
     private LocalDateTime updatedAt = LocalDateTime.now();
 
-    @OneToOne(mappedBy = "candidature", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-    @JsonIgnore
-    private GeneratedTest generatedTest;
+    // Méthodes utilitaires pour la compatibilité
+    public Long getCandidateId() {
+        return candidate != null ? candidate.getId() : null;
+    }
+    
+    public String getPositionTitle() {
+        return internshipPositions != null && !internshipPositions.isEmpty() 
+            ? internshipPositions.iterator().next().getTitle()
+            : "Poste non spécifié";
+    }
+    
+    public String getPositionCompany() {
+        return internshipPositions != null && !internshipPositions.isEmpty() 
+            ? internshipPositions.iterator().next().getCompany()
+            : "Entreprise";
+    }
+    
+    public Long getInternshipPositionId() {
+        return internshipPositions != null && !internshipPositions.isEmpty() 
+            ? internshipPositions.iterator().next().getId()
+            : null;
+    }
 
     @PreUpdate
     public void preUpdate() {

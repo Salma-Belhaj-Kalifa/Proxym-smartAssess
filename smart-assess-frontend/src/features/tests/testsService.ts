@@ -51,6 +51,11 @@ export const testService = {
     return response.data;
   },
 
+  checkExistingTestByCandidate: async (candidateId: number): Promise<{ status: string; exists: boolean; testId?: number; message: string }> => {
+    const response = await apiClient.get(`/tests/check-existing-by-candidate/${candidateId}`);
+    return response.data;
+  },
+
   getTestForReview: async (id: number): Promise<TestReviewData> => {
     const response = await apiClient.get(`/tests/${id}/review`);
     return response.data;

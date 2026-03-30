@@ -13,18 +13,18 @@ import java.util.Optional;
 @Repository
 public interface CandidatureRepository extends JpaRepository<Candidature, Long> {
     List<Candidature> findByCandidate_Id(Long candidateId);
-    List<Candidature> findByInternshipPosition_Id(Long positionId);
+    // Supprimé: List<Candidature> findByInternshipPosition_Id(Long positionId);
     List<Candidature> findByStatus(CandidatureStatus status);
-    Optional<Candidature> findByCandidate_IdAndInternshipPosition_Id(Long candidateId, Long positionId);
+    // Supprimé: Optional<Candidature> findByCandidate_IdAndInternshipPosition_Id(Long candidateId, Long positionId);
     
     // Méthodes avec JOIN FETCH pour éviter les lazy loading exceptions
-    @Query("SELECT c FROM Candidature c JOIN FETCH c.candidate JOIN FETCH c.internshipPosition WHERE c.candidate.id = :candidateId")
+    @Query("SELECT c FROM Candidature c JOIN FETCH c.candidate LEFT JOIN FETCH c.internshipPositions WHERE c.candidate.id = :candidateId")
     List<Candidature> findByCandidate_IdWithRelations(Long candidateId);
     
-    @Query("SELECT c FROM Candidature c JOIN FETCH c.candidate JOIN FETCH c.internshipPosition WHERE c.internshipPosition.id = :positionId")
+    @Query("SELECT c FROM Candidature c JOIN FETCH c.candidate LEFT JOIN FETCH c.internshipPositions ip WHERE ip.id = :positionId")
     List<Candidature> findByInternshipPosition_IdWithRelations(Long positionId);
     
-    @Query("SELECT c FROM Candidature c JOIN FETCH c.candidate JOIN FETCH c.internshipPosition")
+    @Query("SELECT c FROM Candidature c JOIN FETCH c.candidate LEFT JOIN FETCH c.internshipPositions")
     List<Candidature> findAllWithRelations();
     
     // Requêtes natives pour récupérer les données IA depuis les tables candidate_cvs et technical_profiles

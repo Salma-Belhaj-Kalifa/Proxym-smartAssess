@@ -25,6 +25,7 @@ export * from './tests/testsService';
 export * from './tests/testsQueries';
 export * from './tests/testsMutations';
 export * from './tests/types';
+export { useCheckExistingTestByCandidate } from './tests/testsMutations';
 
 // Candidatures Feature
 export * from './candidatures/candidaturesKeys';

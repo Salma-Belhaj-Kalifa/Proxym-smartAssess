@@ -52,7 +52,7 @@ public class InternshipPosition {
     @Builder.Default
     private LocalDateTime updatedAt = LocalDateTime.now();
 
-    @OneToMany(mappedBy = "internshipPosition", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @OneToMany(mappedBy = "internshipPositions", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     @Builder.Default
     private List<Candidature> candidatures = new ArrayList<>();
 

@@ -92,12 +92,14 @@ const CandidateTestPage: React.FC = () => {
         duration = 20;
       }
       
+      console.log('Duration from backend:', duration);
+      
       const testData: TestData = {
-        testId: dataFromHook.test?.id || 0,
+        testId: dataFromHook.test?.id,
         token: token || '',
         candidateName: dataFromHook.test?.candidateName || 'Candidat',
         positionTitle: dataFromHook.test?.positionTitle || 'Poste technique',
-        duration: duration,
+        duration: duration, // ✅ Utiliser la durée réelle du backend
         deadline: dataFromHook.test?.deadline || new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
         questions: dataFromHook.test?.questions || []
       };
@@ -486,6 +488,8 @@ const CandidateTestPage: React.FC = () => {
         testDuration = 20;
       }
       
+      console.log('Starting test with duration:', testDuration, 'minutes');
+      
       // Activer le mode plein écran AVANT tout le reste
       const enterFullscreen = async () => {
         try {
@@ -533,7 +537,7 @@ const CandidateTestPage: React.FC = () => {
       console.log('Test started successfully:', startResponse);
       
       setTestStarted(true);
-      setTimeRemaining((testDataFromHook?.duration || 20) * 60);
+      setTimeRemaining(testDuration * 60); // ✅ Utiliser testDuration au lieu de testDataFromHook?.duration
       loadSavedAnswers();
       
       toast.success('Test démarré en mode plein écran. Toute tentative de sortie sera bloquée.');
@@ -654,9 +658,9 @@ const CandidateTestPage: React.FC = () => {
       
       // Créer les données de soumission selon le format attendu par le backend
       const submissionData = {
-        testId: testDataFromHook?.test?.id || testData?.testId || testDataFromHook?.id,
+        testId: testData?.testId || testDataFromHook?.test?.id || testDataFromHook?.id,
         answers: formattedAnswers,
-        timeSpentMinutes: Math.floor(((testData?.duration || 20) * 60 - timeRemaining) / 60),
+        timeSpentMinutes: Math.floor(((testData?.duration || 20) * 60 - timeRemaining) / 60), // ✅ Utiliser testData.duration
         submittedAt: new Date().toISOString()
       };
       
@@ -669,7 +673,7 @@ const CandidateTestPage: React.FC = () => {
         answers: {
           token: token, // ← Required for backend validation
           answers: formattedAnswers, // ← Answers as Map
-          timeSpent: (testData.duration * 60) - timeRemaining // ← Time spent in seconds
+          timeSpent: ((testData?.duration || 20) * 60) - timeRemaining // ✅ Utiliser testData.duration
         }
       });
       

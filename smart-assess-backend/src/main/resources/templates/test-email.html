@@ -113,13 +113,13 @@
         <div class="content">
             <p>Bonjour <strong th:text="${candidateName}"></strong>,</p>
             
-            <p>Nous sommes ravis de vous informer que votre test technique pour le poste de <span class="highlight" th:text="${positionTitle}"></span> est maintenant disponible.</p>
+            <p>Nous sommes ravis de vous informer que votre test technique pour les postes suivants est maintenant disponible.</p>
             
             <div class="test-info">
                 <h3> Détails du test</h3>
-                <p><strong>Poste:</strong> <span th:text="${positionTitle}"></span></p>
+                <p><strong>Postes:</strong> <span th:text="${positions}"></span></p>
                 <p><strong>Date d'expiration:</strong> <span th:text="${expirationDate}"></span></p>
-                <p><strong>Durée estimée:</strong> 45-60 minutes</p>
+                <p><strong>Durée estimée:</strong> <span th:text="${duration}"></span></p>
             </div>
 
             <p style="text-align: center;">

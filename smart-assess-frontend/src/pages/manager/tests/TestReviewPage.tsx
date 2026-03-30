@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Eye, Mail, Send, CheckCircle, AlertCircle, Clock, Calendar, User, Briefcase, Save, Trash2, Plus, Check, Copy, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -12,10 +12,12 @@ import apiClient from '@/lib/api';
 import { useTests, useTestReview } from '@/features/tests/testsQueries';
 import { useUpdateTest } from '@/features/tests/testsMutations';
 import { TestReviewData, Question } from '@/features/tests/types';
+import { useCandidatures } from '@/features/candidatures/candidaturesQueries';
 
 const TestReviewPage: React.FC = () => {
   const { testId } = useParams<{ testId: string }>();
   const navigate = useNavigate();
+  const { data: candidatures = [] } = useCandidatures();
   const [testData, setTestData] = useState<TestReviewData | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isGeneratingLink, setIsGeneratingLink] = useState(false);
@@ -23,6 +25,12 @@ const TestReviewPage: React.FC = () => {
   const [testLink, setTestLink] = useState<string>('');
   const [showLinkModal, setShowLinkModal] = useState(false);
   const [editingQuestion, setEditingQuestion] = useState<number | null>(null);
+  
+  // Trouver tous les postes du candidat
+  const candidatePositions = useMemo(() => {
+    if (!testData?.candidate?.id) return [];
+    return candidatures.filter(c => c.candidateId === testData.candidate.id);
+  }, [candidatures, testData?.candidate?.id]);
   
   // Utiliser le hook pour récupérer les données du test
   const { data: reviewData, isLoading, error } = useTestReview(testId ? parseInt(testId) : 0);
@@ -358,7 +366,7 @@ const TestReviewPage: React.FC = () => {
       
       const emailData = {
         recipientEmail: testData.candidate?.email,
-        customMessage: `Bonjour ${testData.candidate?.firstName} ${testData.candidate?.lastName},\n\nVous êtes invité à passer un test technique pour le poste de ${testData.internshipPosition?.title}.\n\nVoici votre lien personnel : ${testLink}\n\nCordialement,\nL'équipe de recrutement`
+        customMessage: `Bonjour ${testData.candidate?.firstName} ${testData.candidate?.lastName},\n\nVous êtes invité à passer un test technique.\n\nVoici votre lien personnel : ${testLink}\n\nCordialement,\nL'équipe de recrutement`
       };
       
       // Utiliser apiClient directement car testService.sendTestEmail n'existe pas
@@ -432,7 +440,7 @@ const TestReviewPage: React.FC = () => {
                 <div>
                   <h1 className="text-2xl font-bold text-gray-900">Révision du Test</h1>
                   <p className="text-sm text-gray-600 mt-1">
-                    {testData?.candidate?.firstName} {testData?.candidate?.lastName} - {testData?.internshipPosition?.title}
+                    {testData?.candidate?.firstName} {testData?.candidate?.lastName}
                   </p>
                 </div>
               </div>

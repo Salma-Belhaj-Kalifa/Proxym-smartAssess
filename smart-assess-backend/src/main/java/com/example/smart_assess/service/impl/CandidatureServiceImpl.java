@@ -13,10 +13,13 @@ import com.example.smart_assess.repository.InternshipPositionRepository;
 import com.example.smart_assess.service.CandidatureService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Service;
 
-import java.util.List;
-import java.util.stream.Collectors;
+import java.util.HashSet;  // ✅ Ajouté
+import java.util.Set;        // ✅ Ajouté
+import java.util.ArrayList;  // ✅ Ajouté
+import java.util.List;       // ✅ Ajouté
+import java.util.stream.Collectors; // ✅ Ajouté
+import org.springframework.stereotype.Service;
 
 @Service
 @RequiredArgsConstructor
@@ -32,18 +35,41 @@ public class CandidatureServiceImpl implements CandidatureService {
         Candidate candidate = candidateRepository.findById(request.getCandidateId())
                 .orElseThrow(() -> new RuntimeException("Candidate not found"));
 
-        InternshipPosition position = positionRepository.findById(request.getInternshipPositionId())
-                .orElseThrow(() -> new RuntimeException("Position not found"));
+        // Pas de vérification de doublon nécessaire avec la nouvelle structure @ManyToMany
+        // Un candidat peut avoir une seule candidature avec plusieurs postes
 
-        if (candidatureRepository.findByCandidate_IdAndInternshipPosition_Id(request.getCandidateId(), request.getInternshipPositionId()).isPresent()) {
-            throw new RuntimeException("Candidature already exists");
+        // Vérifier si le candidat a déjà une candidature
+        List<Candidature> existingCandidatures = candidatureRepository.findByCandidate_Id(request.getCandidateId());
+        if (!existingCandidatures.isEmpty()) {
+            throw new RuntimeException("Le candidat a déjà une candidature. Un candidat ne peut avoir qu'une seule candidature.");
+        }
+
+        // Vérifier la limite de 3 postes par candidature
+        if (request.getPositionIds() != null && request.getPositionIds().size() > 3) {
+            throw new RuntimeException("Une candidature peut contenir au maximum 3 postes. Nombre demandé: " + request.getPositionIds().size());
         }
 
         Candidature candidature = Candidature.builder()
                 .candidate(candidate)
-                .internshipPosition(position)
+                .internshipPositions(new HashSet<>())  // Initialise vide, les postes seront ajoutés séparément
                 .status(CandidatureStatus.PENDING)
                 .build();
+        
+        // Ajouter les postes à la candidature si fournis
+        if (request.getPositionIds() != null && !request.getPositionIds().isEmpty()) {
+            Set<InternshipPosition> positions = new HashSet<>(positionRepository.findAllById(request.getPositionIds()));
+            if (positions.size() != request.getPositionIds().size()) {
+                throw new RuntimeException("Un ou plusieurs postes n'ont pas été trouvés. Postes demandés: " + request.getPositionIds().size() + ", postes trouvés: " + positions.size());
+            }
+            candidature.setInternshipPositions(positions);
+        } else if (request.getInternshipPositionId() != null) {
+            // Compatibilité avec l'ancienne structure
+            InternshipPosition singlePosition = positionRepository.findById(request.getInternshipPositionId())
+                    .orElseThrow(() -> new RuntimeException("Position not found"));
+            candidature.setInternshipPositions(Set.of(singlePosition));
+        } else {
+            throw new RuntimeException("Aucun poste fourni. Veuillez fournir soit positionIds soit internshipPositionId.");
+        }
 
         candidature = candidatureRepository.save(candidature);
         return toDto(candidature);
@@ -141,6 +167,38 @@ public class CandidatureServiceImpl implements CandidatureService {
         log.info("Candidature ID: {}", candidature.getId());
         log.info("Candidate ID: {}", candidature.getCandidate() != null ? candidature.getCandidate().getId() : null);
         
+        // ✅ Extraire TOUS les postes
+        List<CandidatureDto.PositionDto> positionDtos = new ArrayList<>();
+        Long firstPositionId = null;
+        String firstPositionTitle = null;
+        String firstPositionCompany = null;
+        String firstPositionDescription = null;
+        
+        if (candidature.getInternshipPositions() != null && !candidature.getInternshipPositions().isEmpty()) {
+            positionDtos = candidature.getInternshipPositions().stream()
+                .map(position -> CandidatureDto.PositionDto.builder()
+                    .id(position.getId())
+                    .title(position.getTitle())
+                    .company(position.getCompany())
+                    .description(position.getDescription())
+                    .acceptedDomains(position.getAcceptedDomains())
+                    .requiredSkills(position.getRequiredSkills())
+                    .isActive(position.getIsActive() != null ? position.getIsActive() : true)
+                    .build())
+                .collect(Collectors.toList());
+            
+            // Garder le premier poste pour la compatibilité ascendante
+            InternshipPosition firstPosition = candidature.getInternshipPositions().iterator().next();
+            firstPositionId = firstPosition.getId();
+            firstPositionTitle = firstPosition.getTitle();
+            firstPositionCompany = firstPosition.getCompany();
+            firstPositionDescription = firstPosition.getDescription();
+            
+            log.info("Found {} positions for candidature {}: {}", 
+                positionDtos.size(), candidature.getId(), 
+                positionDtos.stream().map(p -> p.getTitle()).collect(Collectors.joining(", ")));
+        }
+        
         CandidatureDto.CandidatureDtoBuilder dtoBuilder = CandidatureDto.builder()
                 .id(candidature.getId())
                 .candidateId(candidature.getCandidate() != null ? candidature.getCandidate().getId() : null)
@@ -148,10 +206,13 @@ public class CandidatureServiceImpl implements CandidatureService {
                 .candidateLastName(candidature.getCandidate() != null ? candidature.getCandidate().getLastName() : null)
                 .candidateEmail(candidature.getCandidate() != null ? candidature.getCandidate().getEmail() : null)
                 .candidatePhone(candidature.getCandidate() != null ? candidature.getCandidate().getPhone() : null)
-                .internshipPositionId(candidature.getInternshipPosition() != null ? candidature.getInternshipPosition().getId() : null)
-                .positionTitle(candidature.getInternshipPosition() != null ? candidature.getInternshipPosition().getTitle() : null)
-                .positionCompany(candidature.getInternshipPosition() != null ? candidature.getInternshipPosition().getCompany() : null)
-                .positionDescription(candidature.getInternshipPosition() != null ? candidature.getInternshipPosition().getDescription() : null)
+                // ✅ Compatibilité: premier poste
+                .internshipPositionId(firstPositionId)
+                .positionTitle(firstPositionTitle)
+                .positionCompany(firstPositionCompany)
+                .positionDescription(firstPositionDescription)
+                // ✅ Nouveau: tous les postes
+                .positions(positionDtos)
                 .status(candidature.getStatus())
                 .rejectionReason(candidature.getRejectionReason())
                 .appliedAt(candidature.getAppliedAt())

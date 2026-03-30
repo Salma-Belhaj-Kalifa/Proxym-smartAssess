@@ -39,7 +39,7 @@ const ManagerPositionsPage: React.FC = () => {
   // Obtenir le nombre de candidats pour une position
   const getApplicantsCount = (positionId: number) => {
     return candidatures.filter(candidature => 
-      candidature.internshipPositionId === positionId
+      candidature.internshipPositionId && candidature.internshipPositionId === positionId
     ).length;
   };
 

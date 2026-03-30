@@ -7,7 +7,7 @@ import { useCurrentUserSafe } from '@/features/auth/authQueries';
 import { useCandidaturesByCandidate } from '@/features/candidatures/candidaturesQueries';
 import { usePositions } from '@/features/positions/positionsQueries';
 import { candidaturesService } from '@/features/candidatures/candidaturesService';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 
 export default function CandidateDashboardPage() {
   const { data: user } = useCurrentUserSafe();
@@ -50,69 +50,95 @@ export default function CandidateDashboardPage() {
   };
 
   // Calculer les statistiques à partir des données
+  // Regrouper les candidatures par candidat (une candidature = plusieurs postes)
+  const candidaturesByCandidate = useMemo(() => {
+    const grouped: Record<number, any> = {};
+    
+    detailedCandidatures.forEach(c => {
+      const candidateId = c.candidateId;
+      
+      if (!grouped[candidateId]) {
+        // Initialiser la candidature du candidat
+        grouped[candidateId] = {
+          id: c.id,
+          candidateId: c.candidateId,
+          candidateFirstName: c.candidateFirstName,
+          candidateLastName: c.candidateLastName,
+          candidateEmail: c.candidateEmail,
+          status: c.status,
+          appliedAt: c.appliedAt,
+          updatedAt: c.updatedAt,
+          // Collecter tous les postes de cette candidature
+          allPositions: [],
+          // Conserver la candidature originale
+          candidature: c
+        };
+      }
+      
+      // Ajouter les postes de cette candidature
+      if (c.positions && Array.isArray(c.positions) && c.positions.length > 0) {
+        // ✅ Utiliser les postes de la nouvelle structure backend
+        c.positions.forEach((pos: any) => {
+          if (pos.title && !grouped[candidateId].allPositions.find((p: any) => p.title === pos.title)) {
+            grouped[candidateId].allPositions.push({
+              id: pos.id,
+              title: pos.title,
+              company: pos.company || c.positionCompany || 'Entreprise',
+              appliedAt: c.appliedAt
+            });
+          }
+        });
+      } else if (c.internshipPositions && Array.isArray(c.internshipPositions) && c.internshipPositions.length > 0) {
+        // Compatibilité avec l'ancienne structure frontend
+        c.internshipPositions.forEach((pos: any) => {
+          if (pos.title && !grouped[candidateId].allPositions.find((p: any) => p.title === pos.title)) {
+            grouped[candidateId].allPositions.push({
+              id: pos.id,
+              title: pos.title,
+              company: pos.company || c.positionCompany || 'Entreprise',
+              appliedAt: c.appliedAt
+            });
+          }
+        });
+      } else if (c.positionTitle) {
+        // Utiliser le poste de l'ancienne structure (compatibilité)
+        const positionId = c.internshipPositionId || 0;
+        if (!grouped[candidateId].allPositions.find((p: any) => p.id === positionId)) {
+          grouped[candidateId].allPositions.push({
+            id: positionId,
+            title: c.positionTitle,
+            company: c.positionCompany || 'Entreprise',
+            appliedAt: c.appliedAt
+          });
+        }
+      }
+    });
+    
+    return Object.values(grouped);
+  }, [detailedCandidatures]);
+
   const stats = {
-    totalApplications: detailedCandidatures.length,
-    pendingApplications: detailedCandidatures.filter(c => c.status === 'PENDING').length,
-    acceptedApplications: detailedCandidatures.filter(c => c.status === 'ACCEPTED').length,
-    rejectedApplications: detailedCandidatures.filter(c => c.status === 'REJECTED').length,
+    totalApplications: candidaturesByCandidate.length,
+    pendingApplications: candidaturesByCandidate.filter(c => c.status === 'PENDING').length,
+    acceptedApplications: candidaturesByCandidate.filter(c => c.status === 'ACCEPTED').length,
+    rejectedApplications: candidaturesByCandidate.filter(c => c.status === 'REJECTED').length,
     totalPositions: positions.length,
-    recentApplications: detailedCandidatures
+    recentApplications: candidaturesByCandidate
       .sort((a, b) => new Date(b.appliedAt).getTime() - new Date(a.appliedAt).getTime())
       .slice(0, 5)
-      .map(c => {
-        // Le backend envoie 'internship_position_id' au lieu de 'positionId'
-        const possibleIds = [
-          c.positionId,
-          (c as any).position_id,
-          (c as any).PositionId,
-          (c as any).jobPositionId,
-          (c as any).jobId,
-          (c as any).internship_position_id  // ← AJOUT DU NOM CORRECT DU BACKEND
-        ].filter(id => id !== undefined && id !== null);
-        
-        let positionId = null;
-        let position = null;
-        
-        // Essayer chaque ID possible
-        for (const id of possibleIds) {
-          const parsedId = typeof id === 'string' ? parseInt(id) : id;
-          position = positions.find(p => p.id === parsedId);
-          if (position) {
-            positionId = parsedId;
-            break;
-          }
-        }
-        
-        // Si la position est directement dans la candidature (backend envoie les données)
-        if (!position && (c as any).title && (c as any).company) {
-          position = {
-            title: (c as any).title,
-            company: (c as any).company
-          };
-        }
-        
-        // SOLUTION DE FALLBACK : Si aucune position trouvée, utiliser la plus récente
-        if (!position && positions.length > 0) {
-          // Trier les positions par date de création (la plus récente d'abord)
-          const sortedPositions = [...positions].sort((a, b) => {
-            const dateA = new Date(a.createdAt || '1970-01-01').getTime();
-            const dateB = new Date(b.createdAt || '1970-01-01').getTime();
-            return dateB - dateA;
-          });
-          
-          // Prendre la position la plus récente qui pourrait correspondre
-          position = sortedPositions[0];
-        }
-        
-        return {
-          id: c.id,
-          position: position?.title || (c as any).title || c.position?.title || 'Poste non spécifié',
-          company: position?.company || (c as any).company || c.position?.company || 'Entreprise',
-          status: getStatusText(c.status),
-          appliedDate: c.appliedAt,
-          lastUpdate: c.appliedAt
-        };
-      })
+      .map(c => ({
+        id: c.id,
+        candidateId: c.candidateId,
+        candidateFirstName: c.candidateFirstName,
+        candidateLastName: c.candidateLastName,
+        candidateEmail: c.candidateEmail,
+        positions: c.allPositions,
+        status: getStatusText(c.status),
+        appliedDate: c.appliedAt,
+        lastUpdate: c.appliedAt,
+        // Conserver les informations détaillées pour l'affichage
+        candidature: c.candidature
+      }))
   };
 
   const formatDate = (dateString: string) => {
@@ -289,11 +315,42 @@ export default function CandidateDashboardPage() {
                                     }`} />
                                   </div>
                                   <div className="flex-1">
-                                    <h4 className="font-bold text-gray-900 text-lg mb-1">{application.position}</h4>
-                                    {application.company && (
-                                      <div className="flex items-center gap-2 text-sm text-gray-600">
-                                        <Building className="w-4 h-4" />
-                                        <span>{application.company}</span>
+                                    {/* Afficher tous les postes de la candidature */}
+                                    {application.positions && application.positions.length > 0 ? (
+                                      <div className="space-y-2">
+                                        {application.positions.map((position: any, index: number) => (
+                                          <div key={position.id || index} className="flex items-center justify-between">
+                                            <div>
+                                              <h4 className="font-bold text-gray-900 text-lg">{position.title}</h4>
+                                              {position.company && (
+                                                <div className="flex items-center gap-2 text-sm text-gray-600">
+                                                  <Building className="w-4 h-4" />
+                                                  <span>{position.company}</span>
+                                                </div>
+                                              )}
+                                            </div>
+                                            {index === 0 && (
+                                              <Badge className={`${getStatusColor(application.status)} flex items-center gap-2 px-3 py-1.5 text-sm font-medium`}>
+                                                {getStatusIcon(application.status)}
+                                                {application.status}
+                                              </Badge>
+                                            )}
+                                          </div>
+                                        ))}
+                                        {/* Afficher le nombre de postes si > 1 */}
+                                        {application.positions.length > 1 && (
+                                          <div className="mt-2 text-xs text-gray-500 font-medium">
+                                            {application.positions.length} postes dans cette candidature
+                                          </div>
+                                        )}
+                                      </div>
+                                    ) : (
+                                      <div>
+                                        <h4 className="font-bold text-gray-900 text-lg mb-1">Poste non spécifié</h4>
+                                        <div className="flex items-center gap-2 text-sm text-gray-600">
+                                          <Building className="w-4 h-4" />
+                                          <span>Entreprise</span>
+                                        </div>
                                       </div>
                                     )}
                                   </div>
@@ -310,14 +367,6 @@ export default function CandidateDashboardPage() {
                                     <span>{getTimeSinceApplied(application.appliedDate)}</span>
                                   </div>
                                 </div>
-                              </div>
-
-                              {/* Badge de statut */}
-                              <div className="ml-4">
-                                <Badge className={`${getStatusColor(application.status)} flex items-center gap-2 px-3 py-1.5 text-sm font-medium`}>
-                                  {getStatusIcon(application.status)}
-                                  {application.status}
-                                </Badge>
                               </div>
                             </div>
                           </div>
