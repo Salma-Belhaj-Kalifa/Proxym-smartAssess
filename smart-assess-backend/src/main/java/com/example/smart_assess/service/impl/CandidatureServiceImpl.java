@@ -122,9 +122,37 @@ public class CandidatureServiceImpl implements CandidatureService {
 
     @Override
     public CandidatureDto getCandidatureById(Long id) {
-        Candidature candidature = candidatureRepository.findById(id)
+        log.info("=== GET CANDIDATURE BY ID WITH RELATIONS ===");
+        log.info("Requested ID: {}", id);
+        
+        Candidature candidature = candidatureRepository.findByIdWithRelations(id)
                 .orElseThrow(() -> new RuntimeException("Candidature not found"));
-        return toDto(candidature);
+        
+        log.info("Candidature found: {}", candidature != null ? "YES" : "NO");
+        if (candidature != null) {
+            log.info("Candidature ID: {}", candidature.getId());
+            log.info("Candidate ID: {}", candidature.getCandidate() != null ? candidature.getCandidate().getId() : null);
+            log.info("InternshipPositions size: {}", candidature.getInternshipPositions() != null ? candidature.getInternshipPositions().size() : 0);
+            log.info("InternshipPositions is null: {}", candidature.getInternshipPositions() == null);
+            log.info("InternshipPositions isEmpty: {}", candidature.getInternshipPositions() != null && candidature.getInternshipPositions().isEmpty());
+            
+            if (candidature.getInternshipPositions() != null && !candidature.getInternshipPositions().isEmpty()) {
+                candidature.getInternshipPositions().forEach(pos -> {
+                    log.info("Position - ID: {}, Title: {}", pos.getId(), pos.getTitle());
+                    log.info("Position - AcceptedDomains: {}", pos.getAcceptedDomains());
+                    log.info("Position - RequiredSkills: {}", pos.getRequiredSkills());
+                    log.info("Position - IsActive: {}", pos.getIsActive());
+                });
+            } else {
+                log.warn("⚠️ InternshipPositions is null or empty for candidature {}", id);
+            }
+        }
+        
+        log.info("About to call toDto()...");
+        CandidatureDto result = toDto(candidature);
+        log.info("toDto() completed, returning result with positions: {}", result.getPositions() != null ? result.getPositions().size() : 0);
+        
+        return result;
     }
 
     @Override

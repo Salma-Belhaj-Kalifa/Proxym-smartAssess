@@ -395,54 +395,6 @@ export default function PositionDetailPage() {
             </CardContent>
           </Card>
         </div>
-
-        {/* Right Column - Actions & Info */}
-        <div className="space-y-6">
-          {/* Quick Actions */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Actions rapides</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <Button 
-                variant="outline" 
-                className="w-full justify-start"
-                onClick={handleEdit}
-              >
-                <Edit className="w-4 h-4 mr-2" />
-                Modifier le poste
-              </Button>
-              <Button 
-                variant="destructive" 
-                className="w-full justify-start"
-                onClick={() => setIsDeleteDialogOpen(true)}
-              >
-                <Trash2 className="w-4 h-4 mr-2" />
-                Supprimer le poste
-              </Button>
-            </CardContent>
-          </Card>
-
-          {/* Position Status */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Statut du poste</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  {getStatusBadge(position.isActive)}
-                </div>
-                <div className="text-sm text-gray-600">
-                  {position.isActive 
-                    ? "Ce poste est actif et visible par les candidats"
-                    : "Ce poste est inactif et invisible par les candidats"
-                  }
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
       </div>
 
       {/* Edit Dialog */}

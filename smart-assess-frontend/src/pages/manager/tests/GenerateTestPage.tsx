@@ -56,9 +56,34 @@ const GenerateTestPage = () => {
     return candidateData?.id || (id && !isNaN(Number(id)) ? Number(id) : null);
   }, [candidateData?.id, id]);
   
-  // Calculer separateCandidateId pour l'ID du candidat
+  // ✅ CORRECT - Utiliser l'ID de l'URL comme candidateId et chercher par candidateId
   const separateCandidateId = useMemo(() => {
-    return candidateData?.candidateId || (candidatures.find(c => c.id === Number(id))?.candidateId) || null;
+    console.log('=== SEPARATE CANDIDATE ID CALCUL ===');
+    console.log('ID de l URL (id):', id);
+    console.log('Type de id:', typeof id);
+    console.log('Number(id):', Number(id));
+    console.log('isNaN(Number(id)):', isNaN(Number(id)));
+    
+    // L'ID dans l'URL est le candidateId (136), pas la candidatureId (115)
+    const urlCandidateId = id && !isNaN(Number(id)) ? Number(id) : null;
+    console.log('urlCandidateId calculé:', urlCandidateId);
+    
+    if (urlCandidateId) {
+      console.log('→ Retour urlCandidateId:', urlCandidateId);
+      return urlCandidateId;
+    }
+    
+    // Fallback : chercher dans les candidatures par candidateId
+    const foundCandidature = candidatures.find(c => c.candidateId === Number(id));
+    console.log('foundCandidature:', foundCandidature);
+    if (foundCandidature?.candidateId) {
+      console.log('→ Retour foundCandidature.candidateId:', foundCandidature.candidateId);
+      return foundCandidature.candidateId;
+    }
+    
+    // Dernier fallback : chercher dans candidateData
+    console.log('→ Dernier fallback - candidateData?.candidateId:', candidateData?.candidateId);
+    return candidateData?.candidateId || null;
   }, [candidateData?.candidateId, candidatures, id]);
   
   const [existingTest, setExistingTest] = useState<any>(null);
@@ -228,7 +253,7 @@ const GenerateTestPage = () => {
     }
   }, [candidatures, candidateData, id, candidaturesLoading, candidaturesError]);
 
-  // Vérifier si un test existe dès qu'on a un ID (URL ou candidateData)
+  // Vérifier si un test existe dès qu'on a un ID (utiliser candidatureId au lieu de candidateId)
   useEffect(() => {
     console.log('=== USE EFFECT VÉRIFICATION TEST S\'EXÉCUTE ===');
     console.log('candidateData:', candidateData);
@@ -237,13 +262,21 @@ const GenerateTestPage = () => {
     console.log('candidateId calculé:', candidateId);
     console.log('=== FIN USE EFFECT VÉRIFICATION TEST ===');
     
-    if (candidateId) {
+    // Utiliser l'ID de la candidature (84) au lieu du candidateId (100) pour la vérification du test
+    const testCheckId = candidateData?.id || (id && !isNaN(Number(id)) ? Number(id) : null);
+    console.log('=== TEST CHECK ID ===');
+    console.log('testCheckId:', testCheckId);
+    console.log('candidateData?.id:', candidateData?.id);
+    console.log('Number(id):', Number(id));
+    console.log('=== FIN TEST CHECK ID ===');
+    
+    if (testCheckId) {
       console.log('=== CANDIDATE ID DISPO, VÉRIFICATION TEST ===');
-      console.log('Candidate ID utilisé:', candidateId);
+      console.log('Test Check ID utilisé:', testCheckId);
       
       const timer = setTimeout(() => {
         console.log('APPEL DE checkExistingTest...');
-        checkExistingTest();
+        checkExistingTest(testCheckId);
       }, 500);
       
       return () => clearTimeout(timer);
@@ -324,80 +357,6 @@ const GenerateTestPage = () => {
     }
   }, [technicalProfileData, technicalProfileLoading, candidateData, candidatures, id]);
 
-  // Créer un technical profile fallback à partir des données de la candidature
-  const createFallbackTechnicalProfile = () => {
-    if (!candidateData) return null;
-    
-    console.log('=== CRÉATION DU FALLBACK TECHNICAL PROFILE ===');
-    console.log('CandidateData:', candidateData);
-    
-    // Chercher la candidature correspondante pour plus de données
-    const candidature = candidatures.find(c => c.id === Number(id));
-    console.log('Candidature trouvée pour fallback:', candidature);
-    
-    // Log détaillé de toutes les propriétés de la candidature
-    if (candidature) {
-      console.log('=== ANALYSE COMPLÈTE DE LA CANDIDATURE ===');
-      console.log('ID:', candidature.id);
-      console.log('CandidateId:', candidature.candidateId);
-      console.log('AI Score:', candidature.aiScore);
-      console.log('AI Analysis:', candidature.aiAnalysis);
-      console.log('ParsedData:', candidature.parsedData);
-      console.log('TechnicalProfile:', (candidature as any).technicalProfile);
-      console.log('Domain:', (candidature as any).domain);
-      console.log('Technologies:', (candidature as any).technologies);
-      console.log('ExperienceYears:', (candidature as any).experienceYears);
-      console.log('SkillLevel:', (candidature as any).skillLevel);
-      console.log('CareerLevel:', (candidature as any).careerLevel);
-      console.log('Certifications:', (candidature as any).certifications);
-      console.log('Projects:', (candidature as any).projects);
-      console.log('Education:', (candidature as any).education);
-      console.log('WorkExperience:', (candidature as any).workExperience);
-      console.log('Experience:', (candidature as any).experience);
-      console.log('Toutes les clés:', Object.keys(candidature));
-      console.log('=== FIN ANALYSE CANDIDATURE ===');
-    }
-    
-    const fallbackProfile = {
-      id: candidateData.id,
-      cvId: candidature?.candidateId || candidateData.id,
-      candidateId: candidature?.candidateId || candidateData.id,
-      parsedData: candidature?.aiAnalysis || candidature?.parsedData || (candidature as any)?.technicalProfile?.parsedData || {
-        "Basic Information": {
-          "full_name": `${candidateData.firstName} ${candidateData.lastName}`,
-          "email": candidateData.email,
-          "phone": candidateData.phone || ""
-        },
-        "Technical Information": {
-          "domain": (candidature as any)?.domain || "Backend Development",
-          "technologies": (candidature as any)?.technologies || {
-            "Frontend": ["React", "TypeScript", "Tailwind CSS"],
-            "Backend": ["Node.js", "Express", "MongoDB"],
-            "Tools": ["Git", "Docker", "VS Code"]
-          }
-        },
-        "Summary": {
-          "overall_score": (candidature as any)?.aiScore || 0,
-          "experience_years": (candidature as any)?.experienceYears || "2-3",
-          "skill_level": (candidature as any)?.skillLevel || "Intermédiaire",
-          "career_level": (candidature as any)?.careerLevel || "Intermédiaire",
-          "recommendation": (candidature as any)?.aiScore && (candidature as any)?.aiScore >= 7 ? "Recommandé" : "À évaluer",
-          "summary": `Candidat avec ${(candidature as any)?.aiScore || 0}/10 de score IA. Expérience de ${(candidature as any)?.experienceYears || "2-3"} ans. Niveau ${(candidature as any)?.skillLevel || "Intermédiaire"} en développement. ${(candidature as any)?.aiScore && (candidature as any)?.aiScore >= 7 ? "Profil recommandé pour le poste." : "Profil à évaluer davantage."}`
-        },
-        // Ajouter des données réelles si elles existent dans la candidature
-        "Certifications": (candidature as any)?.certifications || [],
-        "Projects": (candidature as any)?.projects || [],
-        "Education": (candidature as any)?.education || [],
-        "Work Experience": (candidature as any)?.workExperience || (candidature as any)?.experience || []
-      },
-      createdAt: (candidature as any)?.createdAt || new Date().toISOString()
-    };
-    
-    console.log('Fallback technical profile créé:', fallbackProfile);
-    console.log('=== FIN FALLBACK ===');
-    
-    return fallbackProfile;
-  };
 
   const finalIsLoading = !candidateData || technicalProfileLoading;
   const technicalProfile = technicalProfileData;
@@ -413,44 +372,41 @@ const GenerateTestPage = () => {
     console.log('CandidateData updated:', candidateData);
   }, [candidateData]);
 
-  const checkExistingTest = async () => {
-    if (!separateCandidateId) {
-      console.log('No candidate ID available');
+  const checkExistingTest = async (testId: number) => {
+    if (!testId) {
+      console.log('No test check ID available');
       return;
     }
     
+    console.log('=== CHECKING EXISTING TEST ===');
+    console.log('Test Check ID utilisé:', testId);
+    
     try {
-      console.log('=== CHECKING EXISTING TEST ===');
-      console.log('Candidate ID utilisé:', separateCandidateId);
+      const response = await checkExistingTestMutation.mutateAsync(testId);
       
-      const response = await checkExistingTestMutation.mutateAsync(separateCandidateId);
-      
-      console.log('=== RESPONSE DU BACKEND ===');
-      console.log('Response brute:', response);
-      console.log('Response type:', typeof response);
-      console.log('Response keys:', response ? Object.keys(response) : 'null/undefined');
-      console.log('=== FIN RESPONSE BACKEND ===');
-      
-      console.log('Response from checkExistingTest:', response);
-      console.log('Has test:', response.exists);
-      console.log('Test ID:', response.testId);
-      
-      if (response.exists) {
-        const testInfo = {
-          existingTestId: response.testId,
-          existingTestToken: '', // Pas disponible dans la réponse actuelle
-          existingTestStatus: response.status || 'UNKNOWN', // Utiliser le statut réel du backend
-          existingTestCreatedAt: new Date().toISOString() // Pas disponible dans la réponse actuelle
-        };
-        console.log('Setting existingTest:', testInfo);
-        setExistingTest(testInfo);
-        toast.info("Un test existe déjà pour ce candidat");
+      if (response) {
+        if (response.testId) {
+          setExistingTest({
+            existingTestId: response.testId,
+            existingTestToken: (response as any).testToken || '',
+            existingTestStatus: response.status,
+            existingTestCreatedAt: (response as any).createdAt || new Date().toISOString()
+          });
+          console.log('Existing test set:', {
+            existingTestId: response.testId,
+            existingTestStatus: response.status
+          });
+          toast.info("Un test existe déjà pour ce candidat");
+        } else {
+          console.log('No existing test found');
+          setExistingTest(null);
+        }
       } else {
-        console.log('No existing test found');
+        console.log('No response data');
         setExistingTest(null);
       }
-      
     } catch (error: any) {
+      console.error('Error checking existing test:', error);
       setExistingTest(null);
       console.error('Error occurred while checking existing test, assuming no test exists');
       if (error.response?.status === 401) {
@@ -480,85 +436,601 @@ const GenerateTestPage = () => {
     return null;
   };
 
-  const cvUrl = getCvUrl();
+  // Vérifier si un test existe dès qu'on a un ID (utiliser candidatureId au lieu de candidateId)
+  useEffect(() => {
 
-  const downloadCV = async () => {
-    if (!cvUrl) return;
-    
-    try {
-      const response = await fetch(`http://localhost:8080${cvUrl}`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('auth_token') || sessionStorage.getItem('auth_token')}`,
-        },
-      });
+    // Utiliser l'ID de la candidature (84) au lieu du candidateId (100) pour la vérification du test
+    const testCheckId = candidateData?.id || (id && !isNaN(Number(id)) ? Number(id) : null);
+    if (testCheckId) {
+      console.log('=== CANDIDATE ID DISPO, VÉRIFICATION TEST ===');
+      console.log('Test Check ID utilisé:', testCheckId);
       
-      if (!response.ok) {
-        throw new Error('Erreur lors du téléchargement du CV');
-      }
+      const timer = setTimeout(() => {
+        console.log('APPEL DE checkExistingTest...');
+        checkExistingTest(testCheckId);
+      }, 500);
       
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `CV_${candidateData?.firstName}_${candidateData?.lastName}.pdf`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
-      
-      toast.success('CV téléchargé avec succès');
-    } catch (error) {
-      console.error('Error downloading CV:', error);
-      toast.error('Erreur lors du téléchargement du CV');
+      return () => clearTimeout(timer);
+    } else {
+      console.log('=== PAS DE CANDIDATE ID DISPONIBLE ===');
+      console.log('candidateData?.id:', candidateData?.id);
+      console.log('id:', id);
+      console.log('isNaN(Number(id)):', id ? isNaN(Number(id)) : 'id is null');
     }
+  }, [candidateData?.id, id, candidateId]);
+
+  const candidatePositions = useMemo(() => {
+    console.log('=== CANDIDATE POSITIONS CALCUL ===');
+    console.log('separateCandidateId:', separateCandidateId);
+    console.log('candidatures:', candidatures);
+    
+    if (!separateCandidateId) {
+      console.log('→ separateCandidateId est null, retour []');
+      return [];
+    }
+    
+    // Récupérer toutes les candidatures du candidat OU de la candidature actuelle
+    const allCandidateCandidatures = candidatures.filter(c => {
+      // Chercher par candidateId OU par l'ID de la candidature actuelle
+      return c.candidateId === separateCandidateId || c.id === Number(id);
+    });
+    console.log('allCandidateCandidatures:', allCandidateCandidatures);
+    console.log('allCandidateCandidatures.length:', allCandidateCandidatures.length);
+    
+    // ✅ Extraire TOUS les postes de la nouvelle structure positions
+    const allPositions: any[] = [];
+    
+    allCandidateCandidatures.forEach(candidature => {
+      console.log(`=== ANALYSE CANDIDATURE ${candidature.id} ===`);
+      console.log('Candidature complète:', JSON.stringify(candidature, null, 2));
+      
+      // Priorité 1: Utiliser le nouveau champ positions du backend
+      if (candidature.positions && Array.isArray(candidature.positions) && candidature.positions.length > 0) {
+        console.log('→ Utilisation de candidature.positions');
+        candidature.positions.forEach((position: any) => {
+          console.log('Position trouvée:', JSON.stringify(position, null, 2));
+          const positionAcceptedDomains = (position as any).acceptedDomains || (position as any).domains || (position as any).requiredDomains || [];
+          console.log('Domaines acceptés de cette position:', positionAcceptedDomains);
+          
+          allPositions.push({
+            title: position.title,
+            company: position.company,
+            appliedAt: candidature.appliedAt,
+            candidatureId: candidature.id,
+            acceptedDomains: positionAcceptedDomains
+          });
+        });
+      }
+      // Priorité 2: Compatibilité avec internshipPositions
+      else if (candidature.internshipPositions && Array.isArray(candidature.internshipPositions) && candidature.internshipPositions.length > 0) {
+        console.log('→ Utilisation de candidature.internshipPositions');
+        candidature.internshipPositions.forEach((position: any) => {
+          console.log('InternshipPosition trouvée:', JSON.stringify(position, null, 2));
+          const positionAcceptedDomains = (position as any).acceptedDomains || (position as any).domains || (position as any).requiredDomains || [];
+          console.log('Domaines acceptés de cette internshipPosition:', positionAcceptedDomains);
+          
+          allPositions.push({
+            title: position.title,
+            company: position.company,
+            appliedAt: candidature.appliedAt,
+            candidatureId: candidature.id,
+            acceptedDomains: positionAcceptedDomains
+          });
+        });
+      }
+      // Priorité 3: Ancienne structure pour compatibilité
+      else if (candidature.positionTitle && candidature.positionTitle.trim() !== '') {
+        console.log('→ Utilisation de la structure ancienne');
+        console.log('Candidature (ancienne structure):', JSON.stringify(candidature, null, 2));
+        const candidatureAcceptedDomains = (candidature as any).acceptedDomains || (candidature as any).domains || (candidature as any).requiredDomains || [];
+        console.log('Domaines acceptés de la candidature:', candidatureAcceptedDomains);
+        
+        allPositions.push({
+          title: candidature.positionTitle.trim(),
+          company: candidature.positionCompany,
+          appliedAt: candidature.appliedAt,
+          candidatureId: candidature.id,
+          acceptedDomains: candidatureAcceptedDomains
+        });
+      } else {
+        console.log('→ Aucune structure de position trouvée pour cette candidature');
+      }
+    });
+    
+    return allPositions;
+  }, [candidatures, separateCandidateId]);
+
+  // Fonction pour définir des domaines par défaut selon le titre du poste
+  const getDefaultDomainsForPosition = (positionTitle: string): string[] => {
+    if (!positionTitle) return ['informatique'];
+    
+    const title = positionTitle.toLowerCase();
+    
+    // Mapping des titres de poste vers domaines acceptés
+    if (title.includes('développeur') || title.includes('developer') || title.includes('developpeur')) {
+      if (title.includes('frontend') || title.includes('front')) {
+        return ['informatique', 'web development', 'ui/ux', 'software engineering'];
+      } else if (title.includes('backend') || title.includes('back')) {
+        return ['informatique', 'software engineering', 'database', 'devops'];
+      } else if (title.includes('fullstack') || title.includes('full stack')) {
+        return ['informatique', 'software engineering', 'web development', 'database'];
+      } else if (title.includes('mobile') || title.includes('android') || title.includes('ios')) {
+        return ['informatique', 'mobile development', 'software engineering'];
+      } else {
+        return ['informatique', 'software engineering', 'web development'];
+      }
+    }
+    
+    if (title.includes('data') || title.includes('analyste') || title.includes('analytics')) {
+      return ['data science', 'informatique', 'database'];
+    }
+    
+    if (title.includes('design') || title.includes('ui') || title.includes('ux')) {
+      return ['ui/ux', 'web development', 'informatique'];
+    }
+    
+    if (title.includes('devops') || title.includes('infrastructure') || title.includes('cloud')) {
+      return ['devops', 'informatique', 'networking'];
+    }
+    
+    if (title.includes('cyber') || title.includes('sécurité') || title.includes('security')) {
+      return ['cybersecurity', 'informatique', 'networking'];
+    }
+    
+    if (title.includes('réseau') || title.includes('network')) {
+      return ['networking', 'informatique'];
+    }
+    
+    if (title.includes('base de données') || title.includes('database') || title.includes('bdd')) {
+      return ['database', 'informatique'];
+    }
+    
+    if (title.includes('test') || title.includes('qa') || title.includes('qualité')) {
+      return ['software engineering', 'informatique', 'quality assurance'];
+    }
+    
+    // Domaine par défaut pour les autres cas
+    return ['informatique'];
   };
 
-  const openCV = async () => {
-    if (!cvUrl) return;
+  const getEligibilityChecks = () => {
+    console.log('=== GET ELIGIBILITY CHECKS APPELÉ ===');
+    console.log('separateCandidateId:', separateCandidateId);
+    console.log('candidatePositions:', candidatePositions);
+    console.log('candidatePositions.length:', candidatePositions?.length);
     
-    try {
-      const response = await fetch(`http://localhost:8080${cvUrl}`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('auth_token') || sessionStorage.getItem('auth_token')}`,
-        },
+    const checks = [];
+    const data = technicalProfile?.parsedData;
+    
+    console.log('=== DÉBOGAGE DOMAIN EXTRACTION ===');
+    console.log('technicalProfile complet:', technicalProfile);
+    console.log('parsedData complet:', data);
+    console.log('Technical Information:', data?.["Technical Information"]);
+    console.log('Domain depuis Technical Information:', data?.["Technical Information"]?.["domain"]);
+    console.log('Type de parsedData:', typeof data);
+    console.log('Type de Technical Information:', typeof data?.["Technical Information"]);
+    console.log('=== FIN DÉBOGAGE DOMAIN ===');
+    
+    const candidateDomain = data?.["Technical Information"]?.["domain"];
+    
+    // Fonction helper pour vérifier l'éligibilité par poste
+    const checkDomainEligibilityForPosition = (domain: string, acceptedDomainsList: string[]) => {
+      if (!domain || domain === 'Unknown' || domain.trim() === '') return false;
+      if (acceptedDomainsList.length === 0) return false;
+      
+      const normalizeDomain = (d: string) => {
+        return d.toLowerCase()
+          .trim()
+          .replace(/[^\w\s]/g, '') 
+          .replace(/\s+/g, ' '); 
+      };
+      
+      const normalizedCandidate = normalizeDomain(domain);
+      
+      // Vérification directe
+      return acceptedDomainsList.some(acceptedDomain => {
+        const normalizedAccepted = normalizeDomain(acceptedDomain);
+        if (normalizedAccepted === normalizedCandidate) return true;
+        
+        // Équivalences de domaines
+        const domainEquivalences: { [key: string]: string[] } = {
+          'software engineering': ['software engineering', 'ingénierie logicielle', 'développement logiciel', 'informatique', 'software development', 'programmation', 'coding', 'computer science', 'développement', 'development'],
+          'informatique': ['informatique', 'software engineering', 'ingénierie logicielle', 'développement logiciel', 'software development', 'programmation', 'coding', 'computer science', 'développement', 'development'],
+          'data science': ['data science', 'science des données', 'analyse de données', 'data analysis', 'big data', 'machine learning', 'ia', 'intelligence artificielle', 'artificial intelligence'],
+          'web development': ['web development', 'développement web', 'web', 'site web', 'web design', 'frontend', 'back-end', 'fullstack', 'développeur web'],
+          'mobile development': ['mobile development', 'développement mobile', 'mobile', 'android', 'ios', 'application mobile'],
+          'cybersecurity': ['cybersecurity', 'cyber sécurité', 'sécurité informatique', 'sécurité', 'security'],
+          'devops': ['devops', 'développement opérations', 'operations', 'infrastructure', 'cloud'],
+          'ui/ux': ['ui/ux', 'design', 'design interface', 'design expérience utilisateur', 'user interface', 'user experience'],
+          'networking': ['networking', 'réseau', 'réseaux', 'network', 'administration réseau'],
+          'database': ['database', 'base de données', 'bdd', 'data', 'données'],
+          'project management': ['project management', 'gestion de projet', 'management', 'chef de projet']
+        };
+        
+        // Logique d'équivalences
+        for (const [canonicalDomain, equivalents] of Object.entries(domainEquivalences)) {
+          const normalizedCanonical = normalizeDomain(canonicalDomain);
+          
+          if (normalizedAccepted === normalizedCanonical) {
+            const candidateMatches = equivalents.some(eq => normalizeDomain(eq) === normalizedCandidate);
+            if (candidateMatches) return true;
+          }
+        }
+        
+        for (const [canonicalDomain, equivalents] of Object.entries(domainEquivalences)) {
+          const normalizedCandidateInList = equivalents.some(eq => normalizeDomain(eq) === normalizedCandidate);
+          if (normalizedCandidateInList) {
+            const acceptedDomainInList = equivalents.some(eq => normalizeDomain(eq) === normalizedAccepted);
+            if (acceptedDomainInList) return true;
+          }
+        }
+        
+        return false;
+      });
+    };
+    
+    // ✅ Correction: vérifier par rapport à TOUS les postes de la candidature
+    let isEligibleForAnyPosition = false;
+    let allAcceptedDomains = [];
+    
+    if (candidatePositions && candidatePositions.length > 0) {
+      console.log('=== VÉRIFICATION TOUS LES POSTES ===');
+      console.log('candidatePositions:', JSON.stringify(candidatePositions, null, 2));
+      
+      candidatePositions.forEach((position, index) => {
+        console.log(`Poste ${index + 1}: ${position.title}`);
+        console.log(`  Position complète:`, JSON.stringify(position, null, 2));
+        console.log(`  Domaines acceptés bruts: ${position.acceptedDomains}`);
+        console.log(`  Type de acceptedDomains: ${typeof position.acceptedDomains}`);
+        console.log(`  Est un tableau: ${Array.isArray(position.acceptedDomains)}`);
+        
+        const positionAcceptedDomains = position.acceptedDomains || [];
+        console.log(`  Domaines acceptés finaux: ${positionAcceptedDomains}`);
+        allAcceptedDomains = [...allAcceptedDomains, ...positionAcceptedDomains];
+        
+        // Vérifier si éligible pour CE poste spécifique
+        const isEligibleForThisPosition = checkDomainEligibilityForPosition(candidateDomain, positionAcceptedDomains);
+        console.log(`  Éligible pour ce poste: ${isEligibleForThisPosition}`);
+        
+        if (isEligibleForThisPosition) {
+          isEligibleForAnyPosition = true;
+        }
       });
       
-      if (!response.ok) {
-        throw new Error('Erreur lors de l\'ouverture du CV');
-      }
-      
-      const blob = await response.blob();
-      
-      const blobUrl = URL.createObjectURL(blob);
-      
-      const newWindow = window.open(blobUrl, '_blank');
-      
-      if (newWindow) {
-        newWindow.focus();
-        toast.success('CV ouvert dans un nouvel onglet');
-        
-        setTimeout(() => {
-          URL.revokeObjectURL(blobUrl);
-        }, 10000); // 10 secondes
+      console.log(`Domaine du candidat éligible pour AU MOINS UN poste: ${isEligibleForAnyPosition}`);
+    } else if (candidateData?.position) {
+      // Fallback ancienne structure
+      const acceptedDomains = candidateData.position.acceptedDomains || [];
+      allAcceptedDomains = acceptedDomains;
+      isEligibleForAnyPosition = checkDomainEligibilityForPosition(candidateDomain, acceptedDomains);
+    }
+    
+    // Informations des postes du candidat
+    candidatePositions.forEach((position, index) => {
+      checks.push({ 
+        label: ` Poste ${index + 1} : ${position.title}`, 
+        ok: true 
+      });
+    });  
+    
+    // Analyse du CV
+    if (data) {
+      // Domaine technique
+      if (candidateDomain) {
+        if (isEligibleForAnyPosition) {
+          checks.push({ 
+            label: ` Domaine : ${candidateDomain} — compatible avec les postes`, 
+            ok: true 
+          });
+        } else {
+          // Afficher tous les domaines acceptés pour tous les postes
+          const uniqueAcceptedDomains = [...new Set(allAcceptedDomains)];
+          checks.push({ 
+            label: ` Domaine : ${candidateDomain} — non compatible avec les domaines requis (${uniqueAcceptedDomains.join(', ') || 'Non spécifié'})`, 
+            ok: false 
+          });
+        }
       } else {
-        const link = document.createElement('a');
-        link.href = blobUrl;
-        link.download = `CV_${candidateData?.firstName}_${candidateData?.lastName}.pdf`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        toast.info('Le popup a été bloqué. Le CV a été téléchargé à la place.');
-        
-        setTimeout(() => {
-          URL.revokeObjectURL(blobUrl);
-        }, 1000);
+        checks.push({ 
+          label: '⚠️ Domaine technique non détecté dans le CV', 
+          ok: false 
+        });
       }
       
-    } catch (error) {
-      console.error('Error opening CV:', error);
-      toast.error('Erreur lors de l\'ouverture du CV');
+      // Compétences techniques
+      if (data["Technical Information"]?.["technologies"]) {
+        const allSkills = [];
+        Object.values(data["Technical Information"]["technologies"]).forEach(categorySkills => {
+          if (Array.isArray(categorySkills)) {
+            categorySkills.forEach(skill => {
+              if (typeof skill === 'string' && skill.trim()) {
+                allSkills.push(skill);
+              } else if (skill && skill.name && skill.name.trim()) {
+                allSkills.push(skill.name);
+              }
+            });
+          }
+        });
+        
+        if (allSkills.length > 0) {
+          checks.push({ 
+            label: ` ${allSkills.length} compétence(s) technique(s) détectée(s) : ${allSkills.slice(0, 3).join(', ')}${allSkills.length > 3 ? '...' : ''}`, 
+            ok: true 
+          });
+        }
+      }
+      
+      // Expérience
+      const experience = data["Professional Experience"]?.["experience"];
+      if (experience && experience.length > 0) {
+        const totalYears = experience.reduce((sum, exp) => {
+          const years = parseFloat(exp.duration?.split(' ')[0]) || 0;
+          return sum + years;
+        }, 0);
+        
+        checks.push({ 
+          label: `📈 ${experience.length} expérience(s) professionnelle(s) détectée(s)`, 
+          ok: totalYears >= 1 
+        });
+      }
+      
+      // Formation
+      const education = data["Education"]?.["education"];
+      if (education && education.length > 0) {
+        const highestDegree = education.reduce((highest, edu) => {
+          const degreeOrder = { 'bac': 1, 'licence': 2, 'master': 3, 'doctorat': 4 };
+          const eduLevel = degreeOrder[edu.degree?.toLowerCase()] || 0;
+          const highestLevel = degreeOrder[highest.degree?.toLowerCase()] || 0;
+          return eduLevel > highestLevel ? edu : highest;
+        }, education[0]);
+        
+        checks.push({ 
+          label: ` Formation : ${highestDegree.degree} en ${highestDegree.field || 'spécialité non spécifiée'}`, 
+          ok: true 
+        });
+      }
+    } else {
+      checks.push({ 
+        label: '❌ CV non analysé ou données non disponibles', 
+        ok: false 
+      });
+    }
+    
+    // Éligibilité finale
+    const isEligible = isEligibleForAnyPosition && data && candidateDomain && candidateDomain !== 'Unknown';
+    checks.push({ 
+      label: isEligible ? ' Candidature éligible pour génération de test' : ' Candidature non éligible — domaine incompatible ou données manquantes', 
+      ok: isEligible 
+    });
+    
+    return checks;
+  };
+
+  const isCandidateEligible = () => {
+    const data = technicalProfile?.parsedData;
+    const candidateDomain = data?.["Technical Information"]?.["domain"];
+    
+    if (!candidateDomain || candidateDomain === 'Unknown' || candidateDomain.trim() === '') return false;
+    
+    // Utiliser la même logique que getEligibilityChecks mais simplifiée
+    let isEligibleForAnyPosition = false;
+    
+    // Définir les équivalences de domaines une seule fois
+    const domainEquivalences: { [key: string]: string[] } = {
+      'software engineering': ['software engineering', 'ingénierie logicielle', 'développement logiciel', 'informatique', 'software development', 'programmation', 'coding', 'computer science', 'développement', 'development'],
+      'informatique': ['informatique', 'software engineering', 'ingénierie logicielle', 'développement logiciel', 'software development', 'programmation', 'coding', 'computer science', 'développement', 'development'],
+      'data science': ['data science', 'science des données', 'analyse de données', 'data analysis', 'big data', 'machine learning', 'ia', 'intelligence artificielle', 'artificial intelligence'],
+      'web development': ['web development', 'développement web', 'web', 'site web', 'web design', 'frontend', 'back-end', 'fullstack', 'développeur web'],
+      'mobile development': ['mobile development', 'développement mobile', 'mobile', 'android', 'ios', 'application mobile'],
+      'cybersecurity': ['cybersecurity', 'cyber sécurité', 'sécurité informatique', 'sécurité', 'security'],
+      'devops': ['devops', 'développement opérations', 'operations', 'infrastructure', 'cloud'],
+      'ui/ux': ['ui/ux', 'design', 'design interface', 'design expérience utilisateur', 'user interface', 'user experience'],
+      'networking': ['networking', 'réseau', 'réseaux', 'network', 'administration réseau'],
+      'database': ['database', 'base de données', 'bdd', 'data', 'données'],
+      'project management': ['project management', 'gestion de projet', 'management', 'chef de projet']
+    };
+    
+    if (candidatePositions && candidatePositions.length > 0) {
+      candidatePositions.forEach((position) => {
+        const positionAcceptedDomains = position.acceptedDomains || [];
+        
+        // Utiliser la même fonction de vérification que getEligibilityChecks
+        const checkDomainEligibilityForPosition = (domain: string, acceptedDomainsList: string[]) => {
+          if (!domain || domain === 'Unknown' || domain.trim() === '') return false;
+          if (acceptedDomainsList.length === 0) return false;
+          
+          const normalizeDomain = (d: string) => {
+            return d.toLowerCase()
+              .trim()
+              .replace(/[^\w\s]/g, '') 
+              .replace(/\s+/g, ' '); 
+          };
+          
+          const normalizedCandidate = normalizeDomain(domain);
+          
+          // Vérification directe
+          return acceptedDomainsList.some(acceptedDomain => {
+            const normalizedAccepted = normalizeDomain(acceptedDomain);
+            if (normalizedAccepted === normalizedCandidate) return true;
+            
+            // Logique d'équivalences
+            for (const [canonicalDomain, equivalents] of Object.entries(domainEquivalences)) {
+              const normalizedCanonical = normalizeDomain(canonicalDomain);
+              
+              if (normalizedAccepted === normalizedCanonical) {
+                const candidateMatches = equivalents.some(eq => normalizeDomain(eq) === normalizedCandidate);
+                if (candidateMatches) return true;
+              }
+            }
+            
+            for (const [canonicalDomain, equivalents] of Object.entries(domainEquivalences)) {
+              const normalizedCandidateInList = equivalents.some(eq => normalizeDomain(eq) === normalizedCandidate);
+              if (normalizedCandidateInList) {
+                const acceptedDomainInList = equivalents.some(eq => normalizeDomain(eq) === normalizedAccepted);
+                if (acceptedDomainInList) return true;
+              }
+            }
+            
+            return false;
+          });
+        };
+        
+        const isEligibleForThisPosition = checkDomainEligibilityForPosition(candidateDomain, positionAcceptedDomains);
+        if (isEligibleForThisPosition) {
+          isEligibleForAnyPosition = true;
+        }
+      });
+    } else if (candidateData?.position) {
+      // Fallback ancienne structure
+      const acceptedDomains = (candidateData.position as any).acceptedDomains || [];
+      if (acceptedDomains.length === 0) return false;
+      
+      const normalizeDomain = (d: string) => {
+        return d.toLowerCase()
+          .trim()
+          .replace(/[^\w\s]/g, '') 
+          .replace(/\s+/g, ' '); 
+      };
+      
+      const normalizedCandidate = normalizeDomain(candidateDomain);
+      
+      isEligibleForAnyPosition = acceptedDomains.some(acceptedDomain => {
+        const normalizedAccepted = normalizeDomain(acceptedDomain);
+        if (normalizedAccepted === normalizedCandidate) return true;
+        
+        // Logique d'équivalences
+        for (const [canonicalDomain, equivalents] of Object.entries(domainEquivalences)) {
+          const normalizedCanonical = normalizeDomain(canonicalDomain);
+          
+          if (normalizedAccepted === normalizedCanonical) {
+            const candidateMatches = equivalents.some(eq => normalizeDomain(eq) === normalizedCandidate);
+            if (candidateMatches) return true;
+          }
+        }
+        
+        for (const [canonicalDomain, equivalents] of Object.entries(domainEquivalences)) {
+          const normalizedCandidateInList = equivalents.some(eq => normalizeDomain(eq) === normalizedCandidate);
+          if (normalizedCandidateInList) {
+            const acceptedDomainInList = equivalents.some(eq => normalizeDomain(eq) === normalizedAccepted);
+            if (acceptedDomainInList) return true;
+          }
+        }
+        
+        return false;
+      });
+    }
+    
+    return isEligibleForAnyPosition;
+  };
+
+  const handleForceGenerateTest = async () => {
+    if (!candidateData || !technicalProfileData) {
+      toast.error('Veuillez patienter que les données du candidat soient chargées');
+      return;
+    }
+
+    // Extraire les compétences réelles du candidat
+    const skills = extractSkillsFromProfile();
+    console.log('=== GÉNÉRATION FORCÉE DE TEST AVEC COMPÉTENCES RÉELLES ===');
+    console.log('Compétences extraites:', skills);
+    console.log('Nombre de compétences:', skills.length);
+    console.log('=== FIN COMPÉTENCES POUR GÉNÉRATION FORCÉE ===');
+
+    try {
+      // Utiliser l'approche simple de l'ancien code backend
+      // Le backend utilise maintenant: technicalProfile.getParsedData() directement
+      // Plus besoin d'envoyer des customInstructions structurées
+      
+      // Afficher un message d'attente plus informatif
+      toast.loading('Génération forcée du test personnalisé en cours... Cela peut prendre jusqu\'à 60 secondes.', {
+        duration: 0, // Ne pas auto-dismiss
+        id: 'force-generate-test' // ID unique pour pouvoir le mettre à jour
+      });
+      
+      // Appeler l'API avec le format simple (nouvelle structure)
+      const testResponse = await generateTestMutation.mutateAsync({
+        candidatureId: candidateData.id, // Garder pour compatibilité backend
+        level: testConfig.level,
+        questionCount: testConfig.questionCount,
+        duration: testConfig.duration,
+        deadline: testConfig.deadline,
+        note: testConfig.note,
+        focusAreas: skills.map(skill => skill.name), // Garder pour compatibilité
+        // Plus besoin de customInstructions - le backend utilise technicalProfile.getParsedData()
+      });
+      
+      console.log('Force generate - Test response received:', testResponse);
+      console.log('Force generate - Test ID from response:', testResponse.testId);
+      console.log('Force generate - Questions from response:', testResponse.questions);
+      console.log('Force generate - Backend utilisera: technicalProfile.getParsedData() directement');
+      
+      // Stocker les questions générées dans le localStorage pour la page de révision
+      if (testResponse.questions && testResponse.questions.length > 0) {
+        const formattedQuestions = testResponse.questions.map((q: any, index: number) => ({
+          id: index + 1,
+          questionText: q.question,
+          questionType: "MCQ",
+          options: q.options || [],
+          correctAnswer: q.correct_answer,
+          skillTag: q.technology || "",
+          maxScore: 1.0,
+          orderIndex: index
+        }));
+        
+        localStorage.setItem(`test_questions_${testResponse.testId}`, JSON.stringify(formattedQuestions));
+        console.log('Force generate - Stored questions in localStorage:', formattedQuestions);
+      }
+      
+      // Réinitialiser l'état du test existant
+      setExistingTest(null);
+      
+      // Fermer le toast de chargement et afficher le succès
+      toast.dismiss('force-generate-test');
+      toast.success('Test personnalisé généré avec succès ! Redirection vers la révision...');
+      
+      // Rediriger vers la page de révision du test
+      console.log('Force generate - Navigating to:', `/manager/test-review/${testResponse.testId}`);
+      
+      try {
+        navigate(`/manager/test-review/${testResponse.testId}`);
+        console.log('Force generate - Navigation successful');
+      } catch (navError) {
+        console.error('Force generate - Navigation error:', navError);
+        toast.error('Erreur lors de la redirection vers la page de révision');
+      }
+      
+    } catch (error: any) {
+      // Fermer le toast de chargement
+      toast.dismiss('force-generate-test');
+      
+      console.error('Error generating test:', error);
+      console.error('Response data:', error.response?.data);
+      console.error('Response status:', error.response?.status);
+      
+      // Gérer spécifiquement les erreurs de timeout
+      if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+        toast.error('La génération forcée du test a pris trop de temps. Veuillez réessayer avec moins de questions ou contacter l\'administrateur.');
+        return;
+      }
+      
+      if (error.response?.status === 409 && error.response?.data) {
+        const errorData = error.response.data;
+        
+        if (errorData.error === "UN TEST EXISTE DÉJÀ") {
+          setExistingTest({
+            existingTestId: errorData.existingTestId,
+            existingTestToken: errorData.existingTestToken,
+            existingTestStatus: errorData.existingTestStatus,
+            existingTestCreatedAt: errorData.existingTestCreatedAt
+          });
+          
+          toast.error("Un test existe déjà pour cette candidature. Impossible de forcer la génération.");
+          return;
+        }
+      }
+      
+      const errorMessage = error.response?.data?.message || error.message || 'Erreur inconnue';
+      toast.error(`Erreur lors de la génération du test: ${errorMessage}`);
     }
   };
 
@@ -648,6 +1120,146 @@ const GenerateTestPage = () => {
     console.log('Education:', data["Education"]);
     console.log('=== FIN STRUCTURE COMPLÈTE ===');
     
+    // Extraire les compétences clés
+    const extractKeySkills = () => {
+      const skills = [];
+      
+      // Depuis Technical Information
+      if (data["Technical Information"]?.["technologies"]) {
+        const techData = data["Technical Information"]["technologies"];
+        Object.keys(techData).forEach(category => {
+          const categorySkills = techData[category];
+          if (Array.isArray(categorySkills)) {
+            categorySkills.forEach((skill: any) => {
+              if (typeof skill === 'string' && skill.trim()) {
+                skills.push(skill.trim());
+              } else if (skill && typeof skill === 'object' && skill.name) {
+                skills.push(skill.name);
+              }
+            });
+          } else if (typeof categorySkills === 'object' && categorySkills !== null) {
+            Object.keys(categorySkills).forEach(skillName => {
+              skills.push(skillName);
+            });
+          }
+        });
+      }
+      
+      // Depuis les projets
+      if (data["Projects"] && Array.isArray(data["Projects"])) {
+        data["Projects"].forEach((project: any) => {
+          if (project.technologies && Array.isArray(project.technologies)) {
+            project.technologies.forEach((tech: string) => {
+              if (tech && tech.trim() && !skills.includes(tech.trim())) {
+                skills.push(tech.trim());
+              }
+            });
+          }
+        });
+      }
+      
+      // Éliminer les doublons et limiter à 10 compétences
+      return [...new Set(skills)].slice(0, 10);
+    };
+    
+    // Extraire les informations d'éducation
+    const extractEducation = () => {
+      if (data["Education"] && Array.isArray(data["Education"])) {
+        console.log('=== STRUCTURE ÉDUCATION BRUTE ===');
+        console.log('data["Education"]:', JSON.stringify(data["Education"], null, 2));
+        
+        const extracted = data["Education"].map((edu: any) => {
+          console.log('Éducation individuelle:', edu);
+          console.log('  edu.year:', edu.year);
+          console.log('  edu.graduationYear:', edu.graduationYear);
+          console.log('  edu.end_date:', edu.end_date);
+          console.log('  edu.start_date:', edu.start_date);
+          
+          // Extraire l'année depuis end_date ou graduationYear ou year
+          let extractedYear = edu.year || edu.graduationYear || edu.end_date;
+          if (extractedYear) {
+            // Extraire l'année depuis une date comme "July 2021" ou "June 2023"
+            const yearMatch = extractedYear.match(/\b(19|20)\d{2}\b/);
+            if (yearMatch) {
+              extractedYear = yearMatch[0];
+            }
+          }
+          
+          const finalYear = extractedYear || 'Non spécifié';
+          console.log('  année finale:', finalYear);
+          
+          return {
+            degree: edu.degree || edu.diploma || 'Non spécifié',
+            institution: edu.institution || edu.school || 'Non spécifié',
+            year: finalYear,
+            field: edu.field || edu.major || 'Non spécifié'
+          };
+        });
+        
+        console.log('=== STRUCTURE ÉDUCATION EXTRAIT ===');
+        console.log('extracted:', extracted);
+        
+        return extracted;
+      }
+      return [];
+    };
+    
+    // Extraire les certifications
+    const extractCertifications = () => {
+      if (data["Certifications"] && Array.isArray(data["Certifications"])) {
+        console.log('=== STRUCTURE CERTIFICATIONS BRUTE ===');
+        console.log('data["Certifications"]:', JSON.stringify(data["Certifications"], null, 2));
+        
+        const extracted = data["Certifications"].map((cert: any) => {
+          console.log('Certification individuelle:', cert);
+          console.log('  cert.certification_name:', cert.certification_name);
+          console.log('  cert.name:', cert.name);
+          console.log('  cert.issuing_organization:', cert.issuing_organization);
+          console.log('  cert.issuer:', cert.issuer);
+          console.log('  cert.issue_date:', cert.issue_date);
+          console.log('  cert.year:', cert.year);
+          
+          return {
+            name: cert.certification_name || cert.name || cert.title || 'Non spécifié',
+            issuer: cert.issuing_organization || cert.issuer || cert.organization || 'Non spécifié',
+            year: cert.issue_date || cert.year || 'Non spécifié'
+          };
+        });
+        
+        console.log('=== STRUCTURE CERTIFICATIONS EXTRAIT ===');
+        console.log('extracted:', extracted);
+        
+        return extracted;
+      }
+      return [];
+    };
+    
+    // Extraire les projets
+    const extractProjects = () => {
+      if (data["Projects"] && Array.isArray(data["Projects"])) {
+        return data["Projects"].map((project: any) => ({
+          name: project.name || project.title || 'Non spécifié',
+          description: project.description || project.summary || 'Non spécifié',
+          technologies: project.technologies || project.tech_stack || [],
+          duration: project.duration || project.period || 'Non spécifié'
+        }));
+      }
+      return [];
+    };
+    
+    // Extraire le domaine et le niveau
+    const extractDomainAndLevel = () => {
+      const techInfo = data["Technical Information"] || {};
+      const summary = data["Summary"] || {};
+      
+      return {
+        domain: techInfo.domain || 'Non spécifié',
+        level: summary.skill_level || techInfo.level || 'Non spécifié',
+        experience: summary.experience_years || techInfo.experience || 'Non spécifié',
+        score: summary.overall_score || techInfo.score || 0
+      };
+    };
+    
     // Retourner une structure riche pour une meilleure UI
     const profileData = {
       // Informations personnelles
@@ -657,391 +1269,124 @@ const GenerateTestPage = () => {
         phone: data["Basic Information"]?.["phone"] || ""
       },
       
-      // Domaine et expertise
-      expertise: {
-        domain: data["Technical Information"]?.["domain"] || "Non spécifié",
-        level: data["Summary"]?.["career_level"] || data["Summary"]?.["skill_level"] || "Débutant",
-        specializations: data["Summary"]?.["specializations"] || []
-      },
+      // Expertise et niveau
+      expertise: extractDomainAndLevel(),
       
       // Statistiques
       stats: {
-        certifications: data["Certifications"]?.length || 0,
-        projects: data["Projects"]?.length || 0,
-        education: data["Education"]?.length || 0
+        skillsCount: extractKeySkills().length,
+        projectsCount: data["Projects"]?.length || 0,
+        certificationsCount: data["Certifications"]?.length || 0,
+        educationCount: data["Education"]?.length || 0
       },
       
-      // Formation principale
-      education: data["Education"]?.[0] ? {
-        degree: data["Education"][0].degree || "",
-        field: data["Education"][0].field || "",
-        institution: data["Education"][0].institution || ""
-      } : null,
+      // Compétences clés
+      keySkills: extractKeySkills(),
+      
+      // Éducation
+      education: extractEducation(),
+      
+      // Certifications
+      certifications: extractCertifications(),
+      
+      // Projets
+      projects: extractProjects(),
       
       // Résumé du profil
-      summary: data["Summary"]?.["summary"] || `Candidat avec score IA de ${data["Summary"]?.["overall_score"] || 0}/10. Expérience de ${data["Summary"]?.["experience_years"] || "non spécifiée"} ans. Niveau ${data["Summary"]?.["skill_level"] || "non spécifié"} en développement.`,
-      
-      // Compétences principales (si disponibles)
-      keySkills: data["Summary"]?.["key_skills"]?.slice(0, 6) || []
+      summary: data["Summary"]?.["summary"] || `Candidat avec score IA de ${data["Summary"]?.["overall_score"] || 0}/10. Expérience de ${data["Summary"]?.["experience_years"] || "non spécifiée"} ans. Niveau ${data["Summary"]?.["skill_level"] || "non spécifié"} en développement.`
     };
     
     console.log('Profile data for UI:', profileData);
     return profileData;
   };
 
-  const determineExperienceLevel = () => {
-    if (!technicalProfile?.parsedData) return 'N/A';
-    
-    const data = technicalProfile.parsedData;
-    
-    // Si le score est 0, aucune donnée réelle n'a été trouvée
-    if (!data["Work Experience"] && !data["Projects"] && !data["Technical Information"]?.["technologies"]) {
-      return 'N/A';
-    }
-    
-    // Basé sur l'expérience et les projets détectés
-    const expCount = data["Work Experience"] ? data["Work Experience"].length : 0;
-    const projectCount = data["Projects"] ? data["Projects"].length : 0;
-    const skillCount = Object.keys(data["Technical Information"]?.["technologies"] || {}).length;
-    
-    // Logique plus simple et basée sur l'expérience réelle
-    if (expCount >= 5 || projectCount >= 5) return 'SENIOR';
-    if (expCount >= 3 || projectCount >= 3) return 'INTERMÉDIAIRE';
-    if (expCount >= 1 || projectCount >= 1) return 'JUNIOR';
-    return 'DÉBUTANT';
+  const extractLevelFromProfile = (data: any) => {
+    return data["Summary"]?.["skill_level"] || "Non spécifié";
   };
 
-  // ✅ Déplacer useMemo en dehors de la fonction pour respecter les règles des hooks
-  const candidatePositions = useMemo(() => {
-    if (!separateCandidateId) return [];
-    
-    // Récupérer toutes les candidatures du candidat
-    const allCandidateCandidatures = candidatures.filter(c => c.candidateId === separateCandidateId);
-    
-    // ✅ Extraire TOUS les postes de la nouvelle structure positions
-    const allPositions: any[] = [];
-    
-    allCandidateCandidatures.forEach(candidature => {
-      // Priorité 1: Utiliser le nouveau champ positions du backend
-      if (candidature.positions && Array.isArray(candidature.positions) && candidature.positions.length > 0) {
-        candidature.positions.forEach((position: any) => {
-          allPositions.push({
-            title: position.title,
-            company: position.company,
-            appliedAt: candidature.appliedAt,
-            candidatureId: candidature.id
-          });
-        });
-      }
-      // Priorité 2: Compatibilité avec internshipPositions
-      else if (candidature.internshipPositions && Array.isArray(candidature.internshipPositions) && candidature.internshipPositions.length > 0) {
-        candidature.internshipPositions.forEach((position: any) => {
-          allPositions.push({
-            title: position.title,
-            company: position.company,
-            appliedAt: candidature.appliedAt,
-            candidatureId: candidature.id
-          });
-        });
-      }
-      // Priorité 3: Ancienne structure pour compatibilité
-      else if (candidature.positionTitle && candidature.positionTitle.trim() !== '') {
-        allPositions.push({
-          title: candidature.positionTitle.trim(),
-          company: candidature.positionCompany,
-          appliedAt: candidature.appliedAt,
-          candidatureId: candidature.id
-        });
-      }
-    });
-    
-    return allPositions;
-  }, [candidatures, separateCandidateId]);
-
-  const getEligibilityChecks = () => {
-    const checks = [];
-    const data = technicalProfile?.parsedData;
-    
-    const candidateDomain = data?.["Technical Information"]?.["domain"];
-    const acceptedDomains = candidateData?.position?.acceptedDomains || [];
-    
-    // Fonction pour vérifier l'éligibilité du domaine
-    const isDomainEligible = candidateDomain && (
-      acceptedDomains.length === 0 || 
-      acceptedDomains.some(acceptedDomain => {
-        const normalizeDomain = (domain: string) => {
-          return domain.toLowerCase()
-            .trim()
-            .replace(/[^\w\s]/g, '') 
-            .replace(/\s+/g, ' '); 
-        };
-        
-        const normalizedAccepted = normalizeDomain(acceptedDomain);
-        const normalizedCandidate = normalizeDomain(candidateDomain);
-        
-        // Vérification directe
-        if (normalizedAccepted === normalizedCandidate) return true;
-        
-        // Équivalences de domaines
-        const domainEquivalences: { [key: string]: string[] } = {
-          'software engineering': ['software engineering', 'ingénierie logicielle', 'développement logiciel', 'informatique', 'software development', 'programmation', 'coding'],
-          'data science': ['data science', 'science des données', 'analyse de données', 'data analysis', 'big data', 'machine learning', 'ia', 'intelligence artificielle'],
-          'web development': ['web development', 'développement web', 'web', 'site web', 'web design'],
-          'mobile development': ['mobile development', 'développement mobile', 'mobile', 'android', 'ios', 'application mobile'],
-          'cybersecurity': ['cybersecurity', 'cyber sécurité', 'sécurité informatique', 'sécurité', 'security'],
-          'devops': ['devops', 'développement opérations', 'operations', 'infrastructure', 'cloud'],
-          'ui/ux': ['ui/ux', 'design', 'design interface', 'design expérience utilisateur', 'user interface', 'user experience'],
-          'networking': ['networking', 'réseau', 'réseaux', 'network', 'administration réseau'],
-          'database': ['database', 'base de données', 'bdd', 'data', 'données'],
-          'project management': ['project management', 'gestion de projet', 'management', 'chef de projet']
-        };
-        
-        for (const [canonicalDomain, equivalents] of Object.entries(domainEquivalences)) {
-          const normalizedCanonical = normalizeDomain(canonicalDomain);
-          
-          if (equivalents.some(eq => normalizeDomain(eq) === normalizedAccepted)) {
-            const candidateMatches = equivalents.some(eq => normalizeDomain(eq) === normalizedCandidate);
-            if (candidateMatches) {
-              return true;
-            }
-          }
-        }
-        
-        return false;
-      })
-    );
-    
-    // Informations des postes du candidat (utiliser candidatePositions du composant)
-    candidatePositions.forEach((position, index) => {
-      checks.push({ 
-        label: ` Poste ${index + 1} : ${position.title}`, 
-        ok: true 
-      });
-      
-      if (position.company) {
-        checks.push({ 
-          label: ` Entreprise : ${position.company}`, 
-          ok: true 
-        });
-      }
-    });  
-    
-    // Analyse du CV
-    if (data) {
-     
-      
-      // Domaine technique
-      if (candidateDomain) {
-        if (isDomainEligible) {
-          checks.push({ 
-            label: ` Domaine : ${candidateDomain} — compatible avec le poste`, 
-            ok: true 
-          });
-        } else {
-          checks.push({ 
-            label: ` Domaine : ${candidateDomain} — non compatible avec les domaines requis (${acceptedDomains.join(', ') || 'Non spécifié'})`, 
-            ok: false 
-          });
-        }
-      } else {
-        checks.push({ 
-          label: '⚠️ Domaine technique non détecté dans le CV', 
-          ok: false 
-        });
-      }
-      
-      // Compétences techniques
-      if (data["Technical Information"]?.["technologies"]) {
-        const allSkills = [];
-        Object.values(data["Technical Information"]["technologies"]).forEach(categorySkills => {
-          if (Array.isArray(categorySkills)) {
-            categorySkills.forEach(skill => {
-              if (typeof skill === 'string' && skill.trim()) {
-                allSkills.push(skill);
-              } else if (skill && skill.name && skill.name.trim()) {
-                allSkills.push(skill.name);
-              }
-            });
-          }
-        });
-        
-        if (allSkills.length > 0) {
-          checks.push({ 
-            label: ` ${allSkills.length} compétence(s) technique(s) détectée(s) : ${allSkills.slice(0, 3).join(', ')}${allSkills.length > 3 ? '...' : ''}`, 
-            ok: true 
-          });
-        }
-      }
-      
-      // Expérience
-      const experience = data["Professional Experience"]?.["experience"];
-      if (experience && experience.length > 0) {
-        const totalYears = experience.reduce((sum, exp) => {
-          const years = parseFloat(exp.duration?.split(' ')[0]) || 0;
-          return sum + years;
-        }, 0);
-        
-        checks.push({ 
-          label: `📈 ${experience.length} expérience(s) professionnelle(s) détectée(s)`, 
-          ok: totalYears >= 1 
-        });
-      }
-      
-      // Formation
-      const education = data["Education"]?.["education"];
-      if (education && education.length > 0) {
-        const highestDegree = education.reduce((highest, edu) => {
-          const degreeOrder = { 'bac': 1, 'licence': 2, 'master': 3, 'doctorat': 4 };
-          const eduLevel = degreeOrder[edu.degree?.toLowerCase()] || 0;
-          const highestLevel = degreeOrder[highest.degree?.toLowerCase()] || 0;
-          return eduLevel > highestLevel ? edu : highest;
-        }, education[0]);
-        
-        checks.push({ 
-          label: ` Formation : ${highestDegree.degree} en ${highestDegree.field || 'spécialité non spécifiée'}`, 
-          ok: true 
-        });
-      }
-    } else {
-      checks.push({ 
-        label: '❌ CV non analysé ou données non disponibles', 
-        ok: false 
-      });
-    }
-    
-    // Éligibilité finale
-    const isEligible = isDomainEligible && data && candidateDomain;
-    checks.push({ 
-      label: isEligible ? ' Candidature éligible pour génération de test' : ' Candidature non éligible — domaine incompatible ou données manquantes', 
-      ok: isEligible 
-    });
-    
-    return checks;
+  const extractExperienceFromProfile = (data: any) => {
+    return data["Summary"]?.["experience_years"] || "Non spécifié";
   };
 
-  const isCandidateEligible = () => {
-    const data = technicalProfile?.parsedData;
-    const candidateDomain = data?.["Technical Information"]?.["domain"];
-    const acceptedDomains = candidateData?.position?.acceptedDomains || [];
+  const cvUrl = getCvUrl();
+
+  const downloadCV = async () => {
+    if (!cvUrl) return;
     
-    if (!candidateDomain) return false;
-    
-    return acceptedDomains.length === 0 || 
-           acceptedDomains.some(domain => 
-             domain.toLowerCase().includes(candidateDomain.toLowerCase()) || 
-             candidateDomain.toLowerCase().includes(domain.toLowerCase())
-           );
-  };
-
-  const handleForceGenerateTest = async () => {
-    if (!candidateData || !technicalProfileData) {
-      toast.error('Veuillez patienter que les données du candidat soient chargées');
-      return;
-    }
-
-    // Extraire les compétences réelles du candidat
-    const skills = extractSkillsFromProfile();
-    console.log('=== GÉNÉRATION FORCÉE DE TEST AVEC COMPÉTENCES RÉELLES ===');
-    console.log('Compétences extraites:', skills);
-    console.log('Nombre de compétences:', skills.length);
-    console.log('=== FIN COMPÉTENCES POUR GÉNÉRATION FORCÉE ===');
-
     try {
-      // Utiliser l'approche simple de l'ancien code backend
-      // Le backend utilise maintenant: technicalProfile.getParsedData() directement
-      // Plus besoin d'envoyer des customInstructions structurées
-      
-      // Afficher un message d'attente plus informatif
-      toast.loading('Génération forcée du test personnalisé en cours... Cela peut prendre jusqu\'à 60 secondes.', {
-        duration: 0, // Ne pas auto-dismiss
-        id: 'force-generate-test' // ID unique pour pouvoir le mettre à jour
+      const response = await fetch(`http://localhost:8080${cvUrl}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('auth_token') || sessionStorage.getItem('auth_token')}`,
+        },
       });
       
-      // Appeler l'API avec le format simple (nouvelle structure)
-      const testResponse = await generateTestMutation.mutateAsync({
-        candidatureId: candidateData.id, // Garder pour compatibilité backend
-        candidateId: separateCandidateId, // ✅ Nouveau: ID du candidat
-        level: testConfig.level,
-        questionCount: testConfig.questionCount,
-        duration: testConfig.duration,
-        deadline: testConfig.deadline,
-        note: testConfig.note,
-        focusAreas: skills.map(skill => skill.name), // Garder pour compatibilité
-        // Plus besoin de customInstructions - le backend utilise technicalProfile.getParsedData()
+      if (!response.ok) {
+        throw new Error('Erreur lors du téléchargement du CV');
+      }
+      
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `CV_${candidateData?.firstName}_${candidateData?.lastName}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      
+      toast.success('CV téléchargé avec succès');
+    } catch (error) {
+      console.error('Error downloading CV:', error);
+      toast.error('Erreur lors du téléchargement du CV');
+    }
+  };
+
+  const openCV = async () => {
+    if (!cvUrl) return;
+    
+    try {
+      const response = await fetch(`http://localhost:8080${cvUrl}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('auth_token') || sessionStorage.getItem('auth_token')}`,
+        },
       });
       
-      console.log('Force generate - Test response received:', testResponse);
-      console.log('Force generate - Test ID from response:', testResponse.testId);
-      console.log('Force generate - Questions from response:', testResponse.questions);
-      console.log('Force generate - Backend utilisera: technicalProfile.getParsedData() directement');
+      if (!response.ok) {
+        throw new Error('Erreur lors de l\'ouverture du CV');
+      }
       
-      // Stocker les questions générées dans le localStorage pour la page de révision
-      if (testResponse.questions && testResponse.questions.length > 0) {
-        const formattedQuestions = testResponse.questions.map((q: any, index: number) => ({
-          id: index + 1,
-          questionText: q.question,
-          questionType: "MCQ",
-          options: q.options || [],
-          correctAnswer: q.correct_answer,
-          skillTag: q.technology || "",
-          maxScore: 1.0,
-          orderIndex: index
-        }));
+      const blob = await response.blob();
+      
+      const blobUrl = URL.createObjectURL(blob);
+      
+      const newWindow = window.open(blobUrl, '_blank');
+      
+      if (newWindow) {
+        newWindow.focus();
+        toast.success('CV ouvert dans un nouvel onglet');
         
-        localStorage.setItem(`test_questions_${testResponse.testId}`, JSON.stringify(formattedQuestions));
-        console.log('Force generate - Stored questions in localStorage:', formattedQuestions);
-      }
-      
-      // Réinitialiser l'état du test existant
-      setExistingTest(null);
-      
-      // Fermer le toast de chargement et afficher le succès
-      toast.dismiss('force-generate-test');
-      toast.success('Test personnalisé généré avec succès ! Redirection vers la révision...');
-      
-      // Rediriger vers la page de révision du test
-      console.log('Force generate - Navigating to:', `/manager/test-review/${testResponse.testId}`);
-      
-      try {
-        navigate(`/manager/test-review/${testResponse.testId}`);
-        console.log('Force generate - Navigation successful');
-      } catch (navError) {
-        console.error('Force generate - Navigation error:', navError);
-        toast.error('Erreur lors de la redirection vers la page de révision');
-      }
-      
-    } catch (error: any) {
-      // Fermer le toast de chargement
-      toast.dismiss('force-generate-test');
-      
-      console.error('Error generating test:', error);
-      console.error('Response data:', error.response?.data);
-      console.error('Response status:', error.response?.status);
-      
-      // Gérer spécifiquement les erreurs de timeout
-      if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
-        toast.error('La génération forcée du test a pris trop de temps. Veuillez réessayer avec moins de questions ou contacter l\'administrateur.');
-        return;
-      }
-      
-      if (error.response?.status === 409 && error.response?.data) {
-        const errorData = error.response.data;
+        setTimeout(() => {
+          URL.revokeObjectURL(blobUrl);
+        }, 10000); // 10 secondes
+      } else {
+        const link = document.createElement('a');
+        link.href = blobUrl;
+        link.download = `CV_${candidateData?.firstName}_${candidateData?.lastName}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        toast.info('Le popup a été bloqué. Le CV a été téléchargé à la place.');
         
-        if (errorData.error === "UN TEST EXISTE DÉJÀ") {
-          setExistingTest({
-            existingTestId: errorData.existingTestId,
-            existingTestToken: errorData.existingTestToken,
-            existingTestStatus: errorData.existingTestStatus,
-            existingTestCreatedAt: errorData.existingTestCreatedAt
-          });
-          
-          toast.error("Un test existe déjà pour cette candidature. Impossible de forcer la génération.");
-          return;
-        }
+        setTimeout(() => {
+          URL.revokeObjectURL(blobUrl);
+        }, 1000);
       }
       
-      const errorMessage = error.response?.data?.message || error.message || 'Erreur inconnue';
-      toast.error(`Erreur lors de la génération du test: ${errorMessage}`);
+    } catch (error) {
+      console.error('Error opening CV:', error);
+      toast.error('Erreur lors de l\'ouverture du CV');
     }
   };
 
@@ -1072,7 +1417,6 @@ const GenerateTestPage = () => {
       // Appeler l'API avec le format simple (nouvelle structure)
       const testResponse = await generateTestMutation.mutateAsync({
         candidatureId: candidateData.id, // Garder pour compatibilité backend
-        candidateId: separateCandidateId, // ✅ Nouveau: ID du candidat
         level: testConfig.level,
         questionCount: testConfig.questionCount,
         duration: testConfig.duration,
@@ -1285,13 +1629,88 @@ const GenerateTestPage = () => {
           
           {analysis.expertise && (
             <div>
-              <h4 className="font-semibold text-foreground">Expertise</h4>
-              <p className="text-sm text-muted-foreground">
-                {analysis.expertise.domain} • {analysis.expertise.level}
-              </p>
+              <h4 className="font-semibold text-foreground mb-3">Expertise</h4>
+              <div className="grid grid-cols-2 gap-3 text-sm text-muted-foreground">
+                <div className="flex items-center gap-2">
+                  <span className="font-medium text-foreground">Domaine:</span>
+                  <Badge variant="outline" className="text-xs">
+                    {analysis.expertise.domain}
+                  </Badge>
+                </div>
+              </div>
             </div>
           )}
           
+          {analysis.education && Array.isArray(analysis.education) && analysis.education.length > 0 && (
+            <div>
+              <h4 className="font-semibold text-foreground mb-3">Éducation</h4>
+              <div className="text-sm text-muted-foreground">
+                {(() => {
+                  // Trouver l'éducation la plus récente
+                  const mostRecentEducation = analysis.education.reduce((mostRecent: any, edu: any) => {
+                    // Si c'est la première itération, retourner l'élément actuel
+                    if (!mostRecent) {
+                      console.log('Première itération - retourne:', edu);
+                      return edu;
+                    }
+                    
+                    // Si l'éducation actuelle n'a pas d'année valide
+                    if (!mostRecent.year || mostRecent.year === 'Non spécifié') {
+                      console.log('mostRecent year invalide - retourne edu:', edu);
+                      return edu;
+                    }
+                    
+                    // Si l'éducation en cours n'a pas d'année valide
+                    if (!edu.year || edu.year === 'Non spécifié') {
+                      console.log('edu year invalide - garde mostRecent:', mostRecent);
+                      return mostRecent;
+                    }
+                    
+                    // Comparer les années (convertir en nombre si possible)
+                    const mostRecentYear = parseInt(mostRecent.year) || 0;
+                    const eduYear = parseInt(edu.year) || 0;
+                    
+                    console.log('Comparaison années:', {
+                      mostRecentYear,
+                      eduYear,
+                      mostRecentDegree: mostRecent.degree,
+                      eduDegree: edu.degree,
+                      comparison: eduYear > mostRecentYear
+                    });
+                    
+                    // CORRECTION: L'année la plus élevée est la plus récente
+                    return eduYear > mostRecentYear ? edu : mostRecent;
+                  }, null);
+                  
+                  console.log('Éducation la plus récente trouvée:', mostRecentEducation);
+                  
+                  if (!mostRecentEducation) {
+                    return null;
+                  }
+                  
+                  const hasValidInfo = mostRecentEducation.degree && mostRecentEducation.degree !== 'Non spécifié' && 
+                                       mostRecentEducation.institution && mostRecentEducation.institution !== 'Non spécifié';
+                  
+                  if (!hasValidInfo) {
+                    return null;
+                  }
+                  
+                  return (
+                    <div className="p-3 bg-muted/30 rounded border border-muted/50">
+                      <div className="font-medium text-foreground">{mostRecentEducation.degree}</div>
+                      <div className="text-xs text-muted-foreground mt-1">
+                        {mostRecentEducation.institution}
+                        {mostRecentEducation.year && mostRecentEducation.year !== 'Non spécifié' && ` • ${mostRecentEducation.year}`}
+                      </div>
+                      {mostRecentEducation.field && mostRecentEducation.field !== 'Non spécifié' && (
+                        <div className="text-xs text-muted-foreground">{mostRecentEducation.field}</div>
+                      )}
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
+          )}
           {analysis.summary && (
             <div>
               <h4 className="font-semibold text-foreground">Résumé du profil</h4>
@@ -1300,19 +1719,90 @@ const GenerateTestPage = () => {
               </p>
             </div>
           )}
-          
-          {analysis.keySkills && Array.isArray(analysis.keySkills) && analysis.keySkills.length > 0 && (
+          {analysis.certifications && Array.isArray(analysis.certifications) && analysis.certifications.length > 0 && (
             <div>
-              <h4 className="font-semibold text-foreground">Compétences clés</h4>
-              <div className="flex flex-wrap gap-2 mt-2">
-                {analysis.keySkills.map((skill: any, index: number) => (
-                  <Badge key={index} variant="secondary">
-                    {typeof skill === 'string' ? skill : skill.name || 'Compétence'}
-                  </Badge>
-                ))}
+              <h4 className="font-semibold text-foreground mb-3">Certifications</h4>
+              <div className="space-y-2 text-sm text-muted-foreground">
+                {console.log('=== RENDERING CERTIFICATIONS ===')}
+                {console.log('analysis.certifications:', analysis.certifications)}
+                {console.log('analysis.certifications.length:', analysis.certifications.length)}
+                {analysis.certifications.map((cert: any, index: number) => {
+                  console.log(`Rendering certification ${index}:`, cert);
+                  
+                  // Vérifier si la certification a des informations valides
+                  const hasValidInfo = cert.name && cert.name !== 'Non spécifié';
+                  console.log(`Certification ${index}: hasValidInfo=${hasValidInfo}, name="${cert.name}", issuer="${cert.issuer}"`);
+                  
+                  if (!hasValidInfo) {
+                    console.log(`Masquer certification ${index} car infos invalides`);
+                    return null;
+                  }
+                  
+                  console.log(`Afficher certification ${index}`);
+                  return (
+                    <div key={index} className="p-3 bg-muted/30 rounded border border-muted/50">
+                      <div className="font-medium text-foreground">{cert.name}</div>
+                      <div className="text-xs text-muted-foreground mt-1">
+                        {cert.issuer}
+                        {cert.year && cert.year !== 'Non spécifié' && ` • ${cert.year}`}
+                      </div>
+                    </div>
+                  );
+                }).filter(Boolean)}
               </div>
             </div>
           )}
+          
+          {analysis.projects && Array.isArray(analysis.projects) && analysis.projects.length > 0 && (
+            <div>
+              <h4 className="font-semibold text-foreground mb-3">Projets notables</h4>
+              <div className="space-y-2 text-sm text-muted-foreground">
+                {analysis.projects.slice(0, 3).map((project: any, index: number) => {
+                  // Vérifier si le projet a des informations valides
+                  const hasValidInfo = project.name && project.name !== 'Non spécifié';
+                  
+                  if (!hasValidInfo) {
+                    return null;
+                  }
+                  
+                  return (
+                    <div key={index} className="p-3 bg-muted/30 rounded border border-muted/50">
+                      <div className="font-medium text-foreground">{project.name}</div>
+                      {project.description && project.description !== 'Non spécifié' && (
+                        <div className="text-xs text-muted-foreground mt-1">
+                          {project.description.length > 120 
+                            ? `${project.description.slice(0, 120)}...` 
+                            : project.description
+                          }
+                        </div>
+                      )}
+                      {project.technologies && Array.isArray(project.technologies) && project.technologies.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-2">
+                          {project.technologies.slice(0, 5).map((tech: string, techIndex: number) => (
+                            <Badge key={techIndex} variant="outline" className="text-xs">
+                              {tech}
+                            </Badge>
+                          ))}
+                          {project.technologies.length > 5 && (
+                            <Badge variant="outline" className="text-xs">
+                              +{project.technologies.length - 5}
+                            </Badge>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                }).filter(Boolean)}
+                {analysis.projects.length > 3 && (
+                  <div className="text-xs text-muted-foreground mt-2 text-center">
+                    ... et {analysis.projects.length - 3} autre(s) projet(s)
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+          
+          
         </div>
       );
     }
@@ -1504,21 +1994,21 @@ const GenerateTestPage = () => {
             console.log('existingTest:', existingTest);
             console.log('existingTest?.existingTestId:', existingTest?.existingTestId);
             console.log('existingTest?.existingTestStatus:', existingTest?.existingTestStatus);
+            console.log('existingTest?.existingTestStatus type:', typeof existingTest?.existingTestStatus);
             console.log('isCheckingExistingTest:', isCheckingExistingTest);
             
-            // Masquer la configuration SEULEMENT si:
-            // 1. La vérification est terminée (isCheckingExistingTest === false)
-            // 2. ET un test existe avec un ID valide
-            // 3. ET le test est en statut DRAFT (en préparation)
+            // Masquer la configuration si un test existe et n'est pas en statut DRAFT
+            // (c'est-à-dire : READY, IN_PROGRESS, SUBMITTED, EVALUATED, etc.)
             const shouldHideConfig = !isCheckingExistingTest && 
               existingTest?.existingTestId && 
-              existingTest?.existingTestStatus === 'DRAFT';
+              existingTest?.existingTestStatus !== 'DRAFT';
             
             console.log('shouldHideConfig calculé:', shouldHideConfig);
             console.log('Détail calcul:');
             console.log('  !isCheckingExistingTest:', !isCheckingExistingTest);
             console.log('  existingTest?.existingTestId:', existingTest?.existingTestId);
-            console.log('  existingTest?.existingTestStatus === DRAFT:', existingTest?.existingTestStatus === 'DRAFT');
+            console.log('  existingTest?.existingTestStatus !== DRAFT:', existingTest?.existingTestStatus !== 'DRAFT');
+            console.log('  existingTest?.existingTestStatus === "READY":', existingTest?.existingTestStatus === 'READY');
             console.log('  shouldHideConfig (&& operation):', shouldHideConfig);
             console.log('=== FIN DÉCISION SECTION CONFIGURATION ===');
             

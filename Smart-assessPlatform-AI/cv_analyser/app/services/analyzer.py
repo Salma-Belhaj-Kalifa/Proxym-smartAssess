@@ -31,13 +31,16 @@ Return a STRICT JSON with the following sections:
 - specializations: 2-3 key areas of expertise (e.g., "Full-Stack Development", "Cloud Architecture", "AI/ML Integration")
 
 3) Technical Information
-- domain: Identify candidate's PRIMARY professional domain based on the education and the projects/skills
+- domain: The candidate's PRIMARY domain. Follow this strict priority order:
+    STEP 1 — Check education first: If the degree or field of study is explicitly named (e.g., "Law", "Medicine", "Computer Science", "Finance", "Engineering"), set domain to that field. This applies even if the candidate is currently a student.
+    STEP 2 — If no degree field is found, check work experience and projects for a dominant professional area.
+    STEP 3 — If still unclear after steps 1 and 2, set domain to "Unknown".
 - technologies: Group ALL mentioned technologies and skills into logical categories inferred from CV. Use categories dynamically based on context.
-- Capture every technology mentioned anywhere in the CV.
-- If a technology appears multiple times, include it once with the highest skill level observed.
-- skill_level: Assign beginner/intermediate/advanced based on contextual proficiency.
-- Consider context from all sections (projects, experience, education, certifications).
-- DO not include languages in this section
+    - Capture every technology mentioned anywhere in the CV.
+    - If a technology appears multiple times, include it once with the highest skill level observed.
+    - skill_level: Assign beginner/intermediate/advanced based on contextual proficiency.
+    - Consider context from all sections (projects, experience, education, certifications).
+    - DO not include languages in this section
 4) Certifications
 - Extract ONLY explicitly mentioned certifications.
 - Include certification_name, issuing_organization (if mentioned, or empty string if not found), issue_date (if mentioned, or empty string if not found), if any info missing, leave it empty.

@@ -10,7 +10,7 @@ const navItems = [
   { label: "Postes de stage", icon: Briefcase, path: "/manager/postes" },
   { label: "Candidats", icon: Users, path: "/manager/candidats" },
   { label: "Résultats des tests", icon: CheckCircle, path: "/manager/tests-resultats" },
-  { label: "Résultats IA", icon: FileText, path: "/manager/resultats" },
+ // { label: "Résultats IA", icon: FileText, path: "/manager/resultats" },
   { label: "Mon profil", icon: User, path: "/manager/profil" },
 ];
 

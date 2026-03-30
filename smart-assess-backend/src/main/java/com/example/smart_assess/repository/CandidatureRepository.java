@@ -27,6 +27,10 @@ public interface CandidatureRepository extends JpaRepository<Candidature, Long> 
     @Query("SELECT c FROM Candidature c JOIN FETCH c.candidate LEFT JOIN FETCH c.internshipPositions")
     List<Candidature> findAllWithRelations();
     
+    // ✅ AJOUT: Récupérer une seule candidature avec toutes les relations
+    @Query("SELECT c FROM Candidature c JOIN FETCH c.candidate LEFT JOIN FETCH c.internshipPositions WHERE c.id = :id")
+    Optional<Candidature> findByIdWithRelations(Long id);
+    
     // Requêtes natives pour récupérer les données IA depuis les tables candidate_cvs et technical_profiles
     @Query(value = "SELECT cc.id, cc.file_name, cc.file_size_bytes, cc.parsing_status, cc.upload_date, cc.file_data " +
                    "FROM candidate_cvs cc WHERE cc.candidate_id = :candidateId", nativeQuery = true)
