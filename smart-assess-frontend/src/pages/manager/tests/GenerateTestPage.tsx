@@ -1398,10 +1398,6 @@ const GenerateTestPage = () => {
 
     // Extraire les compétences réelles du candidat
     const skills = extractSkillsFromProfile();
-    console.log('=== GÉNÉRATION DE TEST AVEC COMPÉTENCES RÉELLES ===');
-    console.log('Compétences extraites:', skills);
-    console.log('Nombre de compétences:', skills.length);
-    console.log('=== FIN COMPÉTENCES POUR GÉNÉRATION ===');
 
     try {
       // Utiliser l'approche simple de l'ancien code backend
@@ -1426,19 +1422,7 @@ const GenerateTestPage = () => {
         // Plus besoin de customInstructions - le backend utilise technicalProfile.getParsedData()
       });
       
-      console.log('=== DONNÉES ENVOYÉES À L\'API (Nouvelle Structure) ===');
-      console.log('candidatureId:', candidateData.id);
-      console.log('candidateId:', separateCandidateId);
-      console.log('level:', testConfig.level);
-      console.log('questionCount:', testConfig.questionCount);
-      console.log('focusAreas (compétences):', skills.map(skill => skill.name));
-      console.log('Backend utilisera: technicalProfile.getParsedData() directement');
-      console.log('=== FIN DONNÉES API ===');
-      
-      console.log('Normal generate - Test response received:', testResponse);
-      console.log('Normal generate - Test ID from response:', testResponse.testId);
-      console.log('Normal generate - Questions from response:', testResponse.questions);
-      
+
       // Stocker les questions générées dans le localStorage pour la page de révision
       if (testResponse.questions && testResponse.questions.length > 0) {
         const formattedQuestions = testResponse.questions.map((q: any, index: number) => ({
