@@ -158,9 +158,19 @@ public class GeneratedTestController {
 
             if (aiResponse == null || !aiResponse.containsKey("questions")) {
                 log.error("❌ AI Response is null or missing 'questions' key");
+                log.error("AI Response content: {}", aiResponse);
                 return ResponseEntity.status(500).body(Map.of(
                         "success", false,
-                        "error", "Failed to generate questions from AI service"
+                        "error", "AI service returned invalid response format"
+                ));
+            }
+
+            // Check if AI returned an error response
+            if (aiResponse.containsKey("error") && (Boolean) aiResponse.get("error") == true) {
+                log.error("❌ AI service returned error: {}", aiResponse.get("message"));
+                return ResponseEntity.status(500).body(Map.of(
+                        "success", false,
+                        "error", "AI service error: " + aiResponse.get("message")
                 ));
             }
 
@@ -560,6 +570,16 @@ public class GeneratedTestController {
                 position.put("title", firstPosition.getTitle());
                 position.put("company", firstPosition.getCompany());
                 response.put("internshipPosition", position);
+            }
+            
+            // Ajouter l'ID de la candidature pour les actions d'acceptation/rejet
+            if (!candidateCandidatures.isEmpty()) {
+                response.put("candidatureId", candidateCandidatures.get(0).getId());
+                response.put("candidatureStatus", candidateCandidatures.get(0).getStatus().toString());
+                log.info("Added candidatureId to response: {}", candidateCandidatures.get(0).getId());
+                log.info("Added candidatureStatus to response: {}", candidateCandidatures.get(0).getStatus());
+            } else {
+                log.warn("No candidatures found for candidate {}", test.getCandidate().getId());
             }
             
             response.put("testId", test.getId()); // Pour compatibilité
@@ -1207,6 +1227,173 @@ public class GeneratedTestController {
             return ResponseEntity.status(500).body(Map.of(
                 "success", false,
                 "error", "Error getting test results by token: " + e.getMessage()
+            ));
+        }
+    }
+
+    // =========================
+    // UPDATE SINGLE QUESTION
+    // =========================
+    @PutMapping("/{testId}/questions/{questionId}")
+    @PreAuthorize("hasRole('MANAGER') or hasRole('HR')")
+    public ResponseEntity<Map<String, Object>> updateQuestion(@PathVariable Long testId, @PathVariable Long questionId, @RequestBody Map<String, Object> request) {
+        try {
+            log.info("Updating question {} for test {}", questionId, testId);
+            
+            Optional<TestQuestion> questionOpt = testQuestionRepository.findById(questionId);
+            if (questionOpt.isEmpty()) {
+                return ResponseEntity.status(404).body(Map.of(
+                        "success", false,
+                        "error", "Question not found with id: " + questionId
+                ));
+            }
+            
+            TestQuestion question = questionOpt.get();
+            
+            // Vérifier que la question appartient bien au test spécifié
+            if (!question.getTest().getId().equals(testId)) {
+                return ResponseEntity.status(403).body(Map.of(
+                        "success", false,
+                        "error", "Question does not belong to test: " + testId
+                ));
+            }
+            
+            // Mettre à jour les champs de la question
+            if (request.containsKey("questionText")) {
+                question.setQuestionText((String) request.get("questionText"));
+            }
+            if (request.containsKey("questionType")) {
+                question.setQuestionType(QuestionType.valueOf((String) request.get("questionType")));
+            }
+            if (request.containsKey("options")) {
+                // Convertir les options en ArrayNode
+                List<String> optionsList = (List<String>) request.get("options");
+                ArrayNode optionsNode = objectMapper.valueToTree(optionsList);
+                question.setOptions(optionsNode);
+            }
+            if (request.containsKey("correctAnswer")) {
+                question.setCorrectAnswer((String) request.get("correctAnswer"));
+            }
+            if (request.containsKey("maxScore")) {
+                question.setMaxScore(((Number) request.get("maxScore")).doubleValue());
+            }
+            if (request.containsKey("skillTag")) {
+                question.setSkillTag((String) request.get("skillTag"));
+            }
+            if (request.containsKey("orderIndex")) {
+                question.setOrderIndex(((Number) request.get("orderIndex")).intValue());
+            }
+            
+            testQuestionRepository.save(question);
+            log.info("Successfully updated question {} for test {}", questionId, testId);
+            
+            return ResponseEntity.ok(Map.of(
+                    "success", true,
+                    "message", "Question mise à jour avec succès",
+                    "updatedQuestionId", questionId
+            ));
+            
+        } catch (Exception e) {
+            log.error("Error updating question: {}", e.getMessage(), e);
+            return ResponseEntity.status(500).body(Map.of(
+                    "success", false,
+                    "error", "Erreur lors de la mise à jour de la question: " + e.getMessage()
+            ));
+        }
+    }
+
+    // =========================
+    // DELETE SINGLE QUESTION
+    // =========================
+    @DeleteMapping("/{testId}/questions/{questionId}")
+    @PreAuthorize("hasRole('MANAGER') or hasRole('HR')")
+    public ResponseEntity<Map<String, Object>> deleteQuestion(@PathVariable Long testId, @PathVariable Long questionId) {
+        try {
+            log.info("Deleting question {} from test {}", questionId, testId);
+            
+            Optional<TestQuestion> questionOpt = testQuestionRepository.findById(questionId);
+            if (questionOpt.isEmpty()) {
+                return ResponseEntity.status(404).body(Map.of(
+                        "success", false,
+                        "error", "Question not found with id: " + questionId
+                ));
+            }
+            
+            TestQuestion question = questionOpt.get();
+            
+            // Vérifier que la question appartient bien au test spécifié
+            if (!question.getTest().getId().equals(testId)) {
+                return ResponseEntity.status(403).body(Map.of(
+                        "success", false,
+                        "error", "Question does not belong to test: " + testId
+                ));
+            }
+            
+            testQuestionRepository.delete(question);
+            log.info("Successfully deleted question {} from test {}", questionId, testId);
+            
+            return ResponseEntity.ok(Map.of(
+                    "success", true,
+                    "message", "Question supprimée avec succès",
+                    "deletedQuestionId", questionId
+            ));
+            
+        } catch (Exception e) {
+            log.error("Error deleting question: {}", e.getMessage(), e);
+            return ResponseEntity.status(500).body(Map.of(
+                    "success", false,
+                    "error", "Erreur lors de la suppression de la question: " + e.getMessage()
+            ));
+        }
+    }
+
+    // =========================
+    // DELETE TEST
+    // =========================
+    @DeleteMapping("/{testId}")
+    @PreAuthorize("hasRole('MANAGER') or hasRole('HR')")
+    public ResponseEntity<Map<String, Object>> deleteTest(@PathVariable Long testId) {
+        try {
+            log.info("=== DÉBUT SUPPRESSION TEST {} ===", testId);
+            
+            GeneratedTest test = generatedTestRepository.findById(testId)
+                    .orElseThrow(() -> new RuntimeException("Test not found"));
+            
+            // Compter les données qui seront supprimées par cascade
+            int questionCount = test.getQuestions() != null ? test.getQuestions().size() : 0;
+            int answerCount = test.getAnswers() != null ? test.getAnswers().size() : 0;
+            boolean hasEvaluationResult = test.getEvaluationResult() != null;
+            
+            log.info("Test ID: {}", testId);
+            log.info("Token: {}", test.getToken());
+            log.info("Candidat: {} {}", 
+                test.getCandidate() != null ? test.getCandidate().getFirstName() : "N/A",
+                test.getCandidate() != null ? test.getCandidate().getLastName() : "N/A"
+            );
+            log.info("Données qui seront supprimées : {} question(s), {} réponse(s), Évaluation: {}", 
+                questionCount, answerCount, hasEvaluationResult);
+            
+            // La suppression du test déclenchera les cascades automatiquement grâce à CascadeType.ALL
+            generatedTestRepository.delete(test);
+            
+            log.info("=== TEST {} SUPPRIMÉ AVEC SUCCÈS ===", testId);
+            log.info("Suppression en cascade effectuée via JPA CascadeType.ALL");
+            
+            return ResponseEntity.ok(Map.of(
+                "success", true,
+                "message", "Test supprimé avec succès",
+                "deletedData", Map.of(
+                    "questions", questionCount,
+                    "answers", answerCount,
+                    "evaluationResult", hasEvaluationResult
+                )
+            ));
+            
+        } catch (Exception e) {
+            log.error("Erreur lors de la suppression du test {}: {}", testId, e.getMessage(), e);
+            return ResponseEntity.status(500).body(Map.of(
+                "success", false,
+                "error", "Impossible de supprimer ce test. Erreur: " + e.getMessage()
             ));
         }
     }

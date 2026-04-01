@@ -28,7 +28,7 @@ public abstract class User {
     @Column(name = "last_name")
     private String lastName;
 
-    @Column(name = "phone")
+    @Column(name = "phone", nullable = false)
     private String phone;
 
     @Enumerated(EnumType.STRING)

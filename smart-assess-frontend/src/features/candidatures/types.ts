@@ -4,7 +4,7 @@ export interface Candidature {
   candidateFirstName: string;
   candidateLastName: string;
   candidateEmail: string;
-  candidatePhone?: string;
+  candidatePhone: string;  // ✅ Rendu obligatoire
   
   // Propriétés pour compatibilité (premier poste)
   internshipPositionId?: number;
@@ -13,6 +13,7 @@ export interface Candidature {
   positionDescription?: string;
   
   // Nouvelles propriétés pour plusieurs postes
+  // ✅ DTO pour les postes (backend)
   positions?: Array<{
     id: number;
     title: string;

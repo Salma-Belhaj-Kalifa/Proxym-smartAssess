@@ -106,20 +106,126 @@ const TestReviewPage: React.FC = () => {
     setTestData({ ...testData, questions: updatedQuestions });
   };
 
-  const deleteQuestion = (index: number) => {
+  const saveQuestionChanges = async (questionIndex: number) => {
     if (!testData) return;
     
-    const updatedQuestions = testData.questions.filter((_, i) => i !== index);
-    setTestData({ ...testData, questions: updatedQuestions });
+    const question = testData.questions[questionIndex];
+    const testId = testData.id || testData.testId;
     
-    // Réinitialiser l'état d'édition si nécessaire
-    if (editingQuestion === index) {
-      setEditingQuestion(null);
-    } else if (editingQuestion !== null && editingQuestion > index) {
-      setEditingQuestion(editingQuestion - 1);
+    if (!testId || typeof testId !== 'number' || testId <= 0) {
+      toast.error('ID de test invalide pour la sauvegarde');
+      return;
     }
     
-    toast.success('Question supprimée');
+    try {
+      // Vérifier si c'est une question temporaire (ID généré par Date.now())
+      // Les IDs de base de données sont généralement beaucoup plus petits que les timestamps
+      const isTemporaryQuestion = question.id && typeof question.id === 'number' && question.id > 1000000000000;
+      
+      if (isTemporaryQuestion) {
+        // Question temporaire : sauvegarder toutes les questions pour inclure la nouvelle
+        console.log('Detected temporary question, saving all questions - questionId:', question.id, 'testId:', testId);
+        await saveQuestions();
+      } else if (question.id && typeof question.id === 'number' && question.id > 0) {
+        // Question existante en base : la mettre à jour
+        console.log('Updating existing question in database - questionId:', question.id, 'testId:', testId);
+        
+        const response = await apiClient.put(`/tests/${testId}/questions/${question.id}`, {
+          questionText: question.questionText,
+          questionType: question.questionType,
+          options: question.options,
+          correctAnswer: question.correctAnswer,
+          maxScore: question.maxScore,
+          skillTag: question.skillTag,
+          orderIndex: questionIndex
+        });
+        
+        if (response.data.success) {
+          toast.success('Question mise à jour avec succès');
+        } else {
+          toast.error(response.data.error || 'Erreur lors de la mise à jour');
+        }
+      } else {
+        // Question sans ID valide : sauvegarder toutes les questions
+        console.log('Question has no valid ID, saving all questions - testId:', testId);
+        await saveQuestions();
+      }
+    } catch (error: any) {
+      console.error('Error saving question:', error);
+      const errorMessage = error.response?.data?.error || error.message || 'Erreur inconnue';
+      toast.error(`Erreur lors de la sauvegarde: ${errorMessage}`);
+    }
+  };
+
+  const closeQuestionEdit = async (index: number) => {
+    // Sauvegarder les modifications avant de fermer
+    await saveQuestionChanges(index);
+    
+    // Fermer l'édition
+    setEditingQuestion(null);
+  };
+
+  // Fonction utilitaire pour vérifier si une option est la réponse correcte
+  const isOptionCorrect = (option: string, correctAnswer: string): boolean => {
+    return option.trim().length > 0 && 
+           correctAnswer && 
+           correctAnswer.trim().length > 0 && 
+           option.trim() === correctAnswer.trim();
+  };
+
+  const deleteQuestion = async (index: number) => {
+    if (!testData) return;
+    
+    const questionToDelete = testData.questions[index];
+    
+    // Si la question a un ID numérique (existe en base), la supprimer de la base
+    if (questionToDelete.id && typeof questionToDelete.id === 'number') {
+      try {
+        const testId = testData.id || testData.testId;
+        if (!testId || typeof testId !== 'number' || testId <= 0) {
+          toast.error('ID de test invalide pour la suppression');
+          return;
+        }
+        
+        console.log('Deleting question from database - questionId:', questionToDelete.id, 'testId:', testId);
+        
+        const response = await apiClient.delete(`/tests/${testId}/questions/${questionToDelete.id}`);
+        
+        if (response.data.success) {
+          // Supprimer localement aussi
+          const updatedQuestions = testData.questions.filter((_, i) => i !== index);
+          setTestData({ ...testData, questions: updatedQuestions });
+          
+          // Réinitialiser l'état d'édition si nécessaire
+          if (editingQuestion === index) {
+            setEditingQuestion(null);
+          } else if (editingQuestion !== null && editingQuestion > index) {
+            setEditingQuestion(editingQuestion - 1);
+          }
+          
+          toast.success('Question supprimée avec succès');
+        } else {
+          toast.error(response.data.error || 'Erreur lors de la suppression');
+        }
+      } catch (error: any) {
+        console.error('Error deleting question:', error);
+        const errorMessage = error.response?.data?.error || error.message || 'Erreur inconnue';
+        toast.error(`Erreur lors de la suppression: ${errorMessage}`);
+      }
+    } else {
+      // Question temporaire (n'existe pas en base), supprimer seulement localement
+      const updatedQuestions = testData.questions.filter((_, i) => i !== index);
+      setTestData({ ...testData, questions: updatedQuestions });
+      
+      // Réinitialiser l'état d'édition si nécessaire
+      if (editingQuestion === index) {
+        setEditingQuestion(null);
+      } else if (editingQuestion !== null && editingQuestion > index) {
+        setEditingQuestion(editingQuestion - 1);
+      }
+      
+      toast.success('Question supprimée');
+    }
   };
 
   const addNewQuestion = () => {
@@ -133,18 +239,27 @@ const TestReviewPage: React.FC = () => {
       correctAnswer: '',
       skillTag: '',
       maxScore: 10.0,
-      orderIndex: testData.questions.length
+      orderIndex: 0 // Ajouter au début (index 0)
     };
+    
+    // Ajouter la nouvelle question au début de la liste
+    const updatedQuestions = [newQuestion, ...testData.questions];
+    
+    // Mettre à jour les orderIndex des questions existantes
+    const reorderedQuestions = updatedQuestions.map((question, index) => ({
+      ...question,
+      orderIndex: index
+    }));
     
     setTestData({ 
       ...testData, 
-      questions: [...testData.questions, newQuestion] 
+      questions: reorderedQuestions 
     });
     
-    // Ovrir automatiquement l'édition de la nouvelle question
-    setEditingQuestion(testData.questions.length);
+    // Ouvrir automatiquement l'édition de la nouvelle question (index 0)
+    setEditingQuestion(0);
     
-    toast.success('Nouvelle question ajoutée');
+    // Ne pas afficher de toast maintenant - attendre que l'utilisateur sauvegarde
   };
 
   const saveQuestions = async () => {
@@ -167,24 +282,36 @@ const TestReviewPage: React.FC = () => {
       // Valider que la question a un texte et au moins 2 options
       if (!question.questionText.trim()) {
         toast.error(`La question ${index + 1} n'a pas de texte`);
-        throw new Error(`Question ${index + 1} vide`);
+        return null;
       }
       
       if (cleanedOptions.length < 2) {
         toast.error(`La question ${index + 1} doit avoir au moins 2 options`);
-        throw new Error(`Question ${index + 1} avec options insuffisantes`);
+        return null;
       }
       
-      if (!question.correctAnswer || !cleanedOptions.includes(question.correctAnswer)) {
+      // Validation de la réponse correcte avec la fonction utilitaire centralisée
+      const hasValidCorrectAnswer = question.correctAnswer && 
+                                   question.correctAnswer.trim().length > 0 && 
+                                   cleanedOptions.includes(question.correctAnswer.trim());
+      
+      if (!hasValidCorrectAnswer) {
         toast.error(`La question ${index + 1} n'a pas de réponse correcte valide`);
-        throw new Error(`Question ${index + 1} avec réponse correcte invalide`);
+        return null;
       }
       
       return {
         ...question,
         options: cleanedOptions
       };
-    });
+    }).filter(q => q !== null); // Filtrer les questions invalides
+    
+    // Si toutes les questions sont invalides, ne pas sauvegarder
+    if (cleanedQuestions.length === 0) {
+      toast.error('Aucune question valide à sauvegarder');
+      setIsSaving(false);
+      return;
+    }
     
     console.log('SaveQuestions - testData structure:', testData);
     console.log('SaveQuestions - testData.id:', testId);
@@ -197,15 +324,33 @@ const TestReviewPage: React.FC = () => {
       const isDraft = testData.status === 'DRAFT';
       console.log('SaveQuestions - Test is DRAFT:', isDraft);
       
-      // Si le test est en DRAFT, sauvegarder uniquement dans le localStorage
-      if (isDraft) {
-        console.log('SaveQuestions - Using testId:', testId);
+      // Vérifier s'il y a des questions temporaires (nouvelles questions)
+      const hasTemporaryQuestions = cleanedQuestions.some(q => 
+        q.id && typeof q.id === 'number' && q.id > 1000000000000
+      );
+      console.log('SaveQuestions - Has temporary questions:', hasTemporaryQuestions);
+      
+      // Si le test est en DRAFT mais contient des nouvelles questions, sauvegarder en base
+      if (isDraft && hasTemporaryQuestions) {
+        console.log('SaveQuestions - Test is DRAFT but has new questions, saving to database');
+        const response = await apiClient.put(`/tests/${testId}/questions`, {
+          questions: cleanedQuestions
+        });
+        
+        // Nettoyer le localStorage après la sauvegarde en base
+        localStorage.removeItem(`test_questions_${testId}`);
+        console.log('Questions saved to database and localStorage cleared');
+        
+        toast.success('Questions sauvegardées avec succès');
+      } else if (isDraft) {
+        // Si le test est en DRAFT sans nouvelles questions, sauvegarder dans le localStorage
+        console.log('SaveQuestions - Test is DRAFT without new questions, using localStorage:', testId);
         localStorage.setItem(`test_questions_${testId}`, JSON.stringify(cleanedQuestions));
         console.log('Questions saved to localStorage:', cleanedQuestions);
         toast.success('Questions sauvegardées localement');
       } else {
         // Si le test n'est plus en DRAFT, sauvegarder en base
-        console.log('SaveQuestions - Using testId for API:', testId);
+        console.log('SaveQuestions - Test is not DRAFT, saving to database');
         const response = await apiClient.put(`/tests/${testId}/questions`, {
           questions: cleanedQuestions
         });
@@ -627,10 +772,10 @@ const TestReviewPage: React.FC = () => {
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => setEditingQuestion(editingQuestion === index ? null : index)}
+                        onClick={() => editingQuestion === index ? closeQuestionEdit(index) : setEditingQuestion(index)}
                         className="hover:bg-blue-50"
                       >
-                        {editingQuestion === index ? 'Fermer' : 'Modifier'}
+                        {editingQuestion === index ? 'Valider' : 'Modifier'}
                       </Button>
                       
                       <Button
@@ -671,20 +816,23 @@ const TestReviewPage: React.FC = () => {
                                 onChange={(e) => updateOption(index, optionIndex, e.target.value)}
                                 placeholder={`Option ${optionIndex + 1}`}
                                 className={`flex-1 ${
-                                  option === question.correctAnswer 
+                                  isOptionCorrect(option, question.correctAnswer)
                                     ? 'border-green-500 bg-green-50 ring-green-500' 
                                     : 'border-gray-300'
                                 }`}
                               />
                               
-                              {option === question.correctAnswer && (
-                                <div className="flex items-center gap-1">
-                                  <Badge variant="default" className="bg-green-600 text-white">
-                                    <Check className="w-3 h-3" />
-                                    Réponse correcte
-                                  </Badge>
-                                </div>
-                              )}
+                              {/* Bouton radio pour sélectionner la réponse correcte */}
+                              <div className="flex items-center">
+                                <input
+                                  type="radio"
+                                  name={`correct-answer-${index}`}
+                                  checked={isOptionCorrect(option, question.correctAnswer)}
+                                  onChange={() => updateQuestion(index, 'correctAnswer', option)}
+                                  className="w-4 h-4 text-green-600 focus:ring-green-500 border-gray-300"
+                                />
+                                <label className="ml-1 text-sm text-gray-600">Correcte</label>
+                              </div>
                               
                               {question.options.length > 2 && (
                                 <Button
@@ -710,27 +858,7 @@ const TestReviewPage: React.FC = () => {
                         </div>
                       </div>
                       
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-sm font-medium mb-2 text-gray-700">Réponse correcte</label>
-                          <select
-                            value={question.correctAnswer}
-                            onChange={(e) => updateQuestion(index, 'correctAnswer', e.target.value)}
-                            className="w-full p-2 border border-gray-300 rounded-md focus:border-blue-500 focus:ring-blue-500"
-                          >
-                            {question.options.map((option, optionIndex) => {
-                              const hasPrefix = /^[A-D]\)|^[A-D]\./.test(option.trim());
-                              const displayText = hasPrefix ? option : `${String.fromCharCode(65 + optionIndex)}. ${option}`;
-                              
-                              return (
-                                <option key={optionIndex} value={option}>
-                                  {displayText || `(Option ${optionIndex + 1} - vide)`}
-                                </option>
-                              );
-                            })}
-                          </select>
-                        </div>
-                        
+                      <div className="grid grid-cols-1 gap-4">
                         <div>
                           <label className="block text-sm font-medium mb-2 text-gray-700">Compétence</label>
                           <Input
@@ -744,7 +872,7 @@ const TestReviewPage: React.FC = () => {
                     </div>
                   ) : (
                     // Mode lecture
-                    <div className="space-y-4">
+                    <div className="space-y-4 pt-4">
                       <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
                         <h3 className="font-medium mb-2 text-blue-900">Question:</h3>
                         <p className="text-gray-800 font-medium">
@@ -760,7 +888,7 @@ const TestReviewPage: React.FC = () => {
                               return (question.options as string[]).map((option, optionIndex) => {
                                 const hasPrefix = /^[A-D]\)|^[A-D]\./.test(option.trim());
                                 const cleanOption = option.replace(/^[A-D]\)\s*/, '').trim();
-                                const isCorrect = option === question.correctAnswer;
+                                const isCorrect = isOptionCorrect(option, question.correctAnswer);
                                 
                                 console.log(`Option ${optionIndex}: "${option}" vs Correct: "${question.correctAnswer}" = ${isCorrect}`);
                                 

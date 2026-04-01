@@ -24,6 +24,10 @@ const ManagerPositionsPage: React.FC = () => {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   
+  // Debug: afficher les données reçues
+  console.log('Positions data:', positions);
+  console.log('Candidatures data:', candidatures);
+  
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
@@ -38,9 +42,26 @@ const ManagerPositionsPage: React.FC = () => {
 
   // Obtenir le nombre de candidats pour une position
   const getApplicantsCount = (positionId: number) => {
-    return candidatures.filter(candidature => 
-      candidature.internshipPositionId && candidature.internshipPositionId === positionId
-    ).length;
+    console.log(`Getting applicants count for position ${positionId}`);
+    console.log('Available candidatures:', candidatures.length);
+    
+    return candidatures.filter(candidature => {
+      // Vérifier si la candidature est pour cette position (compatibilité ancienne et nouvelle structure)
+      const hasLegacyPositionId = candidature.internshipPositionId && candidature.internshipPositionId === positionId;
+      const hasNewPositions = candidature.positions && candidature.positions.some((pos: any) => pos.id === positionId);
+      
+      const isMatch = hasLegacyPositionId || hasNewPositions;
+      
+      // Debug: afficher les propriétés de la candidature
+      if (isMatch) {
+        console.log(`✅ Candidature ${candidature.id}: positionId=${candidature.internshipPositionId}, candidate=${candidature.candidateFirstName} ${candidature.candidateLastName}`);
+        if (candidature.positions) {
+          console.log(`   Positions: [${candidature.positions.map((p: any) => `${p.id}:${p.title}`).join(', ')}]`);
+        }
+      }
+      
+      return isMatch;
+    }).length;
   };
 
   // Filtrer les positions

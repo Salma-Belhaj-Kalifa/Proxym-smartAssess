@@ -959,10 +959,8 @@ const CandidateTestPage: React.FC = () => {
                   <ul className="text-sm text-red-700 space-y-1 text-left">
                     <li>• <strong>Le mode plein écran s'activera automatiquement</strong> au début du test</li>
                     <li>• <strong>IL EST INTERDIT de quitter le mode plein écran</strong> pendant le test</li>
-                    <li>• <strong>La touche Échap est complètement désactivée</strong></li>
                     <li>• <strong>Les raccourcis clavier (Ctrl+C, Ctrl+V, F12, etc.) sont bloqués</strong></li>
                     <li>• <strong>Le clic droit est désactivé</strong></li>
-                    <li>• <strong>Toute tentative de sortie du plein écran sera immédiatement corrigée</strong></li>
                     <li>• <strong>Le changement d'onglet ou la fermeture de la page annulera le test</strong></li>
                     <li>• <strong>Assurez-vous d'être dans un environnement calme avant de commencer</strong></li>
                   </ul>

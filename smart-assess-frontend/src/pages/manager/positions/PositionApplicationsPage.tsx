@@ -61,7 +61,7 @@ export default function PositionApplicationsPage() {
     
     // Le backend envoie 'internship_position_id' au lieu de 'positionId'
     const possibleIds = [
-      c.positionId,
+      c.internshipPositionId,
       (c as any).position_id,
       (c as any).PositionId,
       (c as any).jobPositionId,
@@ -81,11 +81,11 @@ export default function PositionApplicationsPage() {
     }
     
     // Si la position est directement dans la candidature (backend envoie les données)
-    if (!foundPosition && (c as any).title && (c as any).company) {
+    if (!foundPosition && c.positionTitle && c.positionCompany) {
       foundPosition = {
         id: (c as any).internship_position_id,
-        title: (c as any).title,
-        company: (c as any).company
+        title: c.positionTitle,
+        company: c.positionCompany
       };
     }
     
@@ -96,21 +96,23 @@ export default function PositionApplicationsPage() {
     
     return {
       id: c.id,
+      candidateId: c.candidateId,
       candidate: {
-        id: c.candidateId || c.candidate?.id || c.id,
-        firstName: c.candidate?.firstName,
-        lastName: c.candidate?.lastName,
-        email: c.candidate?.email,
-        phone: c.candidate?.phone
+        id: c.candidateId,
+        firstName: c.candidateFirstName,
+        lastName: c.candidateLastName,
+        email: c.candidateEmail,
+        phone: c.candidatePhone  // ✅ Plus de fallback, champ obligatoire
       },
       position: {
-        id: foundPosition?.id || c.positionId || id,
-        title: foundPosition?.title || (c as any).title || c.position?.title || position?.title || 'Poste non spécifié',
-        company: foundPosition?.company || (c as any).company || c.position?.company || position?.company || 'Entreprise'
+        id: foundPosition?.id || c.internshipPositionId || id,
+        title: foundPosition?.title || c.positionTitle || position?.title || 'Poste non spécifié',
+        company: foundPosition?.company || c.positionCompany || position?.company || 'Entreprise'
       },
       status: c.status || 'PENDING',
       appliedAt: c.appliedAt || new Date().toISOString(),
-      cvUrl: c.cvUrl,
+      // cvUrl n'existe pas dans le type Candidature, mais on peut le récupérer depuis candidateCVs
+      cvUrl: c.candidateCVs && c.candidateCVs.length > 0 ? c.candidateCVs[0].fileName : undefined,
       aiScore: c.aiScore,
       aiAnalysis: c.aiAnalysis
     };

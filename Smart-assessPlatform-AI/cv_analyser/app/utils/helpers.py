@@ -58,12 +58,9 @@ def extract_json_from_response(response_text: str) -> dict:
 
     json_str = response_text[start:end]
 
-    # Clean formatting issues while preserving structure
-    # Remove trailing commas in objects/arrays
     json_str = re.sub(r",\s*}", "}", json_str)
     json_str = re.sub(r",\s*]", "]", json_str)
     
-    # Fix common LLM JSON issues
     json_str = re.sub(r"(\w+):\s*", r'"\1": ', json_str)  # Quote unquoted keys
     json_str = re.sub(r":\s*'([^']*)'", r': "\1"', json_str)  # Single to double quotes
     json_str = re.sub(r':\s*([^",\[\]\{\}\s][^",\[\]\{\}\s]*)', r': "\1"', json_str)  # Quote unquoted values

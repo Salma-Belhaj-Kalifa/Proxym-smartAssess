@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Clock, Calendar, User, Send, Timer, CheckCircle, AlertCircle, Download, Eye } from 'lucide-react';
+import { ArrowLeft, Clock, Calendar, User, Send, Timer, CheckCircle, AlertCircle, Download, Eye, Check, X, Target, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -65,6 +65,9 @@ const TestResultsPage: React.FC = () => {
   const [testResult, setTestResult] = useState<TestResult | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [lastError, setLastError] = useState<Error | null>(null);
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+  const [candidatureId, setCandidatureId] = useState<number | null>(null);
+  const [candidatureStatus, setCandidatureStatus] = useState<string | null>(null);
 
   // Vérifier si testId est un token (UUID) ou un ID numérique
   const isToken = testId && testId.includes('-');
@@ -103,6 +106,21 @@ const TestResultsPage: React.FC = () => {
         if (response.data) {
           const result = response.data;
           
+          // Récupérer l'ID de la candidature si disponible
+          if (result.candidatureId) {
+            setCandidatureId(result.candidatureId);
+            console.log('✅ Candidature ID found:', result.candidatureId);
+          } else {
+            console.warn('❌ No candidatureId found in response');
+            console.log('Response keys:', Object.keys(result));
+          }
+          
+          // Récupérer le statut de la candidature si disponible
+          if (result.candidatureStatus) {
+            setCandidatureStatus(result.candidatureStatus);
+            console.log('✅ Candidature status found:', result.candidatureStatus);
+          }
+          
           // Calculer les scores si nécessaire
           const scoreData = calculateRealScore(result);
           const sessionData = calculateResponseTime(result);
@@ -111,7 +129,9 @@ const TestResultsPage: React.FC = () => {
             id: result.id || parseInt(testId),
             token: result.token || '',
             candidateName: result.candidateName || result.candidate?.firstName + ' ' + result.candidate?.lastName || 'Candidat inconnu',
-            positionTitle: result.positionTitle || 'Poste non spécifié',
+            positionTitle: result.positionTitle || result.positionCompany ? 
+              `${result.positionTitle || 'Poste non spécifié'} - ${result.positionCompany || 'Entreprise'}` : 
+              'Poste non spécifié',
             status: result.status || 'UNKNOWN',
             createdAt: result.createdAt || new Date().toISOString(),
             submittedAt: result.submittedAt || result.createdAt || new Date().toISOString(),
@@ -275,6 +295,72 @@ const TestResultsPage: React.FC = () => {
     return Math.round((skillData.correct / skillData.total) * 100);
   };
 
+  // Fonction pour accepter la candidature
+  const handleAcceptCandidature = async () => {
+    if (!candidatureId) {
+      toast.error('ID de candidature non trouvé');
+      return;
+    }
+
+    try {
+      setIsUpdatingStatus(true);
+      console.log('Accepting candidature:', candidatureId);
+      
+      const response = await apiClient.put(`/candidatures/${candidatureId}/status`, {
+        status: 'ACCEPTED'
+      });
+
+      console.log('Candidature accepted:', response.data);
+      toast.success('Candidature acceptée avec succès');
+      
+      // Mettre à jour l'interface si nécessaire
+      setTimeout(() => {
+        navigate('/manager/candidats');
+      }, 1500);
+      
+    } catch (error: any) {
+      console.error('Error accepting candidature:', error);
+      toast.error(error?.response?.data?.message || 'Erreur lors de l\'acceptation de la candidature');
+    } finally {
+      setIsUpdatingStatus(false);
+    }
+  };
+
+  // Fonction pour rejeter la candidature
+  const handleRejectCandidature = async () => {
+    if (!candidatureId) {
+      toast.error('ID de candidature non trouvé');
+      return;
+    }
+
+    // Demander une raison de rejet
+    const reason = prompt('Veuillez indiquer la raison du rejet (optionnel):');
+    
+    try {
+      setIsUpdatingStatus(true);
+      console.log('Rejecting candidature:', candidatureId, 'Reason:', reason);
+      
+      const response = await apiClient.put(`/candidatures/${candidatureId}/status`, {
+        status: 'REJECTED',
+        rejectionReason: reason || null
+      });
+
+      console.log('Candidature rejected:', response.data);
+      toast.success('Candidature rejetée avec succès');
+      
+      // Mettre à jour l'interface si nécessaire
+      setTimeout(() => {
+        navigate('/manager/candidats');
+      }, 1500);
+      
+    } catch (error: any) {
+      console.error('Error rejecting candidature:', error);
+      toast.error(error?.response?.data?.message || 'Erreur lors du rejet de la candidature');
+    } finally {
+      setIsUpdatingStatus(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -371,7 +457,8 @@ const TestResultsPage: React.FC = () => {
                 </div>
                 <div>
                   <p className="text-sm font-medium text-gray-500">Poste</p>
-                  <p className="text-lg font-semibold">{testResult.positionTitle}</p>
+                  <p className="text-lg font-semibold">{testResult.positionTitle?.split(' - ')[0] || 'Poste non spécifié'}</p>
+                  <p className="text-sm text-gray-600">{testResult.positionTitle?.split(' - ')[1] || 'Entreprise'}</p>
                 </div>
               </div>
               
@@ -421,6 +508,68 @@ const TestResultsPage: React.FC = () => {
               </div>
             </CardContent>
           </Card>
+
+          {/* Boutons d'action pour la candidature */}
+          {candidatureId && candidatureStatus !== 'ACCEPTED' && candidatureStatus !== 'REJECTED' && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Décision de candidature</CardTitle>
+                <p className="text-sm text-gray-600">
+                  Basée sur les résultats du test ({Math.round(testResult.scores?.finalScore || 0)}%)
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex gap-3">
+                  <Button 
+                    onClick={handleAcceptCandidature}
+                    disabled={isUpdatingStatus}
+                    className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+                  >
+                    <Check className="h-4 w-4 mr-2" />
+                    {isUpdatingStatus ? 'Traitement...' : 'Accepter'}
+                  </Button>
+                  <Button 
+                    onClick={handleRejectCandidature}
+                    disabled={isUpdatingStatus}
+                    variant="destructive"
+                    className="flex-1"
+                  >
+                    <X className="h-4 w-4 mr-2" />
+                    {isUpdatingStatus ? 'Traitement...' : 'Rejeter'}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Message pour candidature déjà traitée */}
+          {candidatureId && (candidatureStatus === 'ACCEPTED' || candidatureStatus === 'REJECTED') && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  {candidatureStatus === 'ACCEPTED' ? (
+                    <>
+                      <Check className="h-5 w-5 text-green-600" />
+                      Candidature Acceptée
+                    </>
+                  ) : (
+                    <>
+                      <X className="h-5 w-5 text-red-600" />
+                      Candidature Refusée
+                    </>
+                  )}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-gray-600 mb-4">
+                  {candidatureStatus === 'ACCEPTED' 
+                    ? 'Cette candidature a été acceptée. Le candidat a été notifié de la décision.'
+                    : 'Cette candidature a été refusée. Le candidat a été notifié de la décision.'
+                  }
+                </p>
+              </CardContent>
+            </Card>
+          )}
 
           <Card>
             <CardHeader>

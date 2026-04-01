@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Search, Eye, Calendar, Building2, Briefcase, CheckCircle, XCircle, Clock, AlertCircle, MoreVertical, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -11,6 +11,7 @@ import { Candidature } from '@/features/candidatures/types';
 import { getStatusLabel, getStatusBadgeClass, getStatusVariant } from '@/utils/statusMappings';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import apiClient from '@/lib/api';
 
 interface Candidate {
   id: number;
@@ -48,6 +49,13 @@ interface Application {
   aiAnalysis?: any;
   testGenerated?: boolean;
   testCompleted?: boolean;
+  // ✅ AJOUT: Support pour plusieurs postes dans une seule candidature
+  internshipPositions?: Array<{
+    id: number;
+    title: string;
+    company: string;
+    status?: string;
+  }>;
   allPositions?: Array<{
     id: number;
     title: string;
@@ -75,6 +83,9 @@ export default function ApplicationsPage() {
 
   // Regrouper les candidatures par candidat (une candidature = plusieurs postes)
   const applications = useMemo(() => {
+    console.log('=== DEBUG APPLICATIONS LOGIQUE ===');
+    console.log('candidatures brutes:', candidatures);
+    
     const groupedByCandidate: Record<number, Application> = {};
     
     candidatures.forEach(candidature => {
@@ -90,7 +101,7 @@ export default function ApplicationsPage() {
             firstName: candidature.candidateFirstName || '',
             lastName: candidature.candidateLastName || '',
             email: candidature.candidateEmail || '',
-            phone: candidature.candidatePhone || '',
+            phone: candidature.candidatePhone
           },
           position: {
             id: candidature.internshipPositionId || 0,
@@ -108,20 +119,73 @@ export default function ApplicationsPage() {
         };
       }
       
-      // Ajouter cette candidature comme un poste individuel
-      const currentPosition = {
-        id: candidature.internshipPositionId || 0,
-        title: candidature.positionTitle?.trim() || 'Poste non spécifié',
-        company: candidature.positionCompany || 'Entreprise',
-        status: candidature.status || 'PENDING',
-        appliedAt: candidature.appliedAt
-      };
+      // ✅ UTILISER LA MÊME LOGIQUE QUE GenerateTestPage
+      let positionsToAdd: Array<{id: number, title: string, company: string, status: string, appliedAt: string}> = [];
       
-      // Ajouter à allPositions (sans dédoublonnage pour voir les données réelles)
-      groupedByCandidate[candidateId].allPositions.push(currentPosition);
+      if (candidature.internshipPositions && Array.isArray(candidature.internshipPositions) && candidature.internshipPositions.length > 0) {
+        console.log(`→ Utilisation de candidature.internshipPositions (${candidature.internshipPositions.length} postes)`);
+        candidature.internshipPositions.forEach((position: any) => {
+          console.log('InternshipPosition trouvée:', JSON.stringify(position, null, 2));
+          const positionAcceptedDomains = (position as any).acceptedDomains || (position as any).domains || (position as any).requiredDomains || [];
+          
+          positionsToAdd.push({
+            id: position.id || 0,
+            title: position.title || 'Poste non spécifié',
+            company: position.company || 'Entreprise',
+            status: candidature.status || 'PENDING',
+            appliedAt: candidature.appliedAt
+          });
+        });
+      } else if (candidature.positions && Array.isArray(candidature.positions) && candidature.positions.length > 0) {
+        console.log(`→ Utilisation de candidature.positions (${candidature.positions.length} postes)`);
+        candidature.positions.forEach((position: any) => {
+          console.log('Position trouvée:', JSON.stringify(position, null, 2));
+          const positionAcceptedDomains = (position as any).acceptedDomains || (position as any).domains || (position as any).requiredDomains || [];
+          
+          positionsToAdd.push({
+            id: position.id || 0,
+            title: position.title || 'Poste non spécifié',
+            company: position.company || 'Entreprise',
+            status: candidature.status || 'PENDING',
+            appliedAt: candidature.appliedAt
+          });
+        });
+      } else if (candidature.positionTitle && candidature.positionTitle.trim() !== '') {
+        console.log('→ Utilisation de la structure ancienne');
+        const candidatureAcceptedDomains = (candidature as any).acceptedDomains || (candidature as any).domains || (candidature as any).requiredDomains || [];
+        
+        positionsToAdd.push({
+          id: candidature.internshipPositionId || 0,
+          title: candidature.positionTitle.trim(),
+          company: candidature.positionCompany || 'Entreprise',
+          status: candidature.status || 'PENDING',
+          appliedAt: candidature.appliedAt
+        });
+      } else {
+        console.log('→ Aucune structure de position trouvée pour cette candidature');
+      }
+      
+      // Ajouter les postes à allPositions
+      groupedByCandidate[candidateId].allPositions.push(...positionsToAdd);
     });
     
-    return Object.values(groupedByCandidate);
+    return Object.values(groupedByCandidate)
+    .sort((a, b) => {
+      // Trier par date décroissante (plus récents d'abord)
+      const dateA = new Date(a.appliedAt || 0).getTime();
+      const dateB = new Date(b.appliedAt || 0).getTime();
+      return dateB - dateA;
+    })
+    .map(app => {
+      // ✅ DEBUG: Vérifier le contenu de allPositions
+      console.log(`DEBUG FINAL - Candidat ${app.candidateId}:`, {
+        candidateName: `${app.candidate.firstName} ${app.candidate.lastName}`,
+        totalAllPositions: app.allPositions?.length || 0,
+        allPositions: app.allPositions?.map(pos => ({ id: pos.id, title: pos.title, status: pos.status })) || []
+      });
+      return app;
+    });
+    console.log('=== FIN DEBUG APPLICATIONS LOGIQUE ===');
   }, [candidatures]);
 
   const filteredApplications = applications.filter(app => {
@@ -129,12 +193,22 @@ export default function ApplicationsPage() {
       app.candidate.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       app.candidate.lastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       app.candidate.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      app.position.title.toLowerCase().includes(searchTerm.toLowerCase());
+      // Chercher dans TOUS les postes du candidat, pas seulement le poste principal
+      (app.allPositions && app.allPositions.some(pos => 
+        pos.title.toLowerCase().includes(searchTerm.toLowerCase())
+      ));
 
     const matchesStatus = statusFilter === 'all' || app.status === statusFilter;
-    const matchesPosition = positionFilter === 'all' || (app.position.id && app.position.id === positionFilter);
+    const matchesPosition = positionFilter === 'all' || 
+      // Chercher dans TOUS les postes du candidat
+      (app.allPositions && app.allPositions.some(pos => pos.id === positionFilter));
 
     return matchesSearch && matchesStatus && matchesPosition;
+  }).sort((a, b) => {
+    // Maintenir l'ordre chronologique même après filtrage
+    const dateA = new Date(a.appliedAt || 0).getTime();
+    const dateB = new Date(b.appliedAt || 0).getTime();
+    return dateB - dateA;
   });
 
   const getStatusBadge = (status: string) => {
@@ -206,6 +280,7 @@ export default function ApplicationsPage() {
           <h1 className="text-3xl font-bold text-foreground">Candidats</h1>
           <p className="text-muted-foreground">
             {filteredApplications.length} candidat{filteredApplications.length > 1 ? 's' : ''} trouvé{filteredApplications.length > 1 ? 's' : ''}
+  
           </p>
         </div>
         <Button onClick={handleRefresh} variant="outline">
@@ -290,19 +365,34 @@ export default function ApplicationsPage() {
                   </div>
 
                   <div className="flex flex-wrap items-center gap-2 mb-2">
-                    {/* Afficher tous les postes du candidat avec la même couleur */}
-                    {application.allPositions?.map((position, index) => (
-                      <Badge key={position.id} variant="outline" className="bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100 transition-colors">
-                        {position.title}
-                      </Badge>
-                    ))}
+                    {/* ✅ TOUS LES BADGES EN GRIS : Couleur unifiée pour tous les postes */}
+                    {application.allPositions?.map((position, index) => {
+                      return (
+                        <div key={position.id} className="flex items-center gap-1">
+                          <Badge 
+                            variant="outline" 
+                            className="bg-gray-100 text-gray-800 border-gray-300 hover:bg-gray-200 transition-colors"
+                          >
+                            {position.title}
+                          </Badge>
+                        </div>
+                      );
+                    })}
                   </div>
                   
-                  {/* Afficher l'entreprise en dessous des postes */}
+                  {/* Afficher les entreprises en dessous des postes */}
                   {application.allPositions && application.allPositions.length > 0 && (
-                    <div className="flex items-center gap-1 text-sm text-muted-foreground mb-2">
+                    <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground mb-2">
                       <Building2 className="w-4 h-4" />
-                      <span>{application.position?.company}</span>
+                      {/* ✅ CORRECTION: Extraire les entreprises uniques de allPositions */}
+                      {Array.from(new Set(application.allPositions.map(pos => pos.company))).map((company, index) => (
+                        <span key={company} className="bg-gray-100 px-2 py-1 rounded text-xs">
+                          {company}
+                          {index > 0 && (
+                            <span className="ml-1 text-gray-500">+{index}</span>
+                          )}
+                        </span>
+                      ))}
                     </div>
                   )}
                   

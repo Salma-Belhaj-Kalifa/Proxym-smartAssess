@@ -1,6 +1,7 @@
 package com.example.smart_assess.dto;
 
 import com.example.smart_assess.enums.Role;
+import com.example.smart_assess.validation.ValidTunisianPhone;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -21,6 +22,10 @@ public class CreateUserRequest {
 
     @NotBlank
     private String lastName;
+
+    @NotBlank(message = "Le numéro de téléphone est requis")
+    @ValidTunisianPhone
+    private String phone;
 
     @NotNull
     private Role role;

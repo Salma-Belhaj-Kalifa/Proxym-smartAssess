@@ -71,6 +71,7 @@ app:
 logging:
   level:
     com.example.smart_assess: INFO
+    com.example.smart_assess.validation: DEBUG
     org.springframework.web: INFO
     com.zaxxer.hikari: WARN
     org.springframework.web.multipart: DEBUG

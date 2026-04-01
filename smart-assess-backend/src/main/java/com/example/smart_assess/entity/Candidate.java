@@ -16,9 +16,6 @@ import java.util.List;
 @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 public class Candidate extends User {
 
-    @Builder.Default
-    private String phone = "";
-
     @OneToOne(mappedBy = "candidate", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     @JsonIgnore
     private CandidateCV cv;

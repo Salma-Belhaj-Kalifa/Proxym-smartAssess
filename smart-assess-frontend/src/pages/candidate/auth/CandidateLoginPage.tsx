@@ -51,8 +51,6 @@ export default function CandidateLoginPage() {
     try {
       const result = await loginMutation.mutateAsync({ email, password });
       
-      console.log('Login result:', result); // Debug pour voir la structure de la réponse
-
       // Validation flexible pour différents formats de réponse
       let user = null;
       if (result && typeof result === 'object' && 'user' in result && result.user) {

@@ -22,21 +22,57 @@ REQUIREMENTS:
 - Use technologies from candidate profile
 - Mix difficulty levels appropriately
 
-FORMAT INSTRUCTIONS:
-- Return ONLY valid JSON
-- NO markdown blocks
-- NO trailing commas
-- All strings must be properly quoted
-- Escape quotes inside strings with backslash
-
 EXAMPLE FORMAT:
-{{"questions":[{{"technology":"React","level":"advanced","question":"What is useEffect?","options":["A) Side effects","B) State","C) Props","D) Context"],"correct_answer":"A) Side effects"}}]}}
+{{"questions":[{{"technology":"Python","level":"intermediate","question":"Which statement best describes the role of list comprehension in Python?","options":["A) It creates loops only","B) It simplifies collection creation","C) It manages exceptions","D) It defines classes"],"correct_answer":"A) It simplifies collection creation"}}]}}
 CRITICAL: Must generate exactly {num_questions} questions. Count them before returning.
+QUESTION RULES:
+- Each question must contain:
+  - technology
+  - level
+  - question
+  - options (exactly 4 choices)
+  - correct_answer
+
+VARIETY RULES (VERY IMPORTANT):
+- Do NOT repeat the same concept twice
+- Do NOT generate multiple generic definition questions
+- Use varied question styles:
+  - concept understanding
+  - practical situations
+  - problem-solving
+  - best practices
+  - applied usage
+  - scenario-based reasoning
+
+PROFILE ADAPTATION:
+- Use only skills, tools, technologies, or domains present in candidate profile
+- Adapt question difficulty to candidate experience level
+- If profile contains multiple domains, distribute questions across them
+
+ANTI-REPETITION RULE:
+Avoid repetitive patterns such as:
+- "What is X?"
+- "What is the purpose of X?"
+- "What does X do?"
+
+Instead prefer:
+- practical usage
+- comparison questions
+- decision-making situations
+- applied scenarios
+
+QUALITY RULE:
+- Every question must test a different concept
+- At least half of the questions should be practical or scenario-based
+- Questions must feel realistic for recruitment evaluation
+FINAL CHECK:
+1. Count exactly {num_questions} questions
+2. Verify no repeated concept
+3. Verify JSON validity
+
+Return ONLY JSON.
 """
 
-# -----------------------------
-# Helper function to parse JSON safely
-# -----------------------------
 def extract_json_from_response(response_text: str) -> dict:
     """Extract valid JSON from LLM response quickly."""
     # Remove markdown
@@ -81,9 +117,7 @@ def extract_json_from_response(response_text: str) -> dict:
         logger.error(f"All JSON parsing methods failed. Response: {response_text[:500]}...")
         raise ValueError("Invalid JSON returned by LLM")
 
-# -----------------------------
-# Async Groq API call
-# -----------------------------
+
 async def call_groq_api_async(prompt: str, retries=3):
     api_key = os.getenv("GROQ_API_KEY")
     headers = {
@@ -91,7 +125,7 @@ async def call_groq_api_async(prompt: str, retries=3):
         "Content-Type": "application/json"
     }
     data = {
-        "model": "llama-3.1-8b-instant",
+        "model": "llama-3.3-70b-versatile",
         "messages": [{"role": "user", "content": prompt}],
         "temperature": 0.3,
         "max_tokens": 8000
@@ -115,9 +149,6 @@ async def call_groq_api_async(prompt: str, retries=3):
                 raise Exception(f"API error {resp.status}: {text}")
     raise Exception("Max retries exceeded due to rate limits")
 
-# -----------------------------
-# Question Generator
-# -----------------------------
 class QuestionGenerator:
     def __init__(self):
         self.api_key = None
