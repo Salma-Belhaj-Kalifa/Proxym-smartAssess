@@ -18,12 +18,16 @@ public class Answer {
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "test_id", nullable = false)
-    private GeneratedTest test;
+    @JoinColumn(name = "candidate_id", nullable = false)
+    private Candidate candidate;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "question_id", nullable = false)
     private TestQuestion question;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "test_id")
+    private GeneratedTest test; // Gardé pour référence mais plus obligatoire
 
     @Column(name = "answer_text", columnDefinition = "TEXT")
     private String answerText;

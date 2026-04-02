@@ -71,6 +71,11 @@ export const testService = {
     return response.data;
   },
 
+  startTestByToken: async (token: string): Promise<any> => {
+    const response = await apiClient.post(`/tests/public/${token}/start`);
+    return response.data;
+  },
+
   getTestResults: async (testId: number): Promise<any> => {
     const response = await apiClient.get(`/tests/${testId}/results`);
     return response.data;

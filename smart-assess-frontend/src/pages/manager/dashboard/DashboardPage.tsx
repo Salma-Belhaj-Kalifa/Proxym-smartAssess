@@ -11,6 +11,33 @@ import { useTests } from '@/features/tests/testsQueries';
 import { useCurrentUserSafe } from '@/features/auth/authQueries';
 import { getStatusLabel, getStatusColor } from '@/utils/statusMappings';
 
+/** Tri tests : soumission si dispo, sinon création */
+const getTestRecencyMs = (test: {
+  submittedAt?: string;
+  createdAt?: string;
+}): number => {
+  const raw = test.submittedAt || test.createdAt;
+  if (!raw) return 0;
+  const ms = new Date(raw).getTime();
+  return Number.isNaN(ms) ? 0 : ms;
+};
+
+const formatRelativeActivityTime = (timestampMs: number): string => {
+  if (!timestampMs || Number.isNaN(timestampMs)) return '';
+  const diff = Date.now() - timestampMs;
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "À l'instant";
+  if (mins < 60) return `Il y a ${mins} min`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `Il y a ${hours} h`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `Il y a ${days} j`;
+  return new Date(timestampMs).toLocaleString('fr-FR', {
+    dateStyle: 'short',
+    timeStyle: 'short',
+  });
+};
+
 const DashboardPage = () => {
   const { data: user } = useCurrentUserSafe();
   const { data: positionsData = [], isLoading: positionsLoading } = usePositions();
@@ -23,50 +50,72 @@ const DashboardPage = () => {
   const candidates = useMemo(() => candidatesData || [], [candidatesData]);
   const candidatures = useMemo(() => candidaturesData || [], [candidaturesData]);
   
-  // Utiliser useMemo pour les données enrichies des tests
+  // Tests enrichis (API), puis filtrés sur les candidats encore présents
   const enrichedTestsData = useMemo(() => {
     if (!testsData || testsData.length === 0) {
       return [];
     }
-    
+
     try {
-      const allTests = Array.isArray(testsData) ? testsData : 
-                     (testsData && typeof testsData === 'object' && 'tests' in testsData) ? (testsData as any).tests : [];
-      
-      const validTests = allTests.filter((test: any) => test.id);
-      const enrichedTests = [];
-      
+      const allTests = Array.isArray(testsData)
+        ? testsData
+        : testsData && typeof testsData === 'object' && 'tests' in testsData
+          ? (testsData as { tests: unknown[] }).tests
+          : [];
+
+      const validTests = allTests.filter((test: { id?: number }) => test.id);
+      const enrichedTests: Record<string, unknown>[] = [];
+
       for (const test of validTests) {
         try {
-          const candidate = test.candidate || {
-            id: (test as any).candidateId,
+          const t = test as Record<string, unknown>;
+          const candidate = (t.candidate as Record<string, unknown>) || {
+            id: t.candidateId,
             firstName: 'Candidat',
             lastName: 'Inconnu',
-            email: 'email@example.com'
+            email: 'email@example.com',
           };
-          
-          const position = test.internshipPosition || {
-            id: (test as any).internshipPositionId || 0,
+
+          const position = (t.internshipPosition as Record<string, unknown>) || {
+            id: t.internshipPositionId || 0,
             title: 'Poste inconnu',
-            company: 'SmartAssess'
+            company: 'SmartAssess',
           };
-          
+
           enrichedTests.push({
-            ...test,
-            candidate: candidate,
-            position: position
+            ...t,
+            candidate,
+            position,
           });
         } catch (error) {
-          console.warn(`Test ${test.id} ignoré dans le dashboard:`, error);
+          console.warn(`Test ${(test as { id?: number }).id} ignoré dans le dashboard:`, error);
         }
       }
-      
+
       return enrichedTests;
     } catch (error) {
       console.error('Erreur lors du traitement des tests:', error);
       return [];
     }
   }, [testsData]);
+
+  const validCandidateIdSet = useMemo(
+    () => new Set(candidates.map((c) => c.id).filter((id) => id != null)),
+    [candidates]
+  );
+
+  /** Exclut les tests orphelins (candidat supprimé) ; tri du plus récent au plus ancien */
+  const testsForDashboard = useMemo(() => {
+    const list = enrichedTestsData.filter((test) => {
+      const cid =
+        (test.candidate as { id?: number } | undefined)?.id ??
+        (test as { candidateId?: number }).candidateId;
+      if (cid == null || Number.isNaN(Number(cid))) return false;
+      if (candidatesLoading) return true;
+      return validCandidateIdSet.has(Number(cid));
+    });
+    return [...list].sort((a, b) => getTestRecencyMs(b as never) - getTestRecencyMs(a as never));
+  }, [enrichedTestsData, validCandidateIdSet, candidatesLoading]);
   
   const [isLoading, setIsLoading] = useState(true);
   
@@ -83,18 +132,22 @@ const DashboardPage = () => {
     setIsLoading(loading);
   }, [positionsLoading, candidatesLoading, candidaturesLoading, testsLoading]);
 
-  // Utiliser directement enrichedTestsData au lieu des états locaux
-  const tests = enrichedTestsData;
-  const recentTests = enrichedTestsData;
+  const tests = testsForDashboard;
+  const recentTests = testsForDashboard;
 
   const totalPositions = positions.length;
   const activePositions = positions.filter(p => p.isActive === true || (p as any).status === 'ACTIVE').length;
   const inactivePositions = totalPositions - activePositions;
   const totalCandidatures = candidatures.length;
   const pendingCandidatures = candidatures.filter(c => c.status === 'PENDING').length;
-  const completedTests = tests.filter(t => t.status === 'SUBMITTED' || t.status === 'EVALUATED').length;
-  const inProgressTests = tests.filter(t => t.status === 'IN_PROGRESS' || t.status === 'ASSIGNED' || t.status === 'STARTED').length;
-  const totalTests = tests.length; // Maintenant ça devrait afficher 19
+
+  const completedTests = tests.filter(
+    (t) => t.status === 'SUBMITTED' || t.status === 'EVALUATED'
+  ).length;
+  const inProgressTests = tests.filter((t) =>
+    ['DRAFT', 'READY', 'IN_PROGRESS', 'ASSIGNED'].includes(String(t.status))
+  ).length;
+  const totalTests = tests.length;
 
   const stats = [
     { 
@@ -121,7 +174,7 @@ const DashboardPage = () => {
     { 
       label: "Tests en cours", 
       value: inProgressTests, 
-      sub: `${completedTests} complétés`, 
+      sub: `${Math.max(0, totalTests - completedTests)} non terminé${totalTests - completedTests !== 1 ? 's' : ''}`, 
       icon: TrendingUp, 
       color: "text-warning" 
     },
@@ -138,78 +191,118 @@ const DashboardPage = () => {
     return colors[color] || 'bg-gradient-to-br from-slate-500 to-slate-600';
   };
 
-  // Activités réelles depuis les APIs
-  const activities = [
-    // Tests récents
-    ...(recentTests.slice(-3).map(test => {
-      let score = 'N/A';
-      if (test.finalScore) score = test.finalScore;
-      else if (test.score) score = test.score;
-      else if (test.evaluationResult?.finalScore) score = test.evaluationResult.finalScore;
-      
-      const scoreText = score !== 'N/A' ? ` • Score: ${score}%` : '';
-      const candidateName = test.candidate?.firstName && test.candidate?.lastName 
-        ? `${test.candidate.firstName} ${test.candidate.lastName}` 
-        : `Candidat #${test.candidateId || 'Inconnu'}`;
-      
-      return {
-        text: <>Test <strong>{candidateName}</strong> soumis{scoreText}</>,
-        time: `Il y a ${Math.floor((Date.now() - new Date(test.createdAt).getTime()) / (1000 * 60 * 60))}h`,
-        type: 'test'
-      };
-    }) || []),
-    // Nouveaux candidats
-    ...(candidates.slice(-3).map(candidate => {
-      const candidateName = candidate.firstName && candidate.lastName 
-        ? `${candidate.firstName} ${candidate.lastName}` 
-        : `Candidat #${candidate.id || 'Inconnu'}`;
+  // Activités fusionnées, triées par date réelle (plus récent en premier)
+  const activities = useMemo(() => {
+    type Act = { at: number; text: React.ReactNode; time: string; type: string };
+    const items: Act[] = [];
+
+    recentTests.forEach((test) => {
+      if (test.status !== 'SUBMITTED' && test.status !== 'EVALUATED') return;
+      const raw = (test as { submittedAt?: string }).submittedAt || test.createdAt;
+      if (!raw) return;
+      const at = new Date(raw).getTime();
+      if (Number.isNaN(at)) return;
+
+      let score: string | number = 'N/A';
+      if (test.finalScore != null) score = test.finalScore as number;
+      else if ((test as { score?: number }).score != null) score = (test as { score?: number }).score!;
+      else if ((test as { evaluationResult?: { finalScore?: number } }).evaluationResult?.finalScore != null) {
+        score = (test as { evaluationResult: { finalScore: number } }).evaluationResult.finalScore;
+      }
+      const scoreText = score !== 'N/A' ? ` • Score : ${score}%` : '';
+      const candidateName =
+        test.candidate?.firstName && test.candidate?.lastName
+          ? `${test.candidate.firstName} ${test.candidate.lastName}`
+          : `Candidat #${test.candidate?.id ?? '?'}`;
+
+      items.push({
+        at,
+        type: 'test',
+        time: formatRelativeActivityTime(at),
+        text: (
+          <>
+            Test <strong>{candidateName}</strong> soumis{scoreText}
+          </>
+        ),
+      });
+    });
+
+    candidates.forEach((candidate) => {
+      const raw = (candidate as { createdAt?: string }).createdAt;
+      if (!raw) return;
+      const at = new Date(raw).getTime();
+      if (Number.isNaN(at)) return;
+      const candidateName =
+        candidate.firstName && candidate.lastName
+          ? `${candidate.firstName} ${candidate.lastName}`
+          : `Candidat #${candidate.id}`;
       const email = candidate.email ? ` (${candidate.email})` : '';
-      
-      return {
-        text: <>Nouveau candidat <strong>{candidateName}</strong>{email} inscrit</>,
-        time: `Il y a ${Math.floor((Date.now() - new Date((candidate as any).createdAt).getTime()) / (1000 * 60 * 60))}h`,
-        type: 'candidate'
-      };
-    }) || []),
-    // Candidatures en attente
-    ...(candidatures.slice(-3).filter(c => c.status === 'PENDING').map(candidature => {
-      const candidatureDate = (candidature as any).createdAt || (candidature as any).appliedAt;
-      const timeAgo = candidatureDate ? 
-        `Il y a ${Math.floor((Date.now() - new Date(candidatureDate).getTime()) / (1000 * 60 * 60))}h` :
-        'Date inconnue';
-      
-      const candidateName = candidature.candidateFirstName && candidature.candidateLastName 
-        ? `${candidature.candidateFirstName} ${candidature.candidateLastName}` 
-        : `Candidat #${candidature.candidateId || 'Inconnu'}`;
-      
-      const positionName = candidature.positionTitle 
-        ? ` pour ${candidature.positionTitle}` 
-        : candidature.internshipPositionId 
-          ? ` pour Poste #${candidature.internshipPositionId}` 
-          : '';
-      
-      return {
-        text: <>Candidature de <strong>{candidateName}</strong>{positionName} en attente de review</>,
-        time: timeAgo,
-        type: 'candidature'
-      };
-    }) || []),
-    // Nouveaux postes
-    ...(positions.slice(-1).map(position => {
-      const positionTitle = position.title || `Poste #${position.id || 'Inconnu'}`;
-      const createdBy = position.createdByEmail || `Manager #${position.createdBy || 'Inconnu'}`;
-      
-      return {
-        text: <>Nouveau poste <strong>{positionTitle}</strong> publié par {createdBy}</>,
-        time: `Hier, ${new Date((position as any).createdAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`,
-        type: 'position'
-      };
-    }) || [])
-  ].sort((a, b) => {
-    const timeA = parseInt(a.time.match(/\d+/)?.[0] || '0');
-    const timeB = parseInt(b.time.match(/\d+/)?.[0] || '0');
-    return timeA - timeB;
-  }).slice(0, 10);
+      items.push({
+        at,
+        type: 'candidate',
+        time: formatRelativeActivityTime(at),
+        text: (
+          <>
+            Nouveau candidat <strong>{candidateName}</strong>{email} inscrit
+          </>
+        ),
+      });
+    });
+
+    candidatures
+      .filter((c) => c.status === 'PENDING')
+      .forEach((candidature) => {
+        const raw =
+          (candidature as { createdAt?: string; appliedAt?: string }).createdAt ||
+          (candidature as { appliedAt?: string }).appliedAt;
+        if (!raw) return;
+        const at = new Date(raw).getTime();
+        if (Number.isNaN(at)) return;
+        const candidateName =
+          candidature.candidateFirstName && candidature.candidateLastName
+            ? `${candidature.candidateFirstName} ${candidature.candidateLastName}`
+            : `Candidat #${candidature.candidateId ?? '?'}`;
+        const positionName = candidature.positionTitle
+          ? ` pour ${candidature.positionTitle}`
+          : candidature.internshipPositionId
+            ? ` pour poste #${candidature.internshipPositionId}`
+            : '';
+        items.push({
+          at,
+          type: 'candidature',
+          time: formatRelativeActivityTime(at),
+          text: (
+            <>
+              Candidature de <strong>{candidateName}</strong>
+              {positionName} en attente de review
+            </>
+          ),
+        });
+      });
+
+    positions.forEach((position) => {
+      const raw = (position as { createdAt?: string }).createdAt;
+      if (!raw) return;
+      const at = new Date(raw).getTime();
+      if (Number.isNaN(at)) return;
+      const positionTitle = position.title || `Poste #${position.id}`;
+      const createdBy =
+        (position as { createdByEmail?: string }).createdByEmail ||
+        `Manager #${(position as { createdBy?: number }).createdBy ?? '?'}`;
+      items.push({
+        at,
+        type: 'position',
+        time: formatRelativeActivityTime(at),
+        text: (
+          <>
+            Nouveau poste <strong>{positionTitle}</strong> publié par {createdBy}
+          </>
+        ),
+      });
+    });
+
+    return items.sort((a, b) => b.at - a.at);
+  }, [recentTests, candidates, candidatures, positions]);
 
   // Variables de pagination calculées
   const testsTotalPages = Math.ceil(recentTests.length / testsPerPage);
@@ -397,7 +490,11 @@ const DashboardPage = () => {
                           </div>
                         </div>
                         <div className="text-xs text-muted-foreground">
-                          {new Date(test.createdAt).toLocaleDateString('fr-FR')}
+                          {(test as { submittedAt?: string }).submittedAt || test.createdAt
+                            ? new Date(
+                                (test as { submittedAt?: string }).submittedAt || test.createdAt || ''
+                              ).toLocaleDateString('fr-FR')
+                            : '—'}
                         </div>
                       </div>
                     );

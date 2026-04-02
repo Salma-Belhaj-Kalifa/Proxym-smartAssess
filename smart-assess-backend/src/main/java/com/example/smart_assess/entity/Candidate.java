@@ -27,4 +27,8 @@ public class Candidate extends User {
     @OneToMany(mappedBy = "candidate", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     @JsonIgnore
     private List<GeneratedTest> generatedTests = new ArrayList<>();
+
+    @OneToMany(mappedBy = "candidate", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @JsonIgnore
+    private List<Answer> answers = new ArrayList<>();
 }

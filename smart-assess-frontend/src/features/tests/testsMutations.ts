@@ -145,3 +145,19 @@ export const useStartTest = () => {
     },
   });
 };
+
+export const useStartTestByToken = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (token: string) => testService.startTestByToken(token),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: testKeys.all });
+      toast.success('Test démarré avec succès !');
+    },
+    onError: (error: any) => {
+      const errorMessage = error?.response?.data?.message || error?.response?.data?.error || 'Erreur lors du démarrage du test';
+      toast.error(errorMessage);
+      console.error(error);
+    },
+  });
+};

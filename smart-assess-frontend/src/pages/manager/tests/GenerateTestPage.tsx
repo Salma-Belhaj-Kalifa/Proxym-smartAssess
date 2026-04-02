@@ -8,11 +8,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Sparkles, Check, X, AlertCircle, ArrowLeft, Edit, Briefcase, Settings, CheckCircle, Download, GraduationCap, Award, FolderGit2, Code2, Cpu, Star, Clock, User, ChevronRight } from "lucide-react";
-import { useCandidatures } from '@/features/candidatures/candidaturesQueries';
+import { normalizeAiCorrectAnswer } from '@/features/tests/testAnswerUtils';
 import { useTechnicalProfileByCandidate } from '@/features/technical-profile/technicalProfileQueries';
 import { useCheckExistingTest, useGenerateTest } from '@/features/tests/testsMutations';
 import { useUpdateCandidatureStatus } from '@/features/candidatures/candidaturesMutations';
 import { useCurrentUserSafe } from '@/features/auth/authQueries';
+import { useCandidatures } from '@/features/candidatures/candidaturesQueries';
 import { toast } from "sonner";
 import { getStatusLabel, getStatusColor } from "@/utils/statusMappings";
 
@@ -447,8 +448,9 @@ const GenerateTestPage = () => {
       return [];
     }
     
+    // On ne prend QUE la candidature dont l'id correspond à l'URL
     const allCandidateCandidatures = candidatures.filter(c => {
-      return c.candidateId === separateCandidateId || c.id === Number(id);
+      return c.id === Number(id);
     });
     console.log('allCandidateCandidatures:', allCandidateCandidatures);
     console.log('allCandidateCandidatures.length:', allCandidateCandidatures.length);
@@ -851,16 +853,27 @@ const GenerateTestPage = () => {
       console.log('Force generate - Backend utilisera: technicalProfile.getParsedData() directement');
       
       if (testResponse.questions && testResponse.questions.length > 0) {
-        const formattedQuestions = testResponse.questions.map((q: any, index: number) => ({
-          id: index + 1,
-          questionText: q.question,
-          questionType: "MCQ",
-          options: q.options || [],
-          correctAnswer: q.correct_answer,
-          skillTag: q.technology || "",
-          maxScore: 1.0,
-          orderIndex: index
-        }));
+        const formattedQuestions = testResponse.questions.map((q: any, index: number) => {
+          const options = q.options || [];
+          const correctAnswerIndex = normalizeAiCorrectAnswer(q.correct_answer, options);
+
+          console.log(`Q${index + 1}:`, {
+            raw: q.correct_answer,
+            resolvedIndex: correctAnswerIndex,
+            resolvedText: options[correctAnswerIndex]
+          });
+
+          return {
+            id: index + 1,
+            questionText: q.question,
+            questionType: "MCQ",
+            options,
+            correctAnswer: correctAnswerIndex,  // ✅ index dès la sortie de l'IA
+            skillTag: q.technology || "",
+            maxScore: 1.0,
+            orderIndex: index
+          };
+        });
         
         localStorage.setItem(`test_questions_${testResponse.testId}`, JSON.stringify(formattedQuestions));
         console.log('Force generate - Stored questions in localStorage:', formattedQuestions);
@@ -1332,16 +1345,27 @@ const GenerateTestPage = () => {
       });
 
       if (testResponse.questions && testResponse.questions.length > 0) {
-        const formattedQuestions = testResponse.questions.map((q: any, index: number) => ({
-          id: index + 1,
-          questionText: q.question,
-          questionType: "MCQ",
-          options: q.options || [],
-          correctAnswer: q.correct_answer,
-          skillTag: q.technology || "",
-          maxScore: 1.0,
-          orderIndex: index
-        }));
+        const formattedQuestions = testResponse.questions.map((q: any, index: number) => {
+          const options = q.options || [];
+          const correctAnswerIndex = normalizeAiCorrectAnswer(q.correct_answer, options);
+
+          console.log(`Q${index + 1}:`, {
+            raw: q.correct_answer,
+            resolvedIndex: correctAnswerIndex,
+            resolvedText: options[correctAnswerIndex]
+          });
+
+          return {
+            id: index + 1,
+            questionText: q.question,
+            questionType: "MCQ",
+            options,
+            correctAnswer: correctAnswerIndex,  // ✅ index dès la sortie de l'IA
+            skillTag: q.technology || "",
+            maxScore: 1.0,
+            orderIndex: index
+          };
+        });
         
         localStorage.setItem(`test_questions_${testResponse.testId}`, JSON.stringify(formattedQuestions));
         console.log('Normal generate - Stored questions in localStorage:', formattedQuestions);

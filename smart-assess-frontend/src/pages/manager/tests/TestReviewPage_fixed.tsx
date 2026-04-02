@@ -9,49 +9,10 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import apiClient from '@/lib/api';
-import { useQueryClient } from '@tanstack/react-query';
 import { useTestReview } from '@/features/tests/testsQueries';
-import { testKeys } from '@/features/tests/testsKeys';
-import { TestReviewData, Question as BackendQuestion } from '@/features/tests/types';
 import { useUpdateTest } from '@/features/tests/testsMutations';
+import { TestReviewData, Question } from '@/features/tests/types';
 import { useCandidatures } from '@/features/candidatures/candidaturesQueries';
-import {
-  correctAnswerToIndex,
-  indexToCorrectAnswer,
-  parseOptionsFromApi,
-  adjustCorrectIndexAfterRemove,
-  isCorrectOptionIndex,
-  stripOptionIndexPrefix,
-} from '@/features/tests/testAnswerUtils';
-
-// Type local pour le frontend avec index
-interface Question extends Omit<BackendQuestion, 'correctAnswer'> {
-  correctAnswer: number; // Frontend: index (0, 1, 2, 3...)
-}
-
-/** Valide toutes les questions ; utilisé avant tout PUT (le backend remplace la liste entière). */
-const validateAndCleanQuestionsForSave = (questions: Question[]): Question[] | null => {
-  const out: Question[] = [];
-  for (let index = 0; index < questions.length; index++) {
-    const question = questions[index];
-    const cleanedOptions = question.options.filter((o) => o.trim() !== '');
-    if (!question.questionText.trim()) {
-      toast.error(`La question ${index + 1} n'a pas de texte`);
-      return null;
-    }
-    if (cleanedOptions.length < 2) {
-      toast.error(`La question ${index + 1} doit avoir au moins 2 options`);
-      return null;
-    }
-    const correctAnswerIndex = question.correctAnswer as unknown as number;
-    if (correctAnswerIndex < 0 || correctAnswerIndex >= cleanedOptions.length) {
-      toast.error(`La question ${index + 1} n'a pas de réponse correcte valide`);
-      return null;
-    }
-    out.push({ ...question, options: cleanedOptions, orderIndex: index });
-  }
-  return out;
-};
 
 const TestReviewPage: React.FC = () => {
   const { testId } = useParams<{ testId: string }>();
@@ -64,46 +25,8 @@ const TestReviewPage: React.FC = () => {
   const [testLink, setTestLink] = useState<string>('');
   const [showLinkModal, setShowLinkModal] = useState(false);
   const [editingQuestion, setEditingQuestion] = useState<number | null>(null);
-  const [localQuestions, setLocalQuestions] = useState<Question[]>([]);
-
-  // 🎯 FONCTION POUR NORMALISER LES RÉPONSES API
-  const normalizeApiResponse = (rawQuestions: any[]): Question[] => {
-    console.log('=== NORMALIZE API RESPONSE ===');
-    console.log('Raw questions from backend:', rawQuestions);
-    
-    const normalized = rawQuestions.map(q => {
-      const options = parseOptionsFromApi(q.options);
-      const originalCorrectAnswer = q.correctAnswer;
-      const originalCorrectAnswerIndex = q.correctAnswerIndex;
-      
-      // 🎯 PRIORITÉ: Utiliser correctAnswerIndex si disponible
-      let finalIndex = 0;
-      if (originalCorrectAnswerIndex !== null && originalCorrectAnswerIndex !== undefined && typeof originalCorrectAnswerIndex === 'number') {
-        finalIndex = originalCorrectAnswerIndex;
-        console.log(`Question ID: ${q.id || 'N/A'} - Using correctAnswerIndex: ${finalIndex}`);
-      } else {
-        // Fallback: convertir depuis le texte
-        const correctAnswerStr = typeof originalCorrectAnswer === 'string' ? originalCorrectAnswer : String(originalCorrectAnswer || '');
-        finalIndex = correctAnswerToIndex(correctAnswerStr, options);
-        console.log(`Question ID: ${q.id || 'N/A'} - Converting from text: "${correctAnswerStr}" -> index: ${finalIndex}`);
-      }
-      
-      console.log(`  Options: [${options.join(', ')}]`);
-      console.log(`  Final index: ${finalIndex}`);
-      
-      return {
-        ...q,
-        options,
-        correctAnswer: finalIndex,
-      };
-    }) as unknown as Question[];
-    
-    console.log('Normalized questions for frontend:', normalized);
-    return normalized;
-  };
   
   // 🎯 UTILISER useTestReview pour récupérer les données du test (contient les questions)
-  const queryClient = useQueryClient();
   const { data: reviewData, isLoading, error } = useTestReview(testId ? parseInt(testId) : 0);
   const updateTestMutation = useUpdateTest();
   
@@ -137,141 +60,93 @@ const TestReviewPage: React.FC = () => {
     }
   }, [error]);
 
-  // 🎯 SYNCHRONISER LES QUESTIONS LOCALES
-  useEffect(() => {
-    if (questions) {
-      // Utiliser normalizeApiResponse pour convertir texte → index
-      setLocalQuestions(normalizeApiResponse(questions));
-    }
-  }, [questions]);
-
-  // 🎯 SYNCHRONISER testData avec les questions locales (y compris liste vide après suppression)
-  useEffect(() => {
-    setTestData((prev) =>
-      prev ? { ...prev, questions: localQuestions as unknown as BackendQuestion[] } : prev
-    );
-  }, [localQuestions]);
-
   const updateQuestion = (index: number, field: string, value: any) => {
-    const updatedQuestions = [...localQuestions];
+    if (!questions[index]) return;
+    
+    const updatedQuestions = [...questions];
     updatedQuestions[index] = { ...updatedQuestions[index], [field]: value };
-    setLocalQuestions(updatedQuestions);
+    
     console.log('Question updated locally:', { index, field, value });
   };
 
   const addOption = (questionIndex: number) => {
-    if (!localQuestions[questionIndex]) return;
+    if (!questions[questionIndex]) return;
     
-    const updatedQuestions = [...localQuestions];
+    const updatedQuestions = [...questions];
     const currentOptions = [...(updatedQuestions[questionIndex].options || [])];
     updatedQuestions[questionIndex] = {
       ...updatedQuestions[questionIndex],
       options: [...currentOptions, '']
     };
-    setLocalQuestions(updatedQuestions);
     
     console.log('Option added to question:', questionIndex);
   };
 
   const updateOption = (questionIndex: number, optionIndex: number, value: string) => {
-    if (!localQuestions[questionIndex]) return;
+    if (!questions[questionIndex]) return;
     
-    const updatedQuestions = [...localQuestions];
+    const updatedQuestions = [...questions];
     const currentOptions = [...(updatedQuestions[questionIndex].options || [])];
     currentOptions[optionIndex] = value;
     updatedQuestions[questionIndex] = {
       ...updatedQuestions[questionIndex],
       options: currentOptions
     };
-    setLocalQuestions(updatedQuestions);
     
     console.log('Option updated:', { questionIndex, optionIndex, value });
   };
 
   const removeOption = (questionIndex: number, optionIndex: number) => {
-    if (!localQuestions[questionIndex]) return;
+    if (!questions[questionIndex]) return;
     
-    const updatedQuestions = [...localQuestions];
-    const q = updatedQuestions[questionIndex];
-    const currentOptions = [...q.options];
-    const correctIdx =
-      typeof q.correctAnswer === 'number'
-        ? q.correctAnswer
-        : correctAnswerToIndex(q.correctAnswer, currentOptions);
-    currentOptions.splice(optionIndex, 1);
-    const newCorrect = adjustCorrectIndexAfterRemove(
-      correctIdx,
-      optionIndex,
-      currentOptions.length
-    );
+    const updatedQuestions = [...questions];
+    const currentOptions = updatedQuestions[questionIndex].options.filter((_, i) => i !== optionIndex);
     updatedQuestions[questionIndex] = {
-      ...q,
-      options: currentOptions,
-      correctAnswer: newCorrect,
+      ...updatedQuestions[questionIndex],
+      options: currentOptions
     };
-    setLocalQuestions(updatedQuestions);
+    
+    console.log('Option removed:', { questionIndex, optionIndex });
   };
 
   const saveQuestionChanges = async (questionIndex: number) => {
-    if (!localQuestions[questionIndex]) return;
-
+    if (!questions[questionIndex]) return;
+    
+    const question = questions[questionIndex];
     const currentTestId = testData?.id || testData?.testId;
-
+    
     if (!currentTestId || typeof currentTestId !== 'number' || currentTestId <= 0) {
       toast.error('ID de test invalide pour la sauvegarde');
       return;
     }
-
-    const cleaned = validateAndCleanQuestionsForSave(localQuestions);
-    if (!cleaned) return;
-
+    
     try {
-      const response = await apiClient.put(`/tests/${currentTestId}/questions`, {
-        questions: cleaned.map((q, i) => {
-          // 🎯 CORRECTION: Le backend envoie maintenant le texte de l'option pour correctAnswer
-          // Il faut le convertir en index pour le frontend
-          let correctAnswerIndex = 0;
-          if (typeof q.correctAnswer === 'number') {
-            correctAnswerIndex = q.correctAnswer;
-          } else if (typeof q.correctAnswer === 'string') {
-            // Si c'est une chaîne numérique
-            const correctAnswerStr = q.correctAnswer as string;
-            if (/^\d+$/.test(correctAnswerStr.trim())) {
-              correctAnswerIndex = parseInt(correctAnswerStr.trim(), 10);
-            } else {
-              // Si c'est du texte, trouver l'index correspondant
-              correctAnswerIndex = correctAnswerToIndex(correctAnswerStr, q.options);
-            }
-          }
-          
-          // 🎯 NETTOYER LES CHAMPS - ne garder que ce que le backend attend
-          return {
-            id: q.id,
-            questionText: q.questionText,
-            questionType: q.questionType,
-            options: q.options,
-            correctAnswer: q.correctAnswer,
-            correctAnswerIndex: correctAnswerIndex,
-            skillTag: q.skillTag,
-            maxScore: q.maxScore,
-            orderIndex: i,
-          };
-        }),
+      console.log('Saving question changes for question:', questionIndex);
+      
+      // Créer une copie de toutes les questions avec les modifications
+      const updatedQuestions = questions.map((q, i) => {
+        if (i === questionIndex) {
+          return { ...q, orderIndex: i }; // Mettre à jour l'ordre
+        }
+        return { ...q, orderIndex: i }; // S'assurer que toutes les questions ont un orderIndex
       });
-
+      
+      // 🎯 UTILISER L'ANCIEN ENDPOINT pour la sauvegarde
+      const response = await apiClient.put(`/tests/${currentTestId}/questions`, {
+        questions: updatedQuestions
+      });
+      
       if (response.data.success) {
-        toast.success('Question enregistrée');
-        if (response.data.questions) {
-          setLocalQuestions(normalizeApiResponse(response.data.questions));
-        }
-        setEditingQuestion(null);
-        const tid = testId ? parseInt(testId, 10) : 0;
-        if (tid > 0) {
-          queryClient.invalidateQueries({ queryKey: testKeys.details(tid) });
-        }
+        toast.success('Questions sauvegardées avec succès');
+        // Mettre à jour les données locales
+        setTestData(prev => prev ? { ...prev, questions: updatedQuestions } : null);
       } else {
         toast.error(response.data.error || 'Erreur lors de la sauvegarde');
       }
+      
+      // Fermer l'édition
+      setEditingQuestion(null);
+      
     } catch (error: any) {
       console.error('Error saving question:', error);
       const errorMessage = error.response?.data?.error || error.message || 'Erreur inconnue';
@@ -280,30 +155,32 @@ const TestReviewPage: React.FC = () => {
   };
 
   const closeQuestionEdit = async (index: number) => {
+    // Sauvegarder les modifications avant de fermer
     await saveQuestionChanges(index);
+    
+    // Fermer l'édition
+    setEditingQuestion(null);
   };
 
-  const isOptionCorrect = (optionIndex: number, question: Question): boolean =>
-    isCorrectOptionIndex(optionIndex, question.correctAnswer, question.options);
+  // Fonction utilitaire pour vérifier si une option est la réponse correcte
+  const isOptionCorrect = (option: string, correctAnswer: string): boolean => {
+    return option.trim().length > 0 && 
+           correctAnswer && 
+           correctAnswer.trim().length > 0 && 
+           option.trim() === correctAnswer.trim();
+  };
 
   // 🎯 LOGIQUE DE SUPPRESSION : Utiliser l'API dédiée
   const deleteQuestion = async (index: number) => {
-    if (!localQuestions[index]) return;
+    if (!questions[index]) return;
     
-    const questionToDelete = localQuestions[index];
-
+    const questionToDelete = questions[index];
+    
     if (!questionToDelete.id) {
-      setLocalQuestions((prev) => prev.filter((_, i) => i !== index));
-      setEditingQuestion((ed) => {
-        if (ed === null) return null;
-        if (ed === index) return null;
-        if (ed > index) return ed - 1;
-        return ed;
-      });
-      toast.success('Brouillon supprimé');
+      toast.error('Question invalide');
       return;
     }
-
+    
     try {
       console.log('Deleting question from database - questionId:', questionToDelete.id, 'testId:', testId);
       
@@ -312,21 +189,9 @@ const TestReviewPage: React.FC = () => {
       
       if (response.data.success) {
         toast.success('Question supprimée avec succès');
-        if (Array.isArray(response.data.questions)) {
-          setLocalQuestions(normalizeApiResponse(response.data.questions));
-        } else {
-          setLocalQuestions((prev) => prev.filter((_, i) => i !== index));
-        }
-        setEditingQuestion((ed) => {
-          if (ed === null) return null;
-          if (ed === index) return null;
-          if (ed > index) return ed - 1;
-          return ed;
-        });
-        const tid = testId ? parseInt(testId, 10) : 0;
-        if (tid > 0) {
-          queryClient.invalidateQueries({ queryKey: testKeys.details(tid) });
-        }
+        // Mettre à jour les données locales
+        const updatedQuestions = questions.filter((_, i) => i !== index);
+        setTestData(prev => prev ? { ...prev, questions: updatedQuestions } : null);
       } else {
         toast.error(response.data.error || 'Erreur lors de la suppression');
       }
@@ -338,29 +203,53 @@ const TestReviewPage: React.FC = () => {
     }
   };
 
-  const addNewQuestion = () => {
-    if (!testData?.id && !testData?.testId) {
+  // 🎯 LOGIQUE D'AJOUT : Créer directement en base
+  const addNewQuestion = async () => {
+    const currentTestId = testData?.id || testData?.testId;
+    
+    if (!currentTestId) {
       toast.error('ID de test invalide');
       return;
     }
-
-    const newQuestion: Question = {
+    
+    const newQuestion: Partial<Question> = {
       questionText: '',
       questionType: 'MCQ',
       options: ['', '', '', ''],
-      correctAnswer: 0,
+      correctAnswer: '',
       skillTag: '',
       maxScore: 10.0,
-      orderIndex: 0,
+      orderIndex: 0 // Sera ajusté par le backend
     };
-
-    setLocalQuestions((prev) => [newQuestion, ...prev]);
-    setEditingQuestion(0);
-    toast.info('Rédigez la question et les réponses, puis cliquez sur Valider pour enregistrer.');
+    
+    try {
+      console.log('Creating new question for test:', currentTestId);
+      
+      // 🎯 UTILISER L'ANCIEN ENDPOINT pour la création (questions existent déjà)
+      const response = await apiClient.put(`/tests/${currentTestId}/questions`, {
+        questions: [newQuestion, ...questions]
+      });
+      
+      if (response.data.success) {
+        toast.success('Question ajoutée avec succès');
+        // Mettre à jour les données locales
+        setTestData(prev => prev ? { ...prev, questions: [newQuestion, ...questions] as unknown as Question[] } : null);
+        
+        // Ouvrir l'édition de la nouvelle question (première position)
+        setEditingQuestion(0);
+      } else {
+        toast.error(response.data.error || 'Erreur lors de l\'ajout');
+      }
+      
+    } catch (error: any) {
+      console.error('Error creating question:', error);
+      const errorMessage = error.response?.data?.error || error.message || 'Erreur inconnue';
+      toast.error(`Erreur lors de l'ajout: ${errorMessage}`);
+    }
   };
 
   const saveQuestions = async () => {
-    if (localQuestions.length === 0) {
+    if (!questions || questions.length === 0) {
       toast.error('Aucune question à sauvegarder');
       return;
     }
@@ -372,52 +261,58 @@ const TestReviewPage: React.FC = () => {
       return;
     }
     
-    const cleanedQuestions = validateAndCleanQuestionsForSave(localQuestions);
-    if (!cleanedQuestions) return;
+    // Valider et nettoyer les questions avant sauvegarde
+    const cleanedQuestions = questions.map((question, index) => {
+      // Nettoyer les options vides
+      const cleanedOptions = question.options.filter(option => option.trim() !== '');
+      
+      // Valider que la question a un texte et au moins 2 options
+      if (!question.questionText.trim()) {
+        toast.error(`La question ${index + 1} n'a pas de texte`);
+        return null;
+      }
+      
+      if (cleanedOptions.length < 2) {
+        toast.error(`La question ${index + 1} doit avoir au moins 2 options`);
+        return null;
+      }
+      
+      // Validation de la réponse correcte
+      const hasValidCorrectAnswer = question.correctAnswer && 
+                                   question.correctAnswer.trim().length > 0 && 
+                                   cleanedOptions.includes(question.correctAnswer.trim());
+      
+      if (!hasValidCorrectAnswer) {
+        toast.error(`La question ${index + 1} n'a pas de réponse correcte valide`);
+        return null;
+      }
+      
+      return {
+        ...question,
+        options: cleanedOptions,
+        orderIndex: index // Réorganiser selon l'ordre actuel
+      };
+    }).filter(q => q !== null); // Filtrer les questions invalides
+    
+    // Si toutes les questions sont invalides, ne pas sauvegarder
+    if (cleanedQuestions.length === 0) {
+      toast.error('Aucune question valide à sauvegarder');
+      return;
+    }
     
     try {
       setIsSaving(true);
-      console.log('=== SAVE QUESTIONS DEBUG ===');
-      console.log('Local questions before save:', localQuestions);
-      console.log('Cleaned questions:', cleanedQuestions);
+      console.log('Saving questions:', cleanedQuestions);
       
-      // 🎯 UTILISER les nouvelles fonctions utilitaires
-      const questionsForBackend = cleanedQuestions.map((q, i) => {
-        const correctAnswerText = indexToCorrectAnswer(q.correctAnswer as unknown as number, q.options);
-        console.log(`Question ${i}:`);
-        console.log(`  Local correctAnswer (index): ${q.correctAnswer}`);
-        console.log(`  Options: [${q.options.join(', ')}]`);
-        console.log(`  Backend correctAnswer (text): "${correctAnswerText}"`);
-        
-        // 🎯 NETTOYER LES CHAMPS - ne garder que ce que le backend attend
-        return {
-          id: q.id,
-          questionText: q.questionText,
-          questionType: q.questionType,
-          options: q.options,
-          correctAnswer: correctAnswerText,
-          correctAnswerIndex: q.correctAnswer as number,
-          skillTag: q.skillTag,
-          maxScore: q.maxScore,
-          orderIndex: i,
-        };
-      });
-      
-      console.log('Final payload for backend:', questionsForBackend);
-      
+      // 🎯 UTILISER L'ANCIEN ENDPOINT pour la sauvegarde
       const response = await apiClient.put(`/tests/${currentTestId}/questions`, {
-        questions: questionsForBackend
+        questions: cleanedQuestions
       });
       
       if (response.data.success) {
         toast.success('Questions sauvegardées avec succès');
-        if (response.data.questions) {
-          setLocalQuestions(normalizeApiResponse(response.data.questions));
-        }
-        const tid = testId ? parseInt(testId, 10) : 0;
-        if (tid > 0) {
-          queryClient.invalidateQueries({ queryKey: testKeys.details(tid) });
-        }
+        // Mettre à jour les données locales
+        setTestData(prev => prev ? { ...prev, questions: cleanedQuestions } : null);
       } else {
         toast.error(response.data.error || 'Erreur lors de la sauvegarde');
       }
@@ -451,33 +346,10 @@ const TestReviewPage: React.FC = () => {
       // Si le test est en DRAFT, sauvegarder les questions en base pour la première fois
       if (isDraft) {
         console.log('GenerateTestLink - Using testId for API:', currentTestId);
-
-        const cleanedForLink = validateAndCleanQuestionsForSave(localQuestions);
-        if (!cleanedForLink) {
-          setIsGeneratingLink(false);
-          return;
-        }
-
+        
+        // 🎯 UTILISER L'ANCIEN ENDPOINT pour la sauvegarde
         const response = await apiClient.put(`/tests/${currentTestId}/questions`, {
-          questions: cleanedForLink.map((q, i) => {
-            const correctAnswerText = indexToCorrectAnswer(
-              correctAnswerToIndex(q.correctAnswer, q.options),
-              q.options
-            );
-            
-            // 🎯 NETTOYER LES CHAMPS - ne garder que ce que le backend attend
-            return {
-              id: q.id,
-              questionText: q.questionText,
-              questionType: q.questionType,
-              options: q.options,
-              correctAnswer: correctAnswerText,
-              correctAnswerIndex: correctAnswerToIndex(q.correctAnswer, q.options),
-              skillTag: q.skillTag,
-              maxScore: q.maxScore,
-              orderIndex: i,
-            };
-          }),
+          questions: questions
         });
         
         if (response.data.success) {
@@ -660,6 +532,16 @@ const TestReviewPage: React.FC = () => {
               
               <div className="flex items-center gap-2">
                 <Button
+                  onClick={saveQuestions}
+                  disabled={isSaving}
+                  variant="outline"
+                  className="flex items-center gap-2"
+                >
+                  <Save className="w-4 h-4" />
+                  Sauvegarder
+                </Button>
+                
+                <Button
                   onClick={addNewQuestion}
                   className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700"
                 >
@@ -669,7 +551,7 @@ const TestReviewPage: React.FC = () => {
                 
                 <Button
                   onClick={generateTestLink}
-                  disabled={isGeneratingLink || localQuestions.length === 0}
+                  disabled={isGeneratingLink || !questions || questions.length === 0}
                   className="flex items-center gap-2 bg-green-600 hover:bg-green-700"
                 >
                   <CheckCircle className="w-4 h-4" />
@@ -704,7 +586,7 @@ const TestReviewPage: React.FC = () => {
                 </div>
                 <div>
                   <p className="text-sm text-gray-600">Questions</p>
-                  <p className="font-semibold text-gray-900">{localQuestions.length}</p>
+                  <p className="font-semibold text-gray-900">{questions?.length || 0}</p>
                 </div>
               </div>
             </CardContent>
@@ -774,7 +656,7 @@ const TestReviewPage: React.FC = () => {
 
         {/* Questions */}
         <div className="space-y-6">
-          {localQuestions.length === 0 ? (
+          {(!questions || questions.length === 0) ? (
             <Card>
               <CardContent className="p-6">
                 <div className="text-center">
@@ -804,7 +686,7 @@ const TestReviewPage: React.FC = () => {
               </CardContent>
             </Card>
           ) : (
-            localQuestions.map((question, index) => (
+            questions.map((question, index) => (
               <Card key={index} className="relative hover:shadow-md transition-shadow duration-200">
                 <CardHeader className="bg-gradient-to-r from-gray-50 to-white border-b">
                   <div className="flex items-center justify-between">
@@ -887,8 +769,11 @@ const TestReviewPage: React.FC = () => {
                                   value={option}
                                   onChange={(e) => updateOption(index, optionIndex, e.target.value)}
                                   placeholder={`Option ${String.fromCharCode(65 + optionIndex)}`}
-                                  className={isOptionCorrect(optionIndex, question) ? 'bg-green-50 border-green-200' : ''}
+                                  className={isOptionCorrect(option, question.correctAnswer) ? 'bg-green-50 border-green-200' : ''}
                                 />
+                                <span className="text-sm font-medium text-gray-700">
+                                  {String.fromCharCode(65 + optionIndex)})
+                                </span>
                               </div>
                               
                               {question.options.length > 2 && (
@@ -927,23 +812,18 @@ const TestReviewPage: React.FC = () => {
                                 type="radio"
                                 id={`correct-${index}-${optionIndex}`}
                                 name={`correct-${index}`}
-                                value={optionIndex}
-                                checked={isOptionCorrect(optionIndex, question)}
-                                onChange={() => updateQuestion(index, 'correctAnswer', optionIndex)}
+                                value={option}
+                                checked={question.correctAnswer === option}
+                                onChange={(e) => updateQuestion(index, 'correctAnswer', e.target.value)}
                                 className="w-4 h-4 text-blue-600"
                               />
                               <label 
                                 htmlFor={`correct-${index}-${optionIndex}`}
                                 className="text-sm font-medium text-gray-700 flex items-center gap-2 cursor-pointer"
                               >
-                                {/* 🎯 CORRECTION: Ne pas ajouter d'index si l'option en contient déjà un */}
-                                {!option.match(/^[A-Z]\)/) && (
-                                  <span>{String.fromCharCode(65 + optionIndex)})</span>
-                                )}
-                                <span className="ml-2">
-                                  {stripOptionIndexPrefix(option, optionIndex)}
-                                </span>
-                                {isOptionCorrect(optionIndex, question) && (
+                                <span>{String.fromCharCode(65 + optionIndex)})</span>
+                                <span className="ml-2">{option}</span>
+                                {isOptionCorrect(option, question.correctAnswer) && (
                                   <span className="ml-2 text-green-600 font-medium">✓ Correct</span>
                                 )}
                               </label>
@@ -968,19 +848,16 @@ const TestReviewPage: React.FC = () => {
                             <div 
                               key={optionIndex} 
                               className={`flex items-center gap-2 p-3 rounded-lg border ${
-                                isOptionCorrect(optionIndex, question) 
+                                isOptionCorrect(option, question.correctAnswer) 
                                   ? 'bg-green-50 border-green-200' 
                                   : 'bg-gray-50 border-gray-200'
                               }`}
                             >
                               <span className="font-medium text-gray-900">
-                                {/* 🎯 CORRECTION: Ne pas ajouter d'index si l'option en contient déjà un */}
-                                {!option.match(/^[A-Z]\)/) && (
-                                  <span>{String.fromCharCode(65 + optionIndex)})</span>
-                                )}
+                                {String.fromCharCode(65 + optionIndex)})
                               </span>
-                              <span>{stripOptionIndexPrefix(option, optionIndex)}</span>
-                              {isOptionCorrect(optionIndex, question) && (
+                              <span>{option}</span>
+                              {isOptionCorrect(option, question.correctAnswer) && (
                                 <span className="ml-2 text-green-600 font-medium">✓</span>
                               )}
                             </div>

@@ -10,6 +10,16 @@ import apiClient from '@/lib/api';
 import { useTest } from '@/features/tests/testsQueries';
 import { useGetPublicTest, useGetTestResults } from '@/features/tests/testsQueries';
 import { useSubmitTest } from '@/features/tests/testsMutations';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
 
 interface Question {
   id: number;
@@ -68,6 +78,13 @@ const TestResultsPage: React.FC = () => {
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const [candidatureId, setCandidatureId] = useState<number | null>(null);
   const [candidatureStatus, setCandidatureStatus] = useState<string | null>(null);
+  
+  // 🎯 États pour le modal de rejet
+  const [rejectModalOpen, setRejectModalOpen] = useState(false);
+  const [rejectionReason, setRejectionReason] = useState('');
+  
+  // 🎯 État pour afficher/masquer les détails des réponses
+  const [showDetails, setShowDetails] = useState(false);
 
   // Vérifier si testId est un token (UUID) ou un ID numérique
   const isToken = testId && testId.includes('-');
@@ -326,27 +343,34 @@ const TestResultsPage: React.FC = () => {
     }
   };
 
-  // Fonction pour rejeter la candidature
-  const handleRejectCandidature = async () => {
+  // Fonction pour ouvrir le modal de rejet
+  const handleRejectClick = () => {
+    setRejectModalOpen(true);
+    setRejectionReason('');
+  };
+
+  // Fonction pour confirmer le rejet
+  const handleRejectConfirm = async () => {
     if (!candidatureId) {
       toast.error('ID de candidature non trouvé');
       return;
     }
 
-    // Demander une raison de rejet
-    const reason = prompt('Veuillez indiquer la raison du rejet (optionnel):');
-    
     try {
       setIsUpdatingStatus(true);
-      console.log('Rejecting candidature:', candidatureId, 'Reason:', reason);
+      console.log('Rejecting candidature:', candidatureId, 'Reason:', rejectionReason);
       
       const response = await apiClient.put(`/candidatures/${candidatureId}/status`, {
         status: 'REJECTED',
-        rejectionReason: reason || null
+        rejectionReason: rejectionReason.trim() || null
       });
 
       console.log('Candidature rejected:', response.data);
       toast.success('Candidature rejetée avec succès');
+      
+      // Fermer le modal
+      setRejectModalOpen(false);
+      setRejectionReason('');
       
       // Mettre à jour l'interface si nécessaire
       setTimeout(() => {
@@ -359,6 +383,12 @@ const TestResultsPage: React.FC = () => {
     } finally {
       setIsUpdatingStatus(false);
     }
+  };
+
+  // Fonction pour annuler le rejet
+  const handleRejectCancel = () => {
+    setRejectModalOpen(false);
+    setRejectionReason('');
   };
 
   if (isLoading) {
@@ -425,11 +455,6 @@ const TestResultsPage: React.FC = () => {
             <div className="flex items-center justify-between">
               <div>
                 <h1 className="text-2xl font-bold text-gray-900">Page de Résultats du Test</h1>
-                {testResult.hasRealAnswers && (
-                  <Badge variant="secondary" className="ml-2">
-                    Données réelles
-                  </Badge>
-                )}
               </div>
               <div className="text-right">
                 <Badge variant={getStatusVariant(testResult.status)}>
@@ -529,7 +554,7 @@ const TestResultsPage: React.FC = () => {
                     {isUpdatingStatus ? 'Traitement...' : 'Accepter'}
                   </Button>
                   <Button 
-                    onClick={handleRejectCandidature}
+                    onClick={handleRejectClick}
                     disabled={isUpdatingStatus}
                     variant="destructive"
                     className="flex-1"
@@ -571,45 +596,90 @@ const TestResultsPage: React.FC = () => {
             </Card>
           )}
 
-          <Card>
+          <Card className="lg:col-span-3">
             <CardHeader>
               <CardTitle>Scores par compétence</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-3">
-                {Object.entries(testResult.skillScores || {}).map(([skill, data]) => (
-                  <div key={skill} className="flex items-center justify-between">
-                    <span className="font-medium">{skill}</span>
-                    <div className="flex items-center">
-                      <div className="w-24 bg-gray-200 rounded-full h-2 mr-2">
-                        <div 
-                          className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                          style={{ width: `${getSkillPercentage(skill)}%` }}
-                        ></div>
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
+                {Object.entries(testResult.skillScores || {}).map(([skill, data]) => {
+                  const percentage = getSkillPercentage(skill);
+                  const getColorClass = (percentage: number) => {
+                    if (percentage >= 80) return 'bg-green-500';
+                    if (percentage >= 60) return 'bg-blue-500';
+                    if (percentage >= 40) return 'bg-yellow-500';
+                    if (percentage >= 20) return 'bg-orange-500';
+                    return 'bg-red-500';
+                  };
+                  
+                  return (
+                    <div key={skill} className="p-2 bg-white border rounded hover:shadow-sm transition-shadow">
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <span 
+                            className="text-xs font-medium truncate w-full pr-1" 
+                            title={skill}
+                            style={{ fontSize: skill.length > 15 ? '10px' : '11px' }}
+                          >
+                            {skill}
+                          </span>
+                          <Badge 
+                            variant="outline" 
+                            className={`${getColorClass(percentage)} text-white border-0 text-xs font-bold px-1.5 py-0.5`}
+                          >
+                            {percentage}%
+                          </Badge>
+                        </div>
+                        
+                        <div className="w-full bg-gray-100 rounded-full h-1">
+                          <div 
+                            className={`${getColorClass(percentage)} h-1 rounded-full transition-all duration-300`}
+                            style={{ width: `${percentage}%` }}
+                          ></div>
+                        </div>
                       </div>
-                      <span className="text-sm text-gray-600">{getSkillPercentage(skill)}%</span>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
+              
+              {Object.keys(testResult.skillScores || {}).length === 0 && (
+                <div className="text-center py-6 text-gray-500">
+                  <AlertCircle className="w-6 h-6 mx-auto mb-2 opacity-50" />
+                  <p className="text-xs">Aucune compétence évaluée</p>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
 
+        <div className="mb-6"></div>
+
         <Card className="lg:col-span-3">
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>Détail des réponses</CardTitle>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowDetails(!showDetails)}
+              className="flex items-center gap-2"
+            >
+              <Eye className="w-4 h-4" />
+              {showDetails ? 'Masquer les détails' : 'Voir les détails'}
+            </Button>
           </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {testResult.questions.map((question, index) => (
-                <div key={question.id} className="border rounded-lg p-4">
-                  <div className="flex items-start justify-between mb-2">
-                    <h3 className="font-medium text-gray-900">
-                      Question {index + 1}: {question.questionText}
-                    </h3>
-                    <Badge variant={question.isCorrect ? 'default' : 'destructive'}>
-                      {question.isCorrect ? '✓ Correct' : '✗ Incorrect'}
+          
+          {showDetails && (
+            <CardContent>
+              <div className="space-y-4">
+                {testResult.questions.map((question, index) => (
+                  <div key={question.id} className="border rounded-lg p-4">
+                    <div className="flex items-start justify-between mb-2">
+                      <h3 className="font-medium text-gray-900">
+                        Question {index + 1}: {question.questionText}
+                      </h3>
+                      <Badge variant={question.isCorrect ? 'default' : 'destructive'}>
+                        {question.isCorrect ? '✓ Correct' : '✗ Incorrect'}
                     </Badge>
                   </div>
                   
@@ -629,8 +699,49 @@ const TestResultsPage: React.FC = () => {
               ))}
             </div>
           </CardContent>
+          )}
         </Card>
       </div>
+      
+      {/* 🎯 MODAL DE REJET */}
+      <Dialog open={rejectModalOpen} onOpenChange={setRejectModalOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Rejeter la candidature</DialogTitle>
+            <DialogDescription>
+              Veuillez confirmer le rejet de cette candidature. La raison est optionnelle.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="rejectionReason">Raison du rejet (optionnel)</Label>
+              <Textarea
+                id="rejectionReason"
+                placeholder="Veuillez indiquer la raison du rejet..."
+                value={rejectionReason}
+                onChange={(e) => setRejectionReason(e.target.value)}
+                className="min-h-[100px]"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={handleRejectCancel}
+              disabled={isUpdatingStatus}
+            >
+              Annuler
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleRejectConfirm}
+              disabled={isUpdatingStatus}
+            >
+              {isUpdatingStatus ? 'Traitement...' : 'Confirmer le rejet'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

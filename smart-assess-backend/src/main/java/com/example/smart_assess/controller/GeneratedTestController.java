@@ -20,6 +20,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
+import java.util.HashSet;
 
 @RestController
 @RequestMapping("/api/tests")
@@ -46,6 +47,9 @@ public class GeneratedTestController {
     public ResponseEntity<Map<String, Object>> getAllTests() {
         try {
             List<GeneratedTest> tests = generatedTestRepository.findAll();
+            tests.sort(
+                    Comparator.comparing(GeneratedTest::getSubmittedAt, Comparator.nullsLast(Comparator.reverseOrder()))
+                            .thenComparing(GeneratedTest::getCreatedAt, Comparator.nullsLast(Comparator.reverseOrder())));
             List<Map<String, Object>> testList = tests.stream()
                     .map(test -> {
                         Map<String, Object> testMap = new HashMap<>();
@@ -345,7 +349,21 @@ public class GeneratedTestController {
                         questionMap.put("questionText", question.getQuestionText());
                         questionMap.put("questionType", question.getQuestionType());
                         questionMap.put("options", question.getOptions());
-                        questionMap.put("correctAnswer", question.getCorrectAnswer());
+                        
+                        // 🎯 UTILISER correctAnswerIndex si disponible, mais renvoyer le texte pour l'affichage
+                        Integer correctAnswerIndex = question.getCorrectAnswerIndex();
+                        if (correctAnswerIndex != null && correctAnswerIndex >= 0) {
+                            // Convertir l'index en texte d'option pour l'affichage
+                            List<String> optionsList = objectMapper.convertValue(
+                                question.getOptions(),
+                                objectMapper.getTypeFactory().constructCollectionType(List.class, String.class)
+                            );
+                            String displayText = convertIndexToOptionText(correctAnswerIndex.toString(), optionsList);
+                            questionMap.put("correctAnswer", displayText);
+                        } else {
+                            questionMap.put("correctAnswer", question.getCorrectAnswer());
+                        }
+                        
                         questionMap.put("skillTag", question.getSkillTag());
                         questionMap.put("maxScore", question.getMaxScore());
                         questionMap.put("orderIndex", question.getOrderIndex());
@@ -396,18 +414,48 @@ public class GeneratedTestController {
             for (int i = 0; i < questionsData.size(); i++) {
                 Map<String, Object> questionData = questionsData.get(i);
                 
-                // Convertir les options en ArrayNode en utilisant ObjectMapper
-                List<String> optionsList = (List<String>) questionData.get("options");
+                // Extraire le score depuis les données ou utiliser une valeur par défaut
+                Double score = 10.0; // Valeur par défaut
+                if (questionData.containsKey("maxScore")) {
+                    Object maxScoreObj = questionData.get("maxScore");
+                    if (maxScoreObj instanceof Number) {
+                        score = ((Number) maxScoreObj).doubleValue();
+                    }
+                }
+                
+                List<String> optionsList = objectMapper.convertValue(
+                        questionData.get("options"),
+                        objectMapper.getTypeFactory().constructCollectionType(List.class, String.class)
+                );
+                if (optionsList == null || optionsList.size() < 2) {
+                    return ResponseEntity.badRequest().body(Map.of(
+                            "success", false,
+                            "error", "Question " + (i + 1) + ": au moins 2 options sont requises"
+                    ));
+                }
                 ArrayNode optionsNode = objectMapper.valueToTree(optionsList);
+                
+                String normalizedCorrect;
+                try {
+                    normalizedCorrect = normalizeMcqCorrectAnswerWithIndexSupport(questionData.get("correctAnswer"), optionsList);
+                } catch (IllegalArgumentException ex) {
+                    return ResponseEntity.badRequest().body(Map.of(
+                            "success", false,
+                            "error", "Question " + (i + 1) + ": " + ex.getMessage()
+                    ));
+                }
                 
                 TestQuestion question = TestQuestion.builder()
                         .test(test)
                         .questionText((String) questionData.get("questionText"))
                         .questionType(QuestionType.MCQ)
                         .options(optionsNode)
-                        .correctAnswer((String) questionData.get("correctAnswer"))
-                        .maxScore(((Number) questionData.get("maxScore")).doubleValue())
+                        .correctAnswer(normalizedCorrect)
+                        .correctAnswerIndex(questionData.containsKey("correctAnswerIndex") && questionData.get("correctAnswerIndex") != null ? 
+                            (Integer) questionData.get("correctAnswerIndex") : 
+                            extractIndexFromCorrectAnswer(questionData.get("correctAnswer"), optionsList))
                         .skillTag((String) questionData.get("skillTag"))
+                        .maxScore(score)
                         .orderIndex(i)
                         .build();
                 
@@ -417,10 +465,26 @@ public class GeneratedTestController {
             testQuestionRepository.saveAll(newQuestions);
             log.info("Saved {} questions for test {}", newQuestions.size(), test.getId());
             
+            // Convertir les questions sauvegardées en format de réponse
+            List<Map<String, Object>> savedQuestionsData = newQuestions.stream()
+                    .map(question -> {
+                        Map<String, Object> questionMap = new HashMap<>();
+                        questionMap.put("id", question.getId());
+                        questionMap.put("questionText", question.getQuestionText());
+                        questionMap.put("questionType", question.getQuestionType());
+                        questionMap.put("options", question.getOptions());
+                        questionMap.put("correctAnswer", question.getCorrectAnswer());
+                        questionMap.put("skillTag", question.getSkillTag());
+                        questionMap.put("maxScore", question.getMaxScore());
+                        questionMap.put("orderIndex", question.getOrderIndex());
+                        return questionMap;
+                    })
+                    .collect(Collectors.toList());
+            
             return ResponseEntity.ok(Map.of(
                 "success", true,
                 "message", "Questions saved successfully",
-                "questions", newQuestions.size()
+                "questions", savedQuestionsData
             ));
             
         } catch (Exception e) {
@@ -499,26 +563,93 @@ public class GeneratedTestController {
                         questionMap.put("questionText", question.getQuestionText());
                         questionMap.put("questionType", question.getQuestionType());
                         questionMap.put("options", question.getOptions());
-                        questionMap.put("correctAnswer", question.getCorrectAnswer());
+                        
+                        // 🎯 LOGIQUE SPÉCIALE POUR OPTIONS IDENTIQUES
+                        List<String> optionsList = objectMapper.convertValue(
+                            question.getOptions(),
+                            objectMapper.getTypeFactory().constructCollectionType(List.class, String.class)
+                        );
+                        
+                        String storedCorrectAnswerText = question.getCorrectAnswer();
+                        Integer correctAnswerIndex = question.getCorrectAnswerIndex();
+                        boolean hasIdenticalOptions = optionsList != null && 
+                            new HashSet<>(optionsList).size() == 1 && optionsList.size() > 1;
+                        
+                        if (hasIdenticalOptions) {
+                            // 🎯 OPTIONS IDENTIQUES: utiliser correctAnswerIndex si disponible
+                            if (correctAnswerIndex != null && correctAnswerIndex >= 0 && correctAnswerIndex < optionsList.size()) {
+                                // 🎯 RENVOYER LE TEXTE POUR L'AFFICHAGE
+                                String displayText = convertIndexToOptionText(correctAnswerIndex.toString(), optionsList);
+                                questionMap.put("correctAnswer", displayText);
+                                log.info("Question {} - Identical options detected, using stored correctAnswerIndex: {} -> display text: {}", 
+                                    question.getId(), correctAnswerIndex, displayText);
+                            } else {
+                                // 🎯 FALLBACK: calculer depuis le texte
+                                int correctIndex = findOptionIndex(storedCorrectAnswerText, optionsList);
+                                String displayText = convertIndexToOptionText(String.valueOf(correctIndex), optionsList);
+                                questionMap.put("correctAnswer", displayText);
+                                log.info("Question {} - Identical options detected, calculated index from text: {} -> display text: {}", 
+                                    question.getId(), correctIndex, displayText);
+                            }
+                        } else {
+                            // 🎯 OPTIONS DIFFÉRENTES: renvoyer le texte si disponible, sinon le texte original
+                            if (correctAnswerIndex != null && correctAnswerIndex >= 0 && correctAnswerIndex < optionsList.size()) {
+                                // 🎯 RENVOYER LE TEXTE POUR L'AFFICHAGE
+                                String displayText = convertIndexToOptionText(correctAnswerIndex.toString(), optionsList);
+                                questionMap.put("correctAnswer", displayText);
+                                log.info("Question {} - Different options, using stored correctAnswerIndex: {} -> display text: {}", 
+                                    question.getId(), correctAnswerIndex, displayText);
+                            } else {
+                                questionMap.put("correctAnswer", storedCorrectAnswerText);
+                                log.info("Question {} - Different options, using correctAnswer text: {}", 
+                                    question.getId(), storedCorrectAnswerText);
+                            }
+                        }
+                        
                         questionMap.put("skillTag", question.getSkillTag());
                         questionMap.put("maxScore", question.getMaxScore());
                         
                         // Récupérer la réponse du candidat
-                        Optional<Answer> answerOpt = test.getAnswers().stream()
-                                .filter(answer -> answer.getQuestion().getId().equals(question.getId()))
+                        // 🎯 NOUVELLE LOGIQUE : Récupérer via candidate_id
+                        Optional<Answer> answerOpt = answerRepository.findByCandidateIdAndQuestionId(
+                            test.getCandidate().getId(), question.getId())
+                                .stream()
+                                .filter(answer -> answer.getTest() == null || answer.getTest().getId().equals(test.getId()))
                                 .findFirst();
                         
                         if (answerOpt.isPresent()) {
                             Answer answer = answerOpt.get();
-                            questionMap.put("candidateAnswer", answer.getAnswerText());
-                            questionMap.put("selectedOption", answer.getSelectedOption());
+                            
+                            // 🎯 CONVERTIR LES INDEX EN TEXTE POUR L'AFFICHAGE
+                            String candidateAnswerText = convertIndexToOptionText(answer.getAnswerText(), optionsList);
+                            String displayCorrectAnswerText = convertIndexToOptionText(
+                                correctAnswerIndex != null ? correctAnswerIndex.toString() : storedCorrectAnswerText, 
+                                optionsList
+                            );
+                            
+                            questionMap.put("candidateAnswer", candidateAnswerText);
+                            questionMap.put("selectedOption", candidateAnswerText);
                             questionMap.put("isCorrect", answer.getIsCorrect());
                             questionMap.put("scoreObtained", answer.getScoreObtained());
+                            
+                            // 🎯 AJOUTER LES VALEURS ORIGINALES POUR RÉFÉRENCE
+                            questionMap.put("candidateAnswerIndex", answer.getAnswerText());
+                            questionMap.put("correctAnswerIndex", correctAnswerIndex);
+                            questionMap.put("correctAnswerText", displayCorrectAnswerText);
+                            
                         } else {
                             questionMap.put("candidateAnswer", null);
                             questionMap.put("selectedOption", null);
                             questionMap.put("isCorrect", false);
                             questionMap.put("scoreObtained", 0.0);
+                            
+                            // 🎯 AJOUTER LES VALEURS DE RÉFÉRENCE
+                            questionMap.put("candidateAnswerIndex", null);
+                            questionMap.put("correctAnswerIndex", correctAnswerIndex);
+                            questionMap.put("correctAnswerText", convertIndexToOptionText(
+                                correctAnswerIndex != null ? correctAnswerIndex.toString() : storedCorrectAnswerText, 
+                                optionsList
+                            ));
                         }
                         
                         return questionMap;
@@ -665,10 +796,14 @@ public class GeneratedTestController {
                 ));
             }
 
-            // Mettre à jour les informations de session
-            Integer timeSpent = (Integer) submissionData.get("timeSpent");
+            // Mettre à jour les informations de session (JSON peut envoyer Integer, Long ou Double)
+            int timeSpentSeconds = 0;
+            Object timeSpentRaw = submissionData.get("timeSpent");
+            if (timeSpentRaw instanceof Number) {
+                timeSpentSeconds = ((Number) timeSpentRaw).intValue();
+            }
             test.setSubmittedAt(LocalDateTime.now());
-            test.setTimeSpentMinutes(timeSpent != null ? (int)(timeSpent.longValue() / 60) : 0);
+            test.setTimeSpentMinutes(timeSpentSeconds > 0 ? Math.max(0, timeSpentSeconds / 60) : 0);
             test.setStatus(TestStatus.SUBMITTED);
             
             generatedTestRepository.save(test);
@@ -683,29 +818,59 @@ public class GeneratedTestController {
                 for (Map.Entry<String, Object> entry : answers.entrySet()) {
                     try {
                         Integer questionId = Integer.parseInt(entry.getKey());
-                        String answerText = (String) entry.getValue();
+                        Object rawAnswer = entry.getValue();
+                        String answerText = rawAnswer == null ? "" : String.valueOf(rawAnswer);
                         
                         // Récupérer la question
                         TestQuestion question = testQuestionRepository.findById(questionId.longValue())
                                 .orElseThrow(() -> new RuntimeException("Question not found: " + questionId));
                     
+                    // 🎯 EXTRAIRE L'INDEX ET LE TEXTE DE LA RÉPONSE
+                    List<String> optionsList = objectMapper.convertValue(
+                        question.getOptions(),
+                        objectMapper.getTypeFactory().constructCollectionType(List.class, String.class)
+                    );
+                    
+                    int selectedIndex = 0;
+                    String optionText = answerText;
+                    
+                    // Si answerText est un index numérique, convertir
+                    if (answerText.matches("^\\d+$")) {
+                        try {
+                            selectedIndex = Integer.parseInt(answerText);
+                            if (selectedIndex >= 0 && selectedIndex < optionsList.size()) {
+                                optionText = optionsList.get(selectedIndex);
+                            }
+                        } catch (NumberFormatException e) {
+                            selectedIndex = 0;
+                        }
+                    } else {
+                        // Si answerText est du texte, trouver l'index correspondant
+                        selectedIndex = findOptionIndex(answerText, optionsList);
+                        if (selectedIndex >= 0 && selectedIndex < optionsList.size()) {
+                            optionText = optionsList.get(selectedIndex);
+                        }
+                    }
+                    
                     // Calculer si la réponse est correcte et le score
                     Boolean isCorrect = calculateAnswerCorrectness(question, answerText);
                     Double scoreObtained = isCorrect ? question.getMaxScore() : 0.0;
                     
-                    // Créer l'objet Answer
+                    // 🎯 NOUVELLE LOGIQUE : Créer l'objet Answer avec les bonnes valeurs
                     Answer answer = Answer.builder()
-                            .test(test)
+                            .candidate(test.getCandidate()) // 🎯 Utiliser le candidat au lieu du test
                             .question(question)
-                            .answerText(answerText)
-                            .selectedOption(answerText)
+                            .test(test) // Gardé pour référence
+                            .answerText(optionText)  // 🎯 TEXTE de l'option
+                            .selectedOption(String.valueOf(selectedIndex))  // 🎯 INDEX de l'option
                             .isCorrect(isCorrect)
                             .scoreObtained(scoreObtained)
                             .maxScore(question.getMaxScore())
                             .build();
                     
                     answerRepository.save(answer);
-                    log.info("Saved answer for question {}: {} -> {}", questionId, answerText, isCorrect);
+                    log.info("Saved answer for candidate {} question {}: index={}, text='{}' -> correct={}", 
+                        test.getCandidate().getId(), questionId, selectedIndex, optionText, isCorrect);
                     
                 } catch (NumberFormatException e) {
                     log.warn("Invalid question ID in answers: {}", entry.getKey());
@@ -774,57 +939,411 @@ public class GeneratedTestController {
     // MÉTHODES UTILITAIRES
     // =========================
     
+    /**
+     * Convertit un index ou texte en texte d'option pour l'affichage
+     */
+    private String convertIndexToOptionText(String input, List<String> optionsList) {
+        if (input == null || optionsList == null || optionsList.isEmpty()) {
+            return "";
+        }
+        
+        String trimmed = input.trim();
+        
+        // 🎯 Si c'est un index numérique
+        if (trimmed.matches("^\\d+$")) {
+            try {
+                int idx = Integer.parseInt(trimmed);
+                if (idx >= 0 && idx < optionsList.size()) {
+                    return optionsList.get(idx);
+                }
+            } catch (NumberFormatException e) {
+                // Continuer avec les autres méthodes
+            }
+        }
+        
+        // 🎯 Si c'est déjà le texte d'une option
+        for (String option : optionsList) {
+            if (option != null && option.trim().equalsIgnoreCase(trimmed)) {
+                return option;
+            }
+        }
+        
+        // 🎯 Lettre seule (A, B, C, D)
+        if (trimmed.length() == 1 && Character.isLetter(trimmed.charAt(0))) {
+            int idx = Character.toUpperCase(trimmed.charAt(0)) - 'A';
+            if (idx >= 0 && idx < optionsList.size()) {
+                return optionsList.get(idx);
+            }
+        }
+        
+        // 🎯 Format "A)" ou "A."
+        if (trimmed.length() >= 2 && Character.isLetter(trimmed.charAt(0))) {
+            char secondChar = trimmed.charAt(1);
+            if (secondChar == ')' || secondChar == '.') {
+                int idx = Character.toUpperCase(trimmed.charAt(0)) - 'A';
+                if (idx >= 0 && idx < optionsList.size()) {
+                    return optionsList.get(idx);
+                }
+            }
+        }
+        
+        return trimmed; // Retourner l'original si non trouvé
+    }
+
+    /**
+     * Extrait l'index depuis le correctAnswer brut
+     */
+    private int extractIndexFromCorrectAnswer(Object rawCorrect, List<String> optionsList) {
+        if (rawCorrect == null || optionsList == null || optionsList.isEmpty()) {
+            return 0;
+        }
+        
+        // 🎯 Si c'est un nombre
+        if (rawCorrect instanceof Number) {
+            int idx = ((Number) rawCorrect).intValue();
+            return (idx >= 0 && idx < optionsList.size()) ? idx : 0;
+        }
+        
+        String trimmed = rawCorrect.toString().trim();
+        
+        // 🎯 Si c'est une chaîne numérique
+        if (trimmed.matches("^\\d+$")) {
+            try {
+                int idx = Integer.parseInt(trimmed);
+                return (idx >= 0 && idx < optionsList.size()) ? idx : 0;
+            } catch (NumberFormatException e) {
+                return 0;
+            }
+        }
+        
+        // 🎯 Format spécial INDEX_X_VALUE_Y
+        if (trimmed.startsWith("INDEX_") && trimmed.contains("_VALUE_")) {
+            try {
+                String[] parts = trimmed.split("_VALUE_");
+                if (parts.length >= 2 && parts[0].startsWith("INDEX_")) {
+                    String indexStr = parts[0].substring(6);
+                    int idx = Integer.parseInt(indexStr);
+                    return (idx >= 0 && idx < optionsList.size()) ? idx : 0;
+                }
+            } catch (Exception e) {
+                log.warn("Failed to parse special format: {}", trimmed);
+            }
+        }
+        
+        // 🎯 Lettre seule (A, B, C, D)
+        if (trimmed.length() == 1 && Character.isLetter(trimmed.charAt(0))) {
+            int idx = Character.toUpperCase(trimmed.charAt(0)) - 'A';
+            return (idx >= 0 && idx < optionsList.size()) ? idx : 0;
+        }
+        
+        // 🎯 Format "A)" ou "A."
+        if (trimmed.length() >= 2 && Character.isLetter(trimmed.charAt(0))) {
+            char secondChar = trimmed.charAt(1);
+            if (secondChar == ')' || secondChar == '.') {
+                int idx = Character.toUpperCase(trimmed.charAt(0)) - 'A';
+                return (idx >= 0 && idx < optionsList.size()) ? idx : 0;
+            }
+        }
+        
+        // 🎯 Texte exact - trouver l'index
+        for (int i = 0; i < optionsList.size(); i++) {
+            if (optionsList.get(i) != null && optionsList.get(i).trim().equalsIgnoreCase(trimmed)) {
+                return i;
+            }
+        }
+        
+        return 0; // Par défaut
+    }
+
+    /**
+     * Normalise la réponse correcte - stocke le texte réel mais préserve l'index interne
+     */
+    private String normalizeMcqCorrectAnswerWithIndexSupport(Object rawCorrect, List<String> optionsList) {
+        if (optionsList == null || optionsList.isEmpty()) {
+            throw new IllegalArgumentException("options invalides");
+        }
+        if (rawCorrect == null) {
+            return optionsList.get(0);
+        }
+        
+        // 🎯 Si c'est un nombre, stocker le texte réel de l'option correspondante
+        if (rawCorrect instanceof Number) {
+            int idx = ((Number) rawCorrect).intValue();
+            if (idx >= 0 && idx < optionsList.size()) {
+                // 🎯 STOCKER LE TEXTE RÉEL (plus lisible)
+                return optionsList.get(idx);
+            }
+            throw new IllegalArgumentException("index de réponse correcte invalide: " + idx);
+        }
+        
+        String trimmed = rawCorrect.toString().trim();
+        
+        // 🎯 PRIORITÉ ABSOLUE: Index numérique en chaîne (nouveau format du frontend)
+        if (trimmed.matches("^\\d+$")) {
+            try {
+                int idx = Integer.parseInt(trimmed);
+                if (idx >= 0 && idx < optionsList.size()) {
+                    // 🎯 STOCKER LE TEXTE RÉEL correspondant à l'index
+                    String selectedOption = optionsList.get(idx);
+                    log.info("Converting index '{}' to option text: '{}' for options [{}]", 
+                        idx, selectedOption, optionsList);
+                    return selectedOption;
+                }
+                throw new IllegalArgumentException("index de réponse correcte invalide: " + idx);
+            } catch (NumberFormatException e) {
+                throw new IllegalArgumentException("format numérique invalide: " + trimmed);
+            }
+        }
+        
+        // 🎯 Si format spécial INDEX_X_VALUE_Y, extraire et stocker seulement le texte
+        if (trimmed.startsWith("INDEX_") && trimmed.contains("_VALUE_")) {
+            try {
+                String[] parts = trimmed.split("_VALUE_");
+                if (parts.length >= 2) {
+                    return parts[1]; // 🎯 STOCKER SEULEMENT LE TEXTE RÉEL
+                }
+            } catch (Exception e) {
+                log.warn("Failed to parse special format, using fallback: {}", trimmed);
+            }
+        }
+        
+        // Logique existante pour les autres formats - stocker le texte réel
+        for (String opt : optionsList) {
+            if (opt != null && opt.trim().equalsIgnoreCase(trimmed)) {
+                return opt; // 🎯 STOCKER LE TEXTE RÉEL
+            }
+        }
+        
+        if (trimmed.length() == 1 && Character.isLetter(trimmed.charAt(0))) {
+            int idx = Character.toUpperCase(trimmed.charAt(0)) - 'A';
+            if (idx >= 0 && idx < optionsList.size()) {
+                return optionsList.get(idx); // 🎯 STOCKER LE TEXTE RÉEL
+            }
+        }
+        
+        if (trimmed.length() >= 2 && Character.isLetter(trimmed.charAt(0))) {
+            char sep = trimmed.charAt(1);
+            if ((sep == ')' || sep == '.') && Character.isLetter(trimmed.charAt(0))) {
+                int idx = Character.toUpperCase(trimmed.charAt(0)) - 'A';
+                if (idx >= 0 && idx < optionsList.size()) {
+                    return optionsList.get(idx); // 🎯 STOCKER LE TEXTE RÉEL
+                }
+            }
+        }
+        
+        throw new IllegalArgumentException("la réponse correcte ne correspond à aucune option: " + trimmed);
+    }
+    
     private Boolean calculateAnswerCorrectness(TestQuestion question, String answer) {
         if (answer == null || answer.trim().isEmpty()) {
             return false;
         }
         
-        String correctAnswer = question.getCorrectAnswer();
-        if (correctAnswer == null) {
-            return false;
+        // 🎯 LOGIQUE: Utiliser correctAnswerIndex si disponible, sinon fallback
+        try {
+            // Récupérer les options depuis la question
+            List<String> options = objectMapper.convertValue(
+                question.getOptions(),
+                objectMapper.getTypeFactory().constructCollectionType(List.class, String.class)
+            );
+            
+            if (options == null || options.isEmpty()) {
+                log.warn("No options found for question {}", question.getId());
+                return false;
+            }
+            
+            // 🎯 PRIORITÉ ABSOLUE: Utiliser correctAnswerIndex si disponible
+            Integer correctAnswerIndex = question.getCorrectAnswerIndex();
+            int correctIndex;
+            
+            if (correctAnswerIndex != null && correctAnswerIndex >= 0 && correctAnswerIndex < options.size()) {
+                // 🎯 UTILISER L'INDEX DIRECTEMENT (plus robuste)
+                correctIndex = correctAnswerIndex;
+                log.info("Question {} - Using stored correctAnswerIndex: {}", question.getId(), correctIndex);
+            } else {
+                // 🎯 FALLBACK: Calculer depuis le texte (compatibilité)
+                correctIndex = findOptionIndex(question.getCorrectAnswer(), options);
+                log.info("Question {} - Calculated correctIndex from text: {}", question.getId(), correctIndex);
+            }
+            
+            // 🎯 TROUVER L'INDEX DE LA RÉPONSE DU CANDIDAT
+            int candidateIndex = findOptionIndex(answer, options);
+            if (candidateIndex == -1) {
+                log.warn("Candidate answer not found in options for question {}: answer={}, options={}", 
+                    question.getId(), answer, options);
+                return false;
+            }
+            
+            // 🎯 COMPARAISON PAR INDEX (fiable même avec textes identiques)
+            boolean isCorrect = candidateIndex == correctIndex;
+            log.info("Question {} - Correct index: {}, Candidate index: {}, Is correct: {}", 
+                question.getId(), correctIndex, candidateIndex, isCorrect);
+            
+            return isCorrect;
+            
+        } catch (Exception e) {
+            log.error("Error calculating answer correctness for question {}: {}", question.getId(), e.getMessage(), e);
+            // Fallback à l'ancienne méthode en cas d'erreur
+            return answer.trim().equalsIgnoreCase(question.getCorrectAnswer().trim());
+        }
+    }
+    
+    /**
+     * Extrait l'index du format spécial INDEX_X_VALUE_Y
+     */
+    private int extractIndexFromSpecialFormat(String formattedAnswer) {
+        if (formattedAnswer != null && formattedAnswer.startsWith("INDEX_") && formattedAnswer.contains("_VALUE_")) {
+            try {
+                String[] parts = formattedAnswer.split("_VALUE_");
+                if (parts.length >= 2 && parts[0].startsWith("INDEX_")) {
+                    String indexStr = parts[0].substring(6); // Enlever "INDEX_"
+                    return Integer.parseInt(indexStr);
+                }
+            } catch (NumberFormatException e) {
+                log.warn("Failed to parse index from special format: {}", formattedAnswer);
+            }
+        }
+        return -1;
+    }
+    
+    /**
+     * Extrait l'index de la réponse du candidat (gère plusieurs formats)
+     */
+    private int extractIndexFromAnswer(String answer, TestQuestion question) {
+        try {
+            // Récupérer les options depuis la question
+            List<String> options = objectMapper.convertValue(
+                question.getOptions(),
+                objectMapper.getTypeFactory().constructCollectionType(List.class, String.class)
+            );
+            
+            // Si format spécial, extraire directement
+            int specialIndex = extractIndexFromSpecialFormat(answer);
+            if (specialIndex >= 0) {
+                return specialIndex;
+            }
+            
+            // Sinon, utiliser la logique existante
+            return findOptionIndex(answer, options);
+            
+        } catch (Exception e) {
+            log.error("Error extracting index from answer: {}", e.getMessage(), e);
+            return -1;
+        }
+    }
+    
+    /**
+     * Trouve l'index d'une option dans la liste des options
+     * Accepte: index numérique, lettre (A, B), format (A), ou texte exact
+     */
+    private int findOptionIndex(String answer, List<String> options) {
+        if (answer == null || options == null || options.isEmpty()) {
+            return -1;
         }
         
-        return answer.trim().equalsIgnoreCase(correctAnswer.trim());
+        String trimmed = answer.trim();
+        
+        // 1. Si c'est un nombre, l'utiliser directement comme index
+        try {
+            int numericIndex = Integer.parseInt(trimmed);
+            if (numericIndex >= 0 && numericIndex < options.size()) {
+                return numericIndex;
+            }
+        } catch (NumberFormatException e) {
+            // Pas un nombre, continuer avec les autres méthodes
+        }
+        
+        // 2. Si c'est une lettre seule (A, B, C, D)
+        if (trimmed.length() == 1 && Character.isLetter(trimmed.charAt(0))) {
+            int letterIndex = Character.toUpperCase(trimmed.charAt(0)) - 'A';
+            if (letterIndex >= 0 && letterIndex < options.size()) {
+                return letterIndex;
+            }
+        }
+        
+        // 3. Si c'est au format "A)", "B)", etc.
+        if (trimmed.length() >= 2 && Character.isLetter(trimmed.charAt(0))) {
+            char secondChar = trimmed.charAt(1);
+            if (secondChar == ')' || secondChar == '.') {
+                int letterIndex = Character.toUpperCase(trimmed.charAt(0)) - 'A';
+                if (letterIndex >= 0 && letterIndex < options.size()) {
+                    return letterIndex;
+                }
+            }
+        }
+        
+        // 4. Si c'est le texte exact d'une option
+        for (int i = 0; i < options.size(); i++) {
+            if (options.get(i) != null && options.get(i).trim().equalsIgnoreCase(trimmed)) {
+                return i;
+            }
+        }
+        
+        // 5. Si c'est une correspondance partielle (moins fiable mais utile)
+        for (int i = 0; i < options.size(); i++) {
+            if (options.get(i) != null) {
+                String option = options.get(i).trim();
+                if (option.toLowerCase().contains(trimmed.toLowerCase()) || 
+                    trimmed.toLowerCase().contains(option.toLowerCase())) {
+                    return i;
+                }
+            }
+        }
+        
+        return -1; // Non trouvé
     }
     
     private EvaluationResult calculateTestResults(GeneratedTest test) {
         try {
             log.info("=== CALCULATING TEST RESULTS FOR TEST {} ===", test.getId());
-            List<Answer> answers = test.getAnswers();
-            log.info("Answers found: {}", answers != null ? answers.size() : 0);
+            
+            // 🎯 NOUVELLE LOGIQUE : Récupérer les réponses du candidat via candidate_id
+            List<Answer> answers = answerRepository.findByCandidateId(test.getCandidate().getId());
+            log.info("Answers found for candidate {}: {}", test.getCandidate().getId(), answers != null ? answers.size() : 0);
             
             if (answers == null || answers.isEmpty()) {
-                log.warn("No answers found for test {}", test.getId());
+                log.warn("No answers found for candidate {}", test.getCandidate().getId());
                 return null;
             }
             
-            // Calculer les scores de base
-            int totalQuestions = answers.size();
+            // Filtrer uniquement les réponses pour ce test spécifique
+            List<Answer> testAnswers = answers.stream()
+                    .filter(answer -> answer.getTest() != null && answer.getTest().getId().equals(test.getId()))
+                    .collect(Collectors.toList());
+            
+            log.info("Test-specific answers found: {}", testAnswers.size());
+            
+            if (testAnswers.isEmpty()) {
+                log.warn("No test-specific answers found for test {}", test.getId());
+                return null;
+            }
+            
+            int totalQuestions = testAnswers.size();
             log.info("Total questions: {}", totalQuestions);
             
-            long correctAnswers = answers.stream()
+            long correctAnswers = testAnswers.stream()
                     .filter(answer -> answer.getIsCorrect() != null && answer.getIsCorrect())
                     .count();
             log.info("Correct answers: {}", correctAnswers);
             
-            double totalScore = answers.stream()
+            double totalScore = testAnswers.stream()
                     .mapToDouble(answer -> answer.getScoreObtained() != null ? answer.getScoreObtained() : 0.0)
                     .sum();
             log.info("Total score: {}", totalScore);
             
-            double maxScore = answers.stream()
+            double maxScore = testAnswers.stream()
                     .mapToDouble(answer -> answer.getMaxScore() != null ? answer.getMaxScore() : 1.0)
                     .sum();
             log.info("Max score: {}", maxScore);
             
-            double finalScore = maxScore > 0 ? (totalScore / maxScore) * 100 : 0;
-            log.info("Final score calculated: {}", finalScore);
+            double scorePercentage = maxScore > 0 ? (totalScore / maxScore) * 100 : 0;
+            log.info("Score percentage: {}", scorePercentage);
             
             // Calculer les scores par compétence
             Map<String, EvaluationResult.SkillScore> skillScores = new HashMap<>();
             
             // Regrouper par skillTag
-            Map<String, List<Answer>> answersBySkill = answers.stream()
+            Map<String, List<Answer>> answersBySkill = testAnswers.stream()
                     .filter(answer -> answer.getQuestion() != null && answer.getQuestion().getSkillTag() != null)
                     .collect(Collectors.groupingBy(answer -> answer.getQuestion().getSkillTag()));
             
@@ -837,33 +1356,38 @@ public class GeneratedTestController {
                         .mapToInt(answer -> 1)
                         .sum();
                 
-                int skillTotal = skillAnswers.size();
+                double skillTotal = skillAnswers.stream()
+                        .mapToDouble(answer -> answer.getMaxScore() != null ? answer.getMaxScore() : 1.0)
+                        .sum();
+                
+                double skillObtained = skillAnswers.stream()
+                        .mapToDouble(answer -> answer.getScoreObtained() != null ? answer.getScoreObtained() : 0.0)
+                        .sum();
+                
+                double skillPercentage = skillTotal > 0 ? (skillObtained / skillTotal) * 100 : 0;
                 
                 skillScores.put(skill, EvaluationResult.SkillScore.builder()
                         .correct(skillCorrect)
-                        .total(skillTotal)
+                        .total(skillAnswers.size())
                         .build());
             }
             
             return EvaluationResult.builder()
                     .test(test)
-                    .totalScore((int) totalScore)
-                    .maxScore((int) maxScore)
-                    .finalScore(finalScore)
                     .totalQuestions(totalQuestions)
                     .correctAnswers((int) correctAnswers)
+                    .totalScore((int) totalScore)
+                    .maxScore((int) maxScore)
+                    .finalScore(scorePercentage)
                     .skillScores(skillScores)
+                    .createdAt(LocalDateTime.now())
                     .build();
-                    
+            
         } catch (Exception e) {
             log.error("Error calculating test results: {}", e.getMessage(), e);
             return null;
         }
     }
-    
-    // =========================
-    // SEND TEST EMAIL
-    // =========================
     @PostMapping("/{id}/send-email")
     public ResponseEntity<Map<String, Object>> sendTestEmail(
             @PathVariable Long id,
@@ -1171,8 +1695,11 @@ public class GeneratedTestController {
                         questionMap.put("orderIndex", question.getOrderIndex());
                         
                         // Récupérer la réponse du candidat
-                        Optional<Answer> answerOpt = test.getAnswers().stream()
-                                .filter(answer -> answer.getQuestion().getId().equals(question.getId()))
+                        // 🎯 NOUVELLE LOGIQUE : Récupérer via candidate_id
+                        Optional<Answer> answerOpt = answerRepository.findByCandidateIdAndQuestionId(
+                            test.getCandidate().getId(), question.getId())
+                                .stream()
+                                .filter(answer -> answer.getTest() == null || answer.getTest().getId().equals(test.getId()))
                                 .findFirst();
                         
                         if (answerOpt.isPresent()) {
@@ -1361,7 +1888,11 @@ public class GeneratedTestController {
             
             // Compter les données qui seront supprimées par cascade
             int questionCount = test.getQuestions() != null ? test.getQuestions().size() : 0;
-            int answerCount = test.getAnswers() != null ? test.getAnswers().size() : 0;
+            // 🎯 NOUVELLE LOGIQUE : Compter les réponses du candidat pour ce test
+            List<Answer> candidateAnswers = answerRepository.findByCandidateId(test.getCandidate().getId());
+            int answerCount = (int) candidateAnswers.stream()
+                    .filter(answer -> answer.getTest() != null && answer.getTest().getId().equals(testId))
+                    .count();
             boolean hasEvaluationResult = test.getEvaluationResult() != null;
             
             log.info("Test ID: {}", testId);

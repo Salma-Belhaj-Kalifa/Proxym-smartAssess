@@ -51,15 +51,7 @@ const TestSubmittedPage: React.FC = () => {
               Les résultats seront disponibles prochainement. Vous serez notifié dès qu'ils seront prêts.
             </p>
           )}
-          
-          <div className="space-y-3">
-            <Button 
-              onClick={() => navigate('/candidate/dashboard')} 
-              className="w-full"
-            >
-              Retour au tableau de bord
-            </Button>
-          </div>
+        
         </CardContent>
       </Card>
     </div>

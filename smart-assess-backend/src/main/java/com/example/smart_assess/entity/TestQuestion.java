@@ -38,6 +38,9 @@ public class TestQuestion {
     @Column(name = "correct_answer")
     private String correctAnswer;
 
+    @Column(name = "correct_answer_index")
+    private Integer correctAnswerIndex;
+
     @Column(name = "skill_tag")
     private String skillTag;
 

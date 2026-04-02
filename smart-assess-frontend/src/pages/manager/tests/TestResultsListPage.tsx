@@ -9,6 +9,18 @@ import { useCandidatures, usePositions } from '@/features';
 import { AlertCircle, Eye, User, Briefcase, Clock, Calendar } from 'lucide-react';
 import apiClient from '@/lib/api';
 
+/** Timestamp pour tri : soumission si dispo, sinon création */
+const getResultRecencyTime = (t: {
+  submittedAt?: string;
+  session?: { submittedAt?: string };
+  createdAt?: string;
+}): number => {
+  const raw = t.submittedAt || t.session?.submittedAt || t.createdAt;
+  if (!raw) return 0;
+  const ms = new Date(raw).getTime();
+  return Number.isNaN(ms) ? 0 : ms;
+};
+
 interface TestResult {
   id: number;
   candidate: {
@@ -19,7 +31,7 @@ interface TestResult {
   };
   // ✅ Nouvelle structure: plus de internshipPosition direct
   // Les postes sont récupérés via les candidatures du candidat
-  status: 'SUBMITTED' | 'IN_PROGRESS' | 'PENDING' | 'EXPIRED';
+  status: 'SUBMITTED' | 'IN_PROGRESS' | 'PENDING' | 'EXPIRED' | 'COMPLETED';
   createdAt: string;
   submittedAt?: string;
   timeLimitMinutes: number;
@@ -129,6 +141,8 @@ const TestResultsListPage: React.FC = () => {
           failedTestIds.add(test.id);
         }
       }
+
+      results.sort((a, b) => getResultRecencyTime(b) - getResultRecencyTime(a));
 
       setTestResults(results);
       setRenderKey((prev) => prev + 1);

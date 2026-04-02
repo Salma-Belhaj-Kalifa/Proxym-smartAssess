@@ -55,14 +55,19 @@ public class SecurityConfig {
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-                // Public endpoints
                 .requestMatchers("/api/auth/**").permitAll()
                 .requestMatchers("/api/health/**").permitAll()
                 .requestMatchers("/api/public/**").permitAll()
                 .requestMatchers("/api/debug/**").permitAll()
                 .requestMatchers("/error").permitAll()
-                
-                // Positions endpoints (public read access)
+                .requestMatchers(
+                    "/v3/api-docs/**",
+                    "/v3/api-docs.yaml",
+                    "/swagger-ui/**",
+                    "/swagger-ui.html",
+                    "/swagger-resources/**",
+                    "/webjars/**"
+                ).permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/positions").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/positions/**").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/positions").hasRole("MANAGER")
@@ -70,46 +75,41 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.DELETE, "/api/positions/**").hasRole("MANAGER")
                 .requestMatchers(HttpMethod.PATCH, "/api/positions/**").hasRole("MANAGER")
                 
-                // Candidates endpoints (public read access, authenticated write)
                 .requestMatchers(HttpMethod.GET, "/api/candidates").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/candidates/**").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/candidates").permitAll()
                 .requestMatchers(HttpMethod.PUT, "/api/candidates/**").authenticated()
                 .requestMatchers(HttpMethod.DELETE, "/api/candidates/**").authenticated()
                 
-                // File upload endpoints (public)
                 .requestMatchers("/api/files/upload-cv/**").permitAll()
                 .requestMatchers("/api/ai-analysis/analyze-cv/**").permitAll()
                 .requestMatchers("/api/cvs/upload/**").permitAll()
                 .requestMatchers("/api/simple-upload/cv/**").permitAll()
                 
-                // Test endpoints (public)
                 .requestMatchers("/api/test/**").permitAll()
                 .requestMatchers("/api/tests/public/**").permitAll()
+
+                .requestMatchers(HttpMethod.POST, "/api/tests/*/submit").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/tests/*/start").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/tests/check-existing/**").hasRole("MANAGER")
                 .requestMatchers(HttpMethod.POST, "/api/tests/**").hasRole("MANAGER")
                 .requestMatchers(HttpMethod.PUT, "/api/tests/**").hasRole("MANAGER")
                 
-                // Manager endpoints (require MANAGER role)
                 .requestMatchers("/api/managers/**").hasRole("MANAGER")
                 
-                // HR endpoints (require HR or MANAGER role)
                 .requestMatchers("/api/hr/**").hasAnyRole("HR", "MANAGER")
                 
-                // Technical profile endpoints
                 .requestMatchers(HttpMethod.GET, "/api/technical_profiles/candidate/**").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/technical_profiles/cv/**").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/technical_profiles/**").permitAll()
                 .requestMatchers(HttpMethod.PUT, "/api/technical_profiles/**").authenticated()
                 .requestMatchers(HttpMethod.DELETE, "/api/technical_profiles/**").authenticated()
                 
-                // Candidatures endpoints
                 .requestMatchers(HttpMethod.GET, "/api/candidatures/**").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/candidatures").permitAll()
                 .requestMatchers(HttpMethod.PUT, "/api/candidatures/**").authenticated()
                 .requestMatchers(HttpMethod.DELETE, "/api/candidatures/**").authenticated()
                 
-                // All other requests need authentication
                 .anyRequest().authenticated()
             )
             .authenticationProvider(authenticationProvider())

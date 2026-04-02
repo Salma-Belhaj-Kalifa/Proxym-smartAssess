@@ -21,15 +21,22 @@ const ManagerLayout = () => {
   const logoutMutation = useLogout();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
+  // Attendre la résolution du hook (localStorage) avant toute redirection : sinon au
+  // rafraîchissement `user` est encore indéfini → connexion → retour dashboard.
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="h-10 w-10 animate-spin rounded-full border-2 border-primary border-t-transparent" aria-label="Chargement" />
+      </div>
+    );
+  }
+
   if (!user) {
     return <Navigate to="/recruteur/connexion" replace />;
   }
 
   if (user.role !== 'MANAGER' && user.role !== 'HR') {
     return <Navigate to="/unauthorized" replace />;
-  }
-  if (isLoading) {
-    return null;
   }
   const handleLogout = async () => {
     setIsLoggingOut(true);

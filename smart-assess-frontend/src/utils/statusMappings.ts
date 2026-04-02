@@ -20,6 +20,8 @@ export const getStatusLabel = (status: string): string => {
       return 'Test soumis';
     case 'DRAFT':
       return 'En préparation';
+    case 'READY':
+      return 'Prêt à passer';
     case 'ASSIGNED':
       return 'Assigné';
     case 'EVALUATED':
@@ -53,6 +55,8 @@ export const getStatusColor = (status: string): string => {
       return 'text-blue-600 border-blue-200';
     case 'DRAFT':
       return 'bg-orange-100 text-orange-800 border-orange-300';
+    case 'READY':
+      return 'text-sky-700 border-sky-300 bg-sky-50';
     case 'ASSIGNED':
       return 'text-blue-600 border-blue-200';
     case 'EVALUATED':

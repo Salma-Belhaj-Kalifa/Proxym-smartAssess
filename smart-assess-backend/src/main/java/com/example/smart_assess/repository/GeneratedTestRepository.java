@@ -18,6 +18,5 @@ public interface GeneratedTestRepository extends JpaRepository<GeneratedTest, Lo
     List<GeneratedTest> findByCandidate_IdOrderByCreatedAtDesc(Long candidateId);  // ✅ Ajouté
     List<GeneratedTest> findAllByOrderByCreatedAtDesc();
     
-    // ✅ Ajouté pour la suppression
     void deleteAllByCandidate_Id(Long candidateId);
 }

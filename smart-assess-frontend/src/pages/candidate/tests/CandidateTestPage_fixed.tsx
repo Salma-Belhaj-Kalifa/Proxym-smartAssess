@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import apiClient from '@/lib/api';
 import { useGetPublicTest } from '@/features/tests/testsQueries';
-import { useStartTestByToken, useSubmitTest } from '@/features/tests/testsMutations';
+import { useStartTest, useSubmitTest } from '@/features/tests/testsMutations';
 import { indexToCorrectAnswer } from '@/features/tests/testAnswerUtils';
 import { toast } from 'sonner';
 
@@ -69,7 +69,7 @@ const CandidateTestPage: React.FC = () => {
 
   // Utiliser le hook pour récupérer les données du test public uniquement si token est disponible
   const { data: testDataFromHook, isLoading: testLoading, error: testError } = useGetPublicTest(token || '');
-  const startTestMutation = useStartTestByToken();
+  const startTestMutation = useStartTest();
   const submitTestMutation = useSubmitTest();
 
   useEffect(() => {
@@ -208,7 +208,14 @@ const CandidateTestPage: React.FC = () => {
       
       console.log('Réponse du backend:', response);
       
-      // 🎯 NETTOYAGE APRÈS SOUMISSION - Le useEffect s'en occupera
+      // Sortir du mode plein écran après soumission réussie
+      if (document.fullscreenElement) {
+        await document.exitFullscreen();
+      }
+      
+      // Nettoyer les réponses sauvegardées
+      clearSavedAnswers();
+      
       setTestSubmitted(true);
       toast.success('Test soumis avec succès !');
       
@@ -244,155 +251,6 @@ const CandidateTestPage: React.FC = () => {
   const getAnsweredCount = () => {
     return Object.keys(answers).length;
   };
-
-  // 🎯 FONCTION POUR DÉMARRER LE TEST
-  const handleStartTest = async () => {
-    if (!testData || !token) return;
-    
-    try {
-      console.log('=== DÉMARRAGE DU TEST ===');
-      console.log('Token:', token);
-      console.log('Test duration:', testData?.duration, testData?.timeLimitMinutes);
-      
-      // Appeler l'API pour démarrer le test avec le token
-      await startTestMutation.mutateAsync(token);
-      
-      // Initialiser le chronomètre avec la bonne durée
-      const duration = testData?.timeLimitMinutes || testData?.duration || 20;
-      console.log('Using duration:', duration, 'minutes');
-      setTimeRemaining(duration * 60);
-      setTestStarted(true);
-      
-      // Activer le mode plein écran
-      try {
-        await document.documentElement.requestFullscreen();
-      } catch (error) {
-        console.warn('Could not enter fullscreen mode:', error);
-        toast.warning('Veuillez activer le mode plein écran manuellement (F11)');
-      }
-      
-      // Charger les réponses sauvegardées
-      loadSavedAnswers();
-      
-      toast.success('Test démarré ! Bonne chance !');
-      
-    } catch (error: any) {
-      console.error('Error starting test:', error);
-      toast.error('Erreur lors du démarrage du test');
-    }
-  };
-
-  // 🎯 GESTION DU CHRONOMÈTRE
-  useEffect(() => {
-    if (!testStarted || testSubmitted || timeRemaining <= 0) return;
-
-    const timer = setInterval(() => {
-      setTimeRemaining(prev => {
-        if (prev <= 1) {
-          // Temps écoulé - soumettre automatiquement
-          submitTest();
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, [testStarted, testSubmitted, timeRemaining]);
-
-  // 🎯 CONTRÔLES DE SÉCURITÉ
-  useEffect(() => {
-    if (!testStarted || testSubmitted) return;
-
-    const handleVisibilityChange = () => {
-      if (document.hidden) {
-        setTabSwitchCount(prev => prev + 1);
-        setSecurityWarnings(prev => [...prev, 'Changement d\'onglet détecté']);
-        toast.warning('Changement d\'onglet détecté !');
-      }
-    };
-
-    const handleCopy = (e: ClipboardEvent) => {
-      e.preventDefault();
-      setCopyAttempts(prev => prev + 1);
-      setSecurityWarnings(prev => [...prev, 'Tentative de copie détectée']);
-      toast.warning('Copie interdite !');
-    };
-
-    const handleContextMenu = (e: MouseEvent) => {
-      e.preventDefault();
-      toast.warning('Clic droit désactivé !');
-    };
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Bloquer F12, Ctrl+Shift+I, Ctrl+Shift+C, Ctrl+U, F11, ESC
-      if (
-        e.key === 'F12' ||
-        (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'C')) ||
-        (e.ctrlKey && e.key === 'u') ||
-        e.key === 'F11' ||
-        e.key === 'Escape'
-      ) {
-        e.preventDefault();
-        if (e.key === 'Escape' && document.fullscreenElement) {
-          toast.warning('Sortie du plein écran interdite pendant le test !');
-        } else {
-          toast.warning('Outils de développement désactivés !');
-        }
-      }
-    };
-
-    // Bloquer la sortie du plein écran
-    const handleFullscreenChange = () => {
-      if (!document.fullscreenElement && testStarted && !testSubmitted) {
-        toast.warning('Veuillez rester en mode plein écran !');
-        // Forcer le retour en plein écran
-        setTimeout(() => {
-          document.documentElement.requestFullscreen().catch(() => {
-            toast.warning('Activez manuellement le mode plein écran (F11)');
-          });
-        }, 1000);
-      }
-    };
-
-    // Ajouter les écouteurs d'événements
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    document.addEventListener('copy', handleCopy);
-    document.addEventListener('contextmenu', handleContextMenu);
-    document.addEventListener('keydown', handleKeyDown);
-    document.addEventListener('fullscreenchange', handleFullscreenChange);
-
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-      document.removeEventListener('copy', handleCopy);
-      document.removeEventListener('contextmenu', handleContextMenu);
-      document.removeEventListener('keydown', handleKeyDown);
-      document.removeEventListener('fullscreenchange', handleFullscreenChange);
-    };
-  }, [testStarted, testSubmitted]);
-
-  // 🎯 NETTOYAGE DES CONTRÔLES APRÈS SOUMISSION
-  useEffect(() => {
-    if (testSubmitted) {
-      // Sortir du plein écran
-      if (document.fullscreenElement) {
-        document.exitFullscreen().catch(() => {
-          console.warn('Could not exit fullscreen');
-        });
-      }
-      
-      // Nettoyer tous les écouteurs d'événements
-      const handleCleanup = () => {
-        document.removeEventListener('visibilitychange', () => {});
-        document.removeEventListener('copy', () => {});
-        document.removeEventListener('contextmenu', () => {});
-        document.removeEventListener('keydown', () => {});
-        document.removeEventListener('fullscreenchange', () => {});
-      };
-      
-      handleCleanup();
-    }
-  }, [testSubmitted]);
 
   if (isLoading) {
     return (
@@ -513,40 +371,10 @@ const CandidateTestPage: React.FC = () => {
                   Vous êtes sur le point de commencer un test de {questions.length} questions.
                 </p>
                 
-                {/* 🎯 INSTRUCTIONS AVANT DÉMARRAGE */}
-                <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                  <h4 className="font-semibold text-blue-800 mb-3 flex items-center gap-2">
-                    <AlertCircle className="w-5 h-5" />
-                    Instructions importantes
-                  </h4>
-                  <ul className="text-sm text-blue-700 space-y-2 text-left">
-                    <li className="flex items-start gap-2">
-                      <span className="text-blue-500 mt-1">•</span>
-                      <span>Le test sera en mode plein écran automatiquement</span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <span className="text-blue-500 mt-1">•</span>
-                      <span>Changement d'onglet sera détecté et enregistré</span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <span className="text-blue-500 mt-1">•</span>
-                      <span>Copie, clic droit et outils de développement sont désactivés</span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <span className="text-blue-500 mt-1">•</span>
-                      <span>Vos réponses sont sauvegardées automatiquement</span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <span className="text-blue-500 mt-1">•</span>
-                      <span>Le test se soumettra automatiquement à la fin du temps imparti</span>
-                    </li>
-                  </ul>
-                </div>
-                
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                   <div className="text-center p-4 bg-blue-50 rounded-lg">
                     <Clock className="w-8 h-8 text-blue-600 mx-auto mb-2" />
-                    <div className="font-bold">{testData?.timeLimitMinutes || testData?.duration || 20} minutes</div>
+                    <div className="font-bold">{testData?.duration || 20} minutes</div>
                     <div className="text-sm text-gray-600">Durée</div>
                   </div>
                   
@@ -563,15 +391,8 @@ const CandidateTestPage: React.FC = () => {
                   </div>
                 </div>
                 
-                <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                  <p className="text-sm text-yellow-800">
-                    <strong>Attention :</strong> Assurez-vous d'avoir une connexion internet stable 
-                    et de ne pas être dérangé pendant le test.
-                  </p>
-                </div>
-                
-                <Button onClick={handleStartTest} size="lg" className="bg-blue-600 hover:bg-blue-700" disabled={startTestMutation.isPending}>
-                  {startTestMutation.isPending ? 'Démarrage...' : 'Commencer le test'}
+                <Button onClick={() => setTestStarted(true)} size="lg" className="bg-blue-600 hover:bg-blue-700">
+                  Commencer le test
                 </Button>
               </div>
             </CardContent>
@@ -580,21 +401,6 @@ const CandidateTestPage: React.FC = () => {
       ) : (
         // Interface du test
         <div className="max-w-4xl mx-auto px-4 py-8">
-          {/* 🎯 AVERTISSEMENTS DE SÉCURITÉ */}
-          {securityWarnings.length > 0 && (
-            <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
-              <h4 className="font-semibold text-red-800 mb-2">Avertissements de sécurité:</h4>
-              <ul className="text-sm text-red-700 space-y-1">
-                {securityWarnings.slice(-3).map((warning, index) => (
-                  <li key={index}>• {warning}</li>
-                ))}
-              </ul>
-              <div className="text-xs text-red-600 mt-2">
-                Changements d'onglet: {tabSwitchCount} | Tentatives de copie: {copyAttempts}
-              </div>
-            </div>
-          )}
-          
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">

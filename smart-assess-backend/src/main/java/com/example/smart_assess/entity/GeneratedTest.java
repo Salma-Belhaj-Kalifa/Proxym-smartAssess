@@ -65,6 +65,7 @@ public class GeneratedTest {
     @Builder.Default
     private List<TestQuestion> questions = new ArrayList<>();
 
+    // Relation avec answers maintenue pour compatibilité mais plus utilisée principalement
     @OneToMany(mappedBy = "test", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     @Builder.Default
     private List<Answer> answers = new ArrayList<>();
