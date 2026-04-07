@@ -80,15 +80,12 @@ export default function ManagerProfilePage() {
 
   const handleDeleteAccount = async () => {
     try {
-      // Appeler l'API de suppression du profil manager via React Query
       await deleteProfileMutation.mutateAsync();
       
       // Nettoyage manuel pour éviter les redirections automatiques
       removeAuthToken();
       removeAuthUserData();
       queryClient.clear();
-      
-      // Redirection directe vers la page de connexion manager
       window.location.href = '/recruteur/connexion';
     } catch (error) {
       console.error('Erreur lors de la suppression du compte:', error);

@@ -540,7 +540,7 @@ const TestReviewPage: React.FC = () => {
       setTimeout(() => {
         toast.info('Redirection vers la page des candidats...');
         navigate('/manager/candidats');
-      }, 3000);
+      }, 10000);
       
     } catch (error: any) {
       console.error('Error generating test link:', error);

@@ -49,8 +49,6 @@ export default function RecruiterLoginPage() {
     try {
       const result = await loginMutation.mutateAsync({ email, password });
       
-      console.log('Login result:', result); // Debug pour voir la structure de la réponse
-
       // Validation flexible pour différents formats de réponse
       let user = null;
       if (result && typeof result === 'object' && 'user' in result && result.user) {
@@ -70,7 +68,6 @@ export default function RecruiterLoginPage() {
       }
 
       if (!user || !user.role) {
-        console.error('Login validation failed:', { result, user, hasUser: !!user, hasRole: !!user?.role });
         setErrorMessage("Utilisateur introuvable ou rôle incorrect.");
         return;
       }

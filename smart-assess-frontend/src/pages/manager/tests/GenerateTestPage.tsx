@@ -16,6 +16,7 @@ import { useCurrentUserSafe } from '@/features/auth/authQueries';
 import { useCandidatures } from '@/features/candidatures/candidaturesQueries';
 import { toast } from "sonner";
 import { getStatusLabel, getStatusColor } from "@/utils/statusMappings";
+import { checkDomainEligibility, type EligibilityResult } from '@/features/candidatures/domainEligibility';
 
 interface CandidateData {
   id: number;
@@ -64,11 +65,6 @@ const GenerateTestPage = () => {
   }, [candidateData?.id, id]);
   
   const separateCandidateId = useMemo(() => {
-    console.log('=== SEPARATE CANDIDATE ID CALCUL ===');
-    console.log('ID de l URL (id):', id);
-    console.log('Type de id:', typeof id);
-    console.log('Number(id):', Number(id));
-    console.log('isNaN(Number(id)):', isNaN(Number(id)));
     
     const urlCandidateId = id && !isNaN(Number(id)) ? Number(id) : null;
     console.log('urlCandidateId calculé:', urlCandidateId);
@@ -103,9 +99,6 @@ const GenerateTestPage = () => {
   const loadCandidateData = async () => {
     if (!id) return;
       
-    console.log('=== DÉBUT CHARGEMENT CANDIDAT ===');
-    console.log('ID utilisé:', id);
-    
     try {
       console.log('GenerateTestPage - ID reçu:', id);
       console.log('GenerateTestPage - Candidatures disponibles:', candidatures.map(c => ({ id: c.id, firstName: c.candidateFirstName, lastName: c.candidateLastName })));
@@ -197,18 +190,6 @@ const GenerateTestPage = () => {
         technicalProfiles: candidature.technicalProfiles
       };
       
-      // ✅ VALIDATION: Vérifier que le numéro de téléphone est présent
-      if (!candidature.candidatePhone || candidature.candidatePhone.trim() === '') {
-        toast.error('Le numéro de téléphone du candidat est obligatoire. Veuillez le compléter.');
-        setIsLoading(false);
-        return;
-      }
-      
-      console.log('=== CANDIDATE DATA TO SET ===');
-      console.log('Position title:', candidateDataToSet.position.title);
-      console.log('Position company:', candidateDataToSet.position.company);
-      console.log('=== FIN CANDIDATE DATA TO SET ===');
-   
       setCandidateData(candidateDataToSet);
       setIsLoading(false);
         
@@ -220,13 +201,7 @@ const GenerateTestPage = () => {
   };
 
   useEffect(() => {
-    console.log('=== DEBUG CANDIDATURES ===');
-    console.log('candidaturesLoading:', candidaturesLoading);
-    console.log('candidaturesError:', candidaturesError);
-    console.log('candidatures:', candidatures);
-    console.log('candidatures.length:', candidatures.length);
-    console.log('=== FIN DEBUG CANDIDATURES ===');
-    
+
     if (candidatures.length > 0 && !candidateData) {
       console.log('=== APPEL DE loadCandidateData ===');
       loadCandidateData();
@@ -255,19 +230,7 @@ const GenerateTestPage = () => {
   }, [candidatures, candidateData, id, candidaturesLoading, candidaturesError]);
 
   useEffect(() => {
-    console.log('=== USE EFFECT VÉRIFICATION TEST S\'EXÉCUTE ===');
-    console.log('candidateData:', candidateData);
-    console.log('candidateData?.id:', candidateData?.id);
-    console.log('URL id:', id);
-    console.log('candidateId calculé:', candidateId);
-    console.log('=== FIN USE EFFECT VÉRIFICATION TEST ===');
-    
     const testCheckId = candidateData?.id || (id && !isNaN(Number(id)) ? Number(id) : null);
-    console.log('=== TEST CHECK ID ===');
-    console.log('testCheckId:', testCheckId);
-    console.log('candidateData?.id:', candidateData?.id);
-    console.log('Number(id):', Number(id));
-    console.log('=== FIN TEST CHECK ID ===');
     
     if (testCheckId) {
       console.log('=== CANDIDATE ID DISPO, VÉRIFICATION TEST ===');
@@ -307,29 +270,8 @@ const GenerateTestPage = () => {
   const { data: technicalProfileData, isLoading: technicalProfileLoading, error: technicalProfileError } = useTechnicalProfileByCandidate(cvId);
 
   useEffect(() => {
-    console.log('=== NOUVELLE ARCHITECTURE ===');
-    console.log('CvId pour technical profile:', cvId);
-    console.log('CandidateId (candidature):', candidature?.candidateId);
-    console.log('CandidateData ID:', candidateData?.id);
-    console.log('ID from URL:', id);
-    console.log('Candidatures chargées:', candidatures.length);
-    console.log('=== FIN NOUVELLE ARCHITECTURE ===');
-  }, [cvId, candidateData?.id, id, candidatures.length]);
-
-  useEffect(() => {
-    if (technicalProfileError) {
-      console.log('=== ERREUR TECHNICAL PROFILE ===');
-      console.log('Erreur:', technicalProfileError);
-      console.log('Message:', (technicalProfileError as any)?.message);
-      console.log('Status:', (technicalProfileError as any)?.response?.status);
-      console.log('Data:', (technicalProfileError as any)?.response?.data);
-      console.log('=== FIN ERREUR ===');
-    }
-  }, [technicalProfileError]);
-
-  useEffect(() => {
     if (technicalProfileData) {
-      console.log('=== ************************TECHNICAL PROFILE REÇU DU HOOK ===');
+      console.log('=== TECHNICAL PROFILE REÇU DU HOOK ===');
       console.log('Technical Profile Data:', technicalProfileData);
       console.log('ParsedData:', technicalProfileData?.parsedData);
       console.log('Type:', typeof technicalProfileData);
@@ -345,12 +287,6 @@ const GenerateTestPage = () => {
 
   const finalIsLoading = !candidateData || technicalProfileLoading;
   const technicalProfile = technicalProfileData;
-
-  console.log('=== DÉBOGAGE CHARGEMENT ===');
-  console.log('candidateData:', candidateData);
-  console.log('technicalProfileLoading:', technicalProfileLoading);
-  console.log('finalIsLoading:', finalIsLoading);
-  console.log('=== FIN DÉBOGAGE CHARGEMENT ===');
 
   useEffect(() => {
     console.log('CandidateData updated:', candidateData);
@@ -421,9 +357,6 @@ const GenerateTestPage = () => {
   useEffect(() => {
     const testCheckId = candidateData?.id || (id && !isNaN(Number(id)) ? Number(id) : null);
     if (testCheckId) {
-      console.log('=== CANDIDATE ID DISPO, VÉRIFICATION TEST ===');
-      console.log('Test Check ID utilisé:', testCheckId);
-      
       const timer = setTimeout(() => {
         console.log('APPEL DE checkExistingTest...');
         checkExistingTest(testCheckId);
@@ -514,110 +447,50 @@ const GenerateTestPage = () => {
     return allPositions;
   }, [candidatures, separateCandidateId]);
 
+  const [eligibilityResult, setEligibilityResult] = useState<{
+    eligible: boolean;
+    reason: string;
+    matchedDomain?: string;
+  } | null>(null);
+  const [eligibilityLoading, setEligibilityLoading] = useState(false);
+
+  useEffect(() => {
+    const runEligibilityCheck = async () => {
+      const candidateDomain = technicalProfile?.parsedData
+        ?.["Technical Information"]?.["domain"];
+
+      if (!candidateDomain || candidateDomain === 'Unknown') return;
+
+      const allAcceptedDomains = candidatePositions
+        .flatMap(pos => pos.acceptedDomains || [])
+        .filter(Boolean);
+
+      if (allAcceptedDomains.length === 0) return;
+
+      setEligibilityLoading(true);
+      try {
+        const result = await checkDomainEligibility(
+          candidateDomain,
+          allAcceptedDomains
+        );
+        setEligibilityResult(result);
+      } catch (err) {
+        console.error('Eligibility check failed:', err);
+      } finally {
+        setEligibilityLoading(false);
+      }
+    };
+
+    if (technicalProfile && candidatePositions.length > 0) {
+      runEligibilityCheck();
+    }
+  }, [technicalProfile, candidatePositions]);
+
   const getEligibilityChecks = () => {
-    console.log('=== GET ELIGIBILITY CHECKS APPELÉ ===');
-    console.log('separateCandidateId:', separateCandidateId);
-    console.log('candidatePositions:', candidatePositions);
-    console.log('candidatePositions.length:', candidatePositions?.length);
-    
     const checks = [];
     const data = technicalProfile?.parsedData;
     
-    console.log('=== DÉBOGAGE DOMAIN EXTRACTION ===');
-    console.log('technicalProfile complet:', technicalProfile);
-    console.log('parsedData complet:', data);
-    console.log('Technical Information:', data?.["Technical Information"]);
-    console.log('Domain depuis Technical Information:', data?.["Technical Information"]?.["domain"]);
-    console.log('Type de parsedData:', typeof data);
-    console.log('Type de Technical Information:', typeof data?.["Technical Information"]);
-    console.log('=== FIN DÉBOGAGE DOMAIN ===');
-    
-    const candidateDomain = data?.["Technical Information"]?.["domain"];
-    
-    const checkDomainEligibilityForPosition = (domain: string, acceptedDomainsList: string[]) => {
-      if (!domain || domain === 'Unknown' || domain.trim() === '') return false;
-      if (acceptedDomainsList.length === 0) return false;
-      
-      const normalizeDomain = (d: string) => {
-        return d.toLowerCase()
-          .trim()
-          .replace(/[^\w\s]/g, '') 
-          .replace(/\s+/g, ' '); 
-      };
-      
-      const normalizedCandidate = normalizeDomain(domain);
-      
-      return acceptedDomainsList.some(acceptedDomain => {
-        const normalizedAccepted = normalizeDomain(acceptedDomain);
-        if (normalizedAccepted === normalizedCandidate) return true;
-        
-        const domainEquivalences: { [key: string]: string[] } = {
-          'software engineering': ['software engineering', 'ingénierie logicielle', 'développement logiciel', 'informatique', 'software development', 'programmation', 'coding', 'computer science', 'développement', 'development'],
-          'informatique': ['informatique', 'software engineering', 'ingénierie logicielle', 'développement logiciel', 'software development', 'programmation', 'coding', 'computer science', 'développement', 'development'],
-          'data science': ['data science', 'science des données', 'analyse de données', 'data analysis', 'big data', 'machine learning', 'ia', 'intelligence artificielle', 'artificial intelligence'],
-          'web development': ['web development', 'développement web', 'web', 'site web', 'web design', 'frontend', 'back-end', 'fullstack', 'développeur web'],
-          'mobile development': ['mobile development', 'développement mobile', 'mobile', 'android', 'ios', 'application mobile'],
-          'cybersecurity': ['cybersecurity', 'cyber sécurité', 'sécurité informatique', 'sécurité', 'security'],
-          'devops': ['devops', 'développement opérations', 'operations', 'infrastructure', 'cloud'],
-          'ui/ux': ['ui/ux', 'design', 'design interface', 'design expérience utilisateur', 'user interface', 'user experience'],
-          'networking': ['networking', 'réseau', 'réseaux', 'network', 'administration réseau'],
-          'database': ['database', 'base de données', 'bdd', 'data', 'données'],
-          'project management': ['project management', 'gestion de projet', 'management', 'chef de projet']
-        };
-        
-        for (const [canonicalDomain, equivalents] of Object.entries(domainEquivalences)) {
-          const normalizedCanonical = normalizeDomain(canonicalDomain);
-          if (normalizedAccepted === normalizedCanonical) {
-            const candidateMatches = equivalents.some(eq => normalizeDomain(eq) === normalizedCandidate);
-            if (candidateMatches) return true;
-          }
-        }
-        
-        for (const [canonicalDomain, equivalents] of Object.entries(domainEquivalences)) {
-          const normalizedCandidateInList = equivalents.some(eq => normalizeDomain(eq) === normalizedCandidate);
-          if (normalizedCandidateInList) {
-            const acceptedDomainInList = equivalents.some(eq => normalizeDomain(eq) === normalizedAccepted);
-            if (acceptedDomainInList) return true;
-          }
-        }
-        
-        return false;
-      });
-    };
-    
-    let isEligibleForAnyPosition = false;
-    let allAcceptedDomains = [];
-    
-    if (candidatePositions && candidatePositions.length > 0) {
-      console.log('=== VÉRIFICATION TOUS LES POSTES ===');
-      console.log('candidatePositions:', JSON.stringify(candidatePositions, null, 2));
-      
-      candidatePositions.forEach((position, index) => {
-        console.log(`Poste ${index + 1}: ${position.title}`);
-        console.log(`  Position complète:`, JSON.stringify(position, null, 2));
-        console.log(`  Domaines acceptés bruts: ${position.acceptedDomains}`);
-        console.log(`  Type de acceptedDomains: ${typeof position.acceptedDomains}`);
-        console.log(`  Est un tableau: ${Array.isArray(position.acceptedDomains)}`);
-        
-        const positionAcceptedDomains = position.acceptedDomains || [];
-        console.log(`  Domaines acceptés finaux: ${positionAcceptedDomains}`);
-        allAcceptedDomains = [...allAcceptedDomains, ...positionAcceptedDomains];
-        
-        const isEligibleForThisPosition = checkDomainEligibilityForPosition(candidateDomain, positionAcceptedDomains);
-        console.log(`  Éligible pour ce poste: ${isEligibleForThisPosition}`);
-        
-        if (isEligibleForThisPosition) {
-          isEligibleForAnyPosition = true;
-        }
-      });
-      
-      console.log(`Domaine du candidat éligible pour AU MOINS UN poste: ${isEligibleForAnyPosition}`);
-    } else if (candidateData?.position) {
-      const acceptedDomains = candidateData.position.acceptedDomains || [];
-      allAcceptedDomains = acceptedDomains;
-      isEligibleForAnyPosition = checkDomainEligibilityForPosition(candidateDomain, acceptedDomains);
-    }
-    
+    // Ajouter les checks de base
     candidatePositions.forEach((position, index) => {
       checks.push({ 
         label: ` Poste ${index + 1} : ${position.title}`, 
@@ -626,16 +499,21 @@ const GenerateTestPage = () => {
     });
     
     if (data) {
+      const candidateDomain = data?.["Technical Information"]?.["domain"];
       if (candidateDomain) {
-        if (isEligibleForAnyPosition) {
+        if (eligibilityLoading) {
           checks.push({ 
-            label: ` Domaine : ${candidateDomain} — compatible avec les postes`, 
+            label: ` Domaine : ${candidateDomain} — analyse en cours...`, 
             ok: true 
           });
-        } else {
-          const uniqueAcceptedDomains = [...new Set(allAcceptedDomains)];
+        } else if (eligibilityResult) {
           checks.push({ 
-            label: ` Domaine : ${candidateDomain} — non compatible avec les domaines requis (${uniqueAcceptedDomains.join(', ') || 'Non spécifié'})`, 
+            label: ` Domaine : ${candidateDomain} — ${eligibilityResult.reason}`, 
+            ok: eligibilityResult.eligible 
+          });
+        } else {
+          checks.push({ 
+            label: ` Domaine : ${candidateDomain} — non compatible avec les domaines requis`, 
             ok: false 
           });
         }
@@ -702,7 +580,7 @@ const GenerateTestPage = () => {
       });
     }
     
-    const isEligible = isEligibleForAnyPosition && data && candidateDomain && candidateDomain !== 'Unknown';
+    const isEligible = eligibilityResult?.eligible && data;
     checks.push({ 
       label: isEligible ? ' Candidature éligible pour génération de test' : ' Candidature non éligible — domaine incompatible ou données manquantes', 
       ok: isEligible 
@@ -712,219 +590,7 @@ const GenerateTestPage = () => {
   };
 
   const isCandidateEligible = () => {
-    const data = technicalProfile?.parsedData;
-    const candidateDomain = data?.["Technical Information"]?.["domain"];
-    
-    if (!candidateDomain || candidateDomain === 'Unknown' || candidateDomain.trim() === '') return false;
-    
-    let isEligibleForAnyPosition = false;
-    
-    const domainEquivalences: { [key: string]: string[] } = {
-      'software engineering': ['software engineering', 'ingénierie logicielle', 'développement logiciel', 'informatique', 'software development', 'programmation', 'coding', 'computer science', 'développement', 'development'],
-      'informatique': ['informatique', 'software engineering', 'ingénierie logicielle', 'développement logiciel', 'software development', 'programmation', 'coding', 'computer science', 'développement', 'development'],
-      'data science': ['data science', 'science des données', 'analyse de données', 'data analysis', 'big data', 'machine learning', 'ia', 'intelligence artificielle', 'artificial intelligence'],
-      'web development': ['web development', 'développement web', 'web', 'site web', 'web design', 'frontend', 'back-end', 'fullstack', 'développeur web'],
-      'mobile development': ['mobile development', 'développement mobile', 'mobile', 'android', 'ios', 'application mobile'],
-      'cybersecurity': ['cybersecurity', 'cyber sécurité', 'sécurité informatique', 'sécurité', 'security'],
-      'devops': ['devops', 'développement opérations', 'operations', 'infrastructure', 'cloud'],
-      'ui/ux': ['ui/ux', 'design', 'design interface', 'design expérience utilisateur', 'user interface', 'user experience'],
-      'networking': ['networking', 'réseau', 'réseaux', 'network', 'administration réseau'],
-      'database': ['database', 'base de données', 'bdd', 'data', 'données'],
-      'project management': ['project management', 'gestion de projet', 'management', 'chef de projet']
-    };
-    
-    if (candidatePositions && candidatePositions.length > 0) {
-      candidatePositions.forEach((position) => {
-        const positionAcceptedDomains = position.acceptedDomains || [];
-        
-        const checkDomainEligibilityForPosition = (domain: string, acceptedDomainsList: string[]) => {
-          if (!domain || domain === 'Unknown' || domain.trim() === '') return false;
-          if (acceptedDomainsList.length === 0) return false;
-          
-          const normalizeDomain = (d: string) => {
-            return d.toLowerCase()
-              .trim()
-              .replace(/[^\w\s]/g, '') 
-              .replace(/\s+/g, ' '); 
-          };
-          
-          const normalizedCandidate = normalizeDomain(domain);
-          
-          return acceptedDomainsList.some(acceptedDomain => {
-            const normalizedAccepted = normalizeDomain(acceptedDomain);
-            if (normalizedAccepted === normalizedCandidate) return true;
-            
-            for (const [canonicalDomain, equivalents] of Object.entries(domainEquivalences)) {
-              const normalizedCanonical = normalizeDomain(canonicalDomain);
-              if (normalizedAccepted === normalizedCanonical) {
-                const candidateMatches = equivalents.some(eq => normalizeDomain(eq) === normalizedCandidate);
-                if (candidateMatches) return true;
-              }
-            }
-            
-            for (const [canonicalDomain, equivalents] of Object.entries(domainEquivalences)) {
-              const normalizedCandidateInList = equivalents.some(eq => normalizeDomain(eq) === normalizedCandidate);
-              if (normalizedCandidateInList) {
-                const acceptedDomainInList = equivalents.some(eq => normalizeDomain(eq) === normalizedAccepted);
-                if (acceptedDomainInList) return true;
-              }
-            }
-            
-            return false;
-          });
-        };
-        
-        const isEligibleForThisPosition = checkDomainEligibilityForPosition(candidateDomain, positionAcceptedDomains);
-        if (isEligibleForThisPosition) {
-          isEligibleForAnyPosition = true;
-        }
-      });
-    } else if (candidateData?.position) {
-      const acceptedDomains = (candidateData.position as any).acceptedDomains || [];
-      if (acceptedDomains.length === 0) return false;
-      
-      const normalizeDomain = (d: string) => {
-        return d.toLowerCase()
-          .trim()
-          .replace(/[^\w\s]/g, '') 
-          .replace(/\s+/g, ' '); 
-      };
-      
-      const normalizedCandidate = normalizeDomain(candidateDomain);
-      
-      isEligibleForAnyPosition = acceptedDomains.some(acceptedDomain => {
-        const normalizedAccepted = normalizeDomain(acceptedDomain);
-        if (normalizedAccepted === normalizedCandidate) return true;
-        
-        for (const [canonicalDomain, equivalents] of Object.entries(domainEquivalences)) {
-          const normalizedCanonical = normalizeDomain(canonicalDomain);
-          if (normalizedAccepted === normalizedCanonical) {
-            const candidateMatches = equivalents.some(eq => normalizeDomain(eq) === normalizedCandidate);
-            if (candidateMatches) return true;
-          }
-        }
-        
-        for (const [canonicalDomain, equivalents] of Object.entries(domainEquivalences)) {
-          const normalizedCandidateInList = equivalents.some(eq => normalizeDomain(eq) === normalizedCandidate);
-          if (normalizedCandidateInList) {
-            const acceptedDomainInList = equivalents.some(eq => normalizeDomain(eq) === normalizedAccepted);
-            if (acceptedDomainInList) return true;
-          }
-        }
-        
-        return false;
-      });
-    }
-    
-    return isEligibleForAnyPosition;
-  };
-
-  const handleForceGenerateTest = async () => {
-    if (!candidateData || !technicalProfileData) {
-      toast.error('Veuillez patienter que les données du candidat soient chargées');
-      return;
-    }
-
-    const skills = extractSkillsFromProfile();
-    console.log('=== GÉNÉRATION FORCÉE DE TEST AVEC COMPÉTENCES RÉELLES ===');
-    console.log('Compétences extraites:', skills);
-    console.log('Nombre de compétences:', skills.length);
-    console.log('=== FIN COMPÉTENCES POUR GÉNÉRATION FORCÉE ===');
-
-    try {
-      toast.loading('Génération forcée du test personnalisé en cours... Cela peut prendre jusqu\'à 60 secondes.', {
-        duration: 0,
-        id: 'force-generate-test'
-      });
-      
-      const testResponse = await generateTestMutation.mutateAsync({
-        candidatureId: candidateData.id,
-        level: testConfig.level,
-        questionCount: testConfig.questionCount,
-        duration: testConfig.duration,
-        deadline: testConfig.deadline,
-        note: testConfig.note,
-        focusAreas: skills.map(skill => skill.name),
-      });
-      
-      console.log('Force generate - Test response received:', testResponse);
-      console.log('Force generate - Test ID from response:', testResponse.testId);
-      console.log('Force generate - Questions from response:', testResponse.questions);
-      console.log('Force generate - Backend utilisera: technicalProfile.getParsedData() directement');
-      
-      if (testResponse.questions && testResponse.questions.length > 0) {
-        const formattedQuestions = testResponse.questions.map((q: any, index: number) => {
-          const options = q.options || [];
-          const correctAnswerIndex = normalizeAiCorrectAnswer(q.correct_answer, options);
-
-          console.log(`Q${index + 1}:`, {
-            raw: q.correct_answer,
-            resolvedIndex: correctAnswerIndex,
-            resolvedText: options[correctAnswerIndex]
-          });
-
-          return {
-            id: index + 1,
-            questionText: q.question,
-            questionType: "MCQ",
-            options,
-            correctAnswer: correctAnswerIndex,  // ✅ index dès la sortie de l'IA
-            skillTag: q.technology || "",
-            maxScore: 1.0,
-            orderIndex: index
-          };
-        });
-        
-        localStorage.setItem(`test_questions_${testResponse.testId}`, JSON.stringify(formattedQuestions));
-        console.log('Force generate - Stored questions in localStorage:', formattedQuestions);
-      }
-      
-      setExistingTest(null);
-      
-      toast.dismiss('force-generate-test');
-      toast.success('Test personnalisé généré avec succès ! Redirection vers la révision...');
-      
-      console.log('Force generate - Navigating to:', `/manager/test-review/${testResponse.testId}`);
-      
-      try {
-        navigate(`/manager/test-review/${testResponse.testId}`);
-        console.log('Force generate - Navigation successful');
-      } catch (navError) {
-        console.error('Force generate - Navigation error:', navError);
-        toast.error('Erreur lors de la redirection vers la page de révision');
-      }
-      
-    } catch (error: any) {
-      toast.dismiss('force-generate-test');
-      
-      console.error('Error generating test:', error);
-      console.error('Response data:', error.response?.data);
-      console.error('Response status:', error.response?.status);
-      
-      if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
-        toast.error('La génération forcée du test a pris trop de temps. Veuillez réessayer avec moins de questions ou contacter l\'administrateur.');
-        return;
-      }
-      
-      if (error.response?.status === 409 && error.response?.data) {
-        const errorData = error.response.data;
-        
-        if (errorData.error === "UN TEST EXISTE DÉJÀ") {
-          setExistingTest({
-            existingTestId: errorData.existingTestId,
-            existingTestToken: errorData.existingTestToken,
-            existingTestStatus: errorData.existingTestStatus,
-            existingTestCreatedAt: errorData.existingTestCreatedAt
-          });
-          
-          toast.error("Un test existe déjà pour cette candidature. Impossible de forcer la génération.");
-          return;
-        }
-      }
-      
-      const errorMessage = error.response?.data?.message || error.message || 'Erreur inconnue';
-      toast.error(`Erreur lors de la génération du test: ${errorMessage}`);
-    }
+    return eligibilityResult?.eligible && technicalProfile?.parsedData;
   };
 
   const extractSkillsFromProfile = () => {
@@ -936,11 +602,6 @@ const GenerateTestPage = () => {
     }
     
     const data = technicalProfile.parsedData;
-    console.log('=== STRUCTURE DES DONNÉES POUR COMPÉTENCES ===');
-    console.log('Technical Information:', data["Technical Information"]);
-    console.log('Technologies dans Technical Information:', data["Technical Information"]?.["technologies"]);
-    console.log('=== FIN STRUCTURE COMPÉTENCES ===');
-    
     const skills = [];
     let hasRealSkills = false;
     
@@ -992,7 +653,6 @@ const GenerateTestPage = () => {
   };
 
   const extractAnalysisFromProfile = () => {
-    console.log('extractAnalysisFromProfile called, technicalProfile:', technicalProfile);
     
     if (!technicalProfile?.parsedData) {
       console.log('No parsedData in technicalProfile');
@@ -1000,24 +660,10 @@ const GenerateTestPage = () => {
     }
     
     const data = technicalProfile.parsedData;
-    console.log('=== STRUCTURE COMPLÈTE DES DONNÉES PARSED DATA ===');
-    console.log('parsedData keys:', Object.keys(data));
-    console.log('parsedData complet:', JSON.stringify(data, null, 2));
-    console.log('Basic Information:', data["Basic Information"]);
-    console.log('Technical Information:', data["Technical Information"]);
-    console.log('Summary:', data["Summary"]);
-    console.log('Certifications:', data["Certifications"]);
-    console.log('Projects:', data["Projects"]);
-    console.log('Education:', data["Education"]);
-    console.log('=== FIN STRUCTURE COMPLÈTE ===');
-    
+  
     const extractKeySkills = () => {
       const skills = [];
       
-      console.log('=== NOUVELLE STRUCTURE - KEY SKILLS ===');
-      console.log('data["Summary"]:', data["Summary"]);
-      
-      // 1. Priorité absolue: key_skills depuis Summary (nouvelle structure du prompt)
       if (data["Summary"]?.["key_skills"] && Array.isArray(data["Summary"]["key_skills"])) {
         console.log('Key skills trouvées dans Summary:', data["Summary"]["key_skills"]);
         data["Summary"]["key_skills"].forEach((skill: string) => {
@@ -1054,7 +700,6 @@ const GenerateTestPage = () => {
                 }
               });
             } else if (typeof categorySkills === 'object' && categorySkills !== null) {
-              // Format: {React: "advanced", Angular: "intermediate"}
               Object.keys(categorySkills).forEach(skillName => {
                 if (skillName && skillName.trim()) {
                   skills.push(skillName.trim());
@@ -1086,13 +731,7 @@ const GenerateTestPage = () => {
           }
         });
       }
-      
-      console.log('=== COMPÉTENCES FINALES EXTRAITES ===');
-      console.log('Nombre de compétences:', skills.length);
-      console.log('Compétences:', skills);
-      console.log('Source: Summary key_skills?', !!data["Summary"]?.["key_skills"]);
-      console.log('=== FIN COMPÉTENCES EXTRAITES ===');
-      
+     
       return [...new Set(skills)].slice(0, 5);
     };
     
@@ -1102,11 +741,6 @@ const GenerateTestPage = () => {
         console.log('data["Education"]:', JSON.stringify(data["Education"], null, 2));
         
         const extracted = data["Education"].map((edu: any) => {
-          console.log('Éducation individuelle:', edu);
-          console.log('  edu.year:', edu.year);
-          console.log('  edu.graduationYear:', edu.graduationYear);
-          console.log('  edu.end_date:', edu.end_date);
-          console.log('  edu.start_date:', edu.start_date);
           
           let extractedYear = edu.year || edu.graduationYear || edu.end_date;
           if (extractedYear) {
@@ -1126,10 +760,7 @@ const GenerateTestPage = () => {
             field: edu.field || edu.major || 'Non spécifié'
           };
         });
-        
-        console.log('=== STRUCTURE ÉDUCATION EXTRAIT ===');
-        console.log('extracted:', extracted);
-        
+       
         return extracted;
       }
       return [];
@@ -1360,7 +991,7 @@ const GenerateTestPage = () => {
             questionText: q.question,
             questionType: "MCQ",
             options,
-            correctAnswer: correctAnswerIndex,  // ✅ index dès la sortie de l'IA
+            correctAnswer: correctAnswerIndex,
             skillTag: q.technology || "",
             maxScore: 1.0,
             orderIndex: index
@@ -1457,52 +1088,24 @@ const GenerateTestPage = () => {
     }
   };
 
-  if (finalIsLoading) {
-    return (
-      <div className="p-6 lg:p-8 max-w-5xl mx-auto">
-        <div className="animate-pulse space-y-4">
-          <div className="h-8 bg-gray-200 rounded w-1/3"></div>
-          <div className="h-4 bg-gray-200 rounded w-1/2"></div>
-          <div className="grid grid-cols-2 gap-6">
-            <div className="h-64 bg-gray-200 rounded"></div>
-            <div className="h-64 bg-gray-200 rounded"></div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (!candidateData) {
-    return (
-      <div className="p-6 lg:p-8 max-w-5xl mx-auto text-center">
-        <AlertCircle className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-        <h3 className="text-lg font-semibold text-foreground mb-2">Candidature non trouvée</h3>
-        <Button onClick={() => navigate('/manager/candidats')} className="mt-4">
-          Retour aux candidats
-        </Button>
-      </div>
-    );
-  }
-
+  // Déplacer tous les hooks avant les returns conditionnels
   const skills = extractSkillsFromProfile();
   const analysis: any = extractAnalysisFromProfile();
-  const eligibility = getEligibilityChecks();
+  const eligibility = useMemo(
+    () => getEligibilityChecks(),
+    [eligibilityResult, eligibilityLoading, technicalProfile, candidatePositions]
+  );
 
   const shouldHideConfig = !isCheckingExistingTest && 
     existingTest?.existingTestId && 
     existingTest?.existingTestStatus !== 'DRAFT';
 
-  // ─── helpers for the AI profile section ───────────────────────────────────
   const getMostRecentEducation = (eduList: any[]) => {
     if (!eduList || eduList.length === 0) return null;
-    
-    console.log('=== GET MOST RECENT EDUCATION ===');
-    console.log('eduList:', eduList);
     
     return eduList.reduce((most: any, edu: any) => {
       console.log('Comparing:', most, 'vs', edu);
       
-      // Si pas de "most", retourner l'éducation actuelle
       if (!most) return edu;
       
       // Extraire l'année de l'éducation actuelle
@@ -1521,7 +1124,6 @@ const GenerateTestPage = () => {
       else if (most.end_date) mostEndDate = most.end_date;
       else if (most.endDate) mostEndDate = most.endDate;
       
-      // Fonction pour extraire l'année depuis une date complète
       const extractYear = (dateStr: any) => {
         if (!dateStr) return null;
         if (typeof dateStr === 'number') return dateStr;
@@ -1538,19 +1140,16 @@ const GenerateTestPage = () => {
       
       console.log('Years extracted:', currentYearNum, 'vs', mostYearNum);
       
-      // Si l'éducation actuelle n'a pas d'année mais l'autre en a, garder l'autre
       if (currentYearNum === null && mostYearNum !== null) {
         console.log('Current has no year, keeping most');
         return most;
       }
       
-      // Si l'éducation actuelle a une année mais pas l'autre, prendre l'actuelle
       if (currentYearNum !== null && mostYearNum === null) {
         console.log('Current has year, most has none, taking current');
         return edu;
       }
       
-      // Si les deux ont des années, comparer
       if (currentYearNum !== null && mostYearNum !== null) {
         if (currentYearNum > mostYearNum) {
           console.log('Newer education found:', edu);
@@ -1558,9 +1157,7 @@ const GenerateTestPage = () => {
         }
       }
       
-      // Si aucune année valide, prendre la première (priorité à celle qui semble plus récente par le titre)
       if (currentYearNum === null && mostYearNum === null) {
-        // Prioriser les formations qui semblent plus avancées (contenant "Engineering", "Master", etc.)
         const currentPriority = edu.degree?.toLowerCase().includes('engineering') || 
                            edu.degree?.toLowerCase().includes('master') ||
                            edu.degree?.toLowerCase().includes('software') ? 1 : 0;
@@ -1591,9 +1188,35 @@ const GenerateTestPage = () => {
     return { pct, color };
   };
 
+  if (finalIsLoading) {
+    return (
+      <div className="p-6 lg:p-8 max-w-5xl mx-auto">
+        <div className="animate-pulse space-y-4">
+          <div className="h-8 bg-gray-200 rounded w-1/3"></div>
+          <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+          <div className="grid grid-cols-2 gap-6">
+            <div className="h-64 bg-gray-200 rounded"></div>
+            <div className="h-64 bg-gray-200 rounded"></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!candidateData) {
+    return (
+      <div className="p-6 lg:p-8 max-w-5xl mx-auto text-center">
+        <AlertCircle className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+        <h3 className="text-lg font-semibold text-foreground mb-2">Candidature non trouvée</h3>
+        <Button onClick={() => navigate('/manager/candidats')} className="mt-4">
+          Retour aux candidats
+        </Button>
+      </div>
+    );
+  }
+
   return (
     <div className="p-6 lg:p-8 max-w-5xl mx-auto space-y-8">
-      {/* ── Header ─────────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <Button variant="outline" size="sm" onClick={() => navigate('/manager/candidats')}>
@@ -1616,9 +1239,7 @@ const GenerateTestPage = () => {
       </div>
 
       <div className="grid lg:grid-cols-2 gap-6">
-        {/* ── Left : Candidate Profile ────────────────────────────────── */}
         <div className="space-y-4">
-          {/* Identity card */}
           <div className="glass-card p-5">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
@@ -1650,10 +1271,6 @@ const GenerateTestPage = () => {
             {/* Quick info grid */}
             <div className="grid grid-cols-3 gap-2 mb-4">
               <div className="text-center p-2 rounded-lg bg-slate-50 border border-slate-100">
-                <p className="text-xs text-muted-foreground">Candidature</p>
-                <p className="text-xs font-semibold text-slate-700">#{candidateData.id}</p>
-              </div>
-              <div className="text-center p-2 rounded-lg bg-slate-50 border border-slate-100">
                 <p className="text-xs text-muted-foreground">Date</p>
                 <p className="text-xs font-semibold text-slate-700">
                   {candidateData.appliedAt ? new Date(candidateData.appliedAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' }) : '—'}
@@ -1667,7 +1284,6 @@ const GenerateTestPage = () => {
               </div>
             </div>
 
-            {/* Positions */}
             <div>
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2 flex items-center gap-1">
                 <Briefcase className="w-3 h-3" /> Postes postulés
@@ -1682,10 +1298,8 @@ const GenerateTestPage = () => {
             </div>
           </div>
 
-          {/* ── AI Analysis Panel ───────────────────────────────────────── */}
           {analysis ? (
             <div className="glass-card overflow-hidden">
-              {/* Panel header with score */}
               <div className="px-5 pt-4 pb-3 border-b border-slate-100 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center">
@@ -1713,14 +1327,12 @@ const GenerateTestPage = () => {
 
               <div className="p-5 space-y-5 max-h-[520px] overflow-y-auto">
 
-                {/* Summary */}
                 {analysis.summary && (
                   <p className="text-xs text-muted-foreground leading-relaxed border-l-2 border-indigo-200 pl-3 italic">
                     {analysis.summary}
                   </p>
                 )}
 
-                {/* Domain + Level row */}
                 {(analysis.expertise?.domain || analysis.expertise?.level || analysis.expertise?.experience) && (
                   <div className="flex flex-wrap gap-2">
                     {analysis.expertise?.domain && analysis.expertise.domain !== 'Non spécifié' && (
@@ -1863,10 +1475,7 @@ const GenerateTestPage = () => {
 
                 {/* Education */}
                 {analysis.education && analysis.education.length > 0 && (() => {
-                  console.log('=== EDUCATION SECTION DEBUG ===');
-                  console.log('analysis.education:', analysis.education);
-                  console.log('analysis.education.length:', analysis.education.length);
-                  
+                 
                   const mostRecent = getMostRecentEducation(analysis.education);
                   console.log('mostRecent education:', mostRecent);
                   
@@ -1898,10 +1507,7 @@ const GenerateTestPage = () => {
                     console.log('Education has invalid data:', mostRecent);
                     return null;
                   }
-                  
-                  console.log('Education will be displayed:', mostRecent);
-                  console.log('=== END EDUCATION DEBUG ===');
-                  
+                
                   return (
                     <div>
                       <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2 flex items-center gap-1">
@@ -2163,9 +1769,7 @@ const GenerateTestPage = () => {
           )}
         </div>
 
-        {/* ── Right : Test Config ─────────────────────────────────────── */}
         <div className="space-y-6">
-          {/* Eligibility check */}
           <div className="glass-card p-6">
             <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
               <CheckCircle className="h-5 w-5 text-green-500" />
@@ -2200,7 +1804,6 @@ const GenerateTestPage = () => {
             </div>
           </div>
 
-          {/* Test configuration */}
           {!shouldHideConfig && (
             <div className="glass-card p-6">
               <h3 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
@@ -2369,8 +1972,6 @@ const GenerateTestPage = () => {
                     </Button>
                   )}
                   
-                  {/* ✅ MASQUER le bouton "Refuser" quand le test est soumis */}
-                  {/* Le candidat a terminé le test, on ne peut plus refuser la candidature */}
                 </>
               ) : (
                 <>

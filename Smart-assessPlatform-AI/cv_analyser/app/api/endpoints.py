@@ -8,6 +8,8 @@ from app.utils.cv_validator import validate_cv_text, validate_file_type
 from app.services.report_generator import ReportGenerator, CandidateReport
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
+from app.services.eligibility_service import check_domain_eligibility  # ✅ import
+
 
 router = APIRouter()
 analyzer = CVAnalyzer()
@@ -66,7 +68,26 @@ class GenerateReportRequest(BaseModel):
     applied_position: str
     test_start: str                   
     test_end: str                     
+class EligibilityRequest(BaseModel):
+    candidate_domain: str
+    accepted_domains: list[str]
 
+class EligibilityResult(BaseModel):
+    eligible: bool
+    matched_domain: str | None = None
+    reason: str 
+
+@router.post("/eligibility", response_model=EligibilityResult)
+async def check_domain_eligibility_endpoint(body: EligibilityRequest):
+    try:
+        result = await check_domain_eligibility(
+            candidate_domain=body.candidate_domain,
+            accepted_domains=body.accepted_domains
+        )
+        return EligibilityResult(**result)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+        
 @router.get("/health")
 async def health_check():
     return {"status": "healthy", "service": "CV Analysis API"}

@@ -180,7 +180,6 @@ const DashboardPage = () => {
     },
   ];
 
-  // Helper function pour les couleurs des stats
   const getStatColor = (color: string) => {
     const colors: Record<string, string> = {
       'text-primary': 'bg-gradient-to-br from-blue-500 to-blue-600',
@@ -198,22 +197,23 @@ const DashboardPage = () => {
 
     recentTests.forEach((test) => {
       if (test.status !== 'SUBMITTED' && test.status !== 'EVALUATED') return;
-      const raw = (test as { submittedAt?: string }).submittedAt || test.createdAt;
+      const raw = (test as any).submittedAt || (test as any).createdAt;
       if (!raw) return;
       const at = new Date(raw).getTime();
       if (Number.isNaN(at)) return;
 
       let score: string | number = 'N/A';
-      if (test.finalScore != null) score = test.finalScore as number;
-      else if ((test as { score?: number }).score != null) score = (test as { score?: number }).score!;
-      else if ((test as { evaluationResult?: { finalScore?: number } }).evaluationResult?.finalScore != null) {
-        score = (test as { evaluationResult: { finalScore: number } }).evaluationResult.finalScore;
+      if ((test as any).finalScore != null) score = (test as any).finalScore as number;
+      else if ((test as any).score != null) score = (test as any).score;
+      else if ((test as any).evaluationResult?.finalScore != null) {
+        score = (test as any).evaluationResult.finalScore;
       }
       const scoreText = score !== 'N/A' ? ` • Score : ${score}%` : '';
-      const candidateName =
-        test.candidate?.firstName && test.candidate?.lastName
-          ? `${test.candidate.firstName} ${test.candidate.lastName}`
-          : `Candidat #${test.candidate?.id ?? '?'}`;
+      const candidate = (test as any).candidate;
+      const candidateName = 
+        candidate?.firstName && candidate?.lastName
+          ? `${candidate.firstName} ${candidate.lastName}`
+          : `Candidat #${candidate?.id ?? '?'}`;
 
       items.push({
         at,
@@ -327,7 +327,6 @@ const DashboardPage = () => {
           </div>
         ) : (
           <>
-            {/* Header amélioré */}
             <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-sm border border-slate-200/60 p-8">
               <div className="flex items-center justify-between">
                 <div>
@@ -359,7 +358,7 @@ const DashboardPage = () => {
                   <Button className="bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 shadow-lg shadow-primary/25" asChild>
                     <Link to="/manager/postes">
                       <Plus className="w-4 h-4 mr-2" />
-                      Nouveau poste
+                      Postes
                     </Link>
                   </Button>
                 </div>
@@ -384,7 +383,6 @@ const DashboardPage = () => {
               </div>
             )}
 
-            {/* Alerte si les données des tests ne sont pas disponibles */}
             {tests.length === 0 && (
               <div className="glass-card p-4 border-l-4 border-blue-500 bg-blue-50">
                 <div className="flex items-center gap-3">
@@ -392,14 +390,13 @@ const DashboardPage = () => {
                   <div>
                     <h3 className="font-semibold text-blue-800">Aucun test trouvé</h3>
                     <p className="text-sm text-blue-700">
-                      Aucun test n'est disponible dans la base de données. Les autres fonctionnalités restent opérationnelles.
+                      Aucun test n'est disponible dans la base de données.
                     </p>
                   </div>
                 </div>
               </div>
             )}
 
-            {/* Stats */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
               {stats.map((stat, index) => (
                 <div key={stat.label} className="group relative overflow-hidden">
@@ -429,7 +426,6 @@ const DashboardPage = () => {
               ))}
             </div>
 
-            {/* Tests récents */}
             <div className="glass-card p-6">
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-lg font-semibold flex items-center gap-2">
@@ -447,42 +443,44 @@ const DashboardPage = () => {
                 {paginatedRecentTests.length === 0 ? (
                   <p className="text-muted-foreground text-sm py-4">Aucun test récent</p>
                 ) : (
-                  paginatedRecentTests.map((test, index) => {
+                  paginatedRecentTests.map((test) => {
+                    const testAny = test as any;
                     let score = 'N/A';
-                    if (test.finalScore) score = test.finalScore;
-                    else if (test.score) score = test.score;
-                    else if (test.evaluationResult?.finalScore) score = test.evaluationResult.finalScore;
+                    if (testAny.finalScore) score = testAny.finalScore;
+                    else if (testAny.score) score = testAny.score;
+                    else if (testAny.evaluationResult?.finalScore) score = testAny.evaluationResult.finalScore;
                     
                     const scoreText = score !== 'N/A' ? ` • Score: ${score}%` : '';
                     
                     // Gérer les données manquantes du candidat avec fallback robuste
-                    const candidateName = test.candidate?.firstName && test.candidate?.lastName 
-                      ? `${test.candidate.firstName} ${test.candidate.lastName}`
-                      : test.candidate?.firstName 
-                        ? test.candidate.firstName
-                        : test.candidate?.id && !isNaN(test.candidate.id)
-                          ? `Candidat #${test.candidate.id}`
-                          : test.candidateId && !isNaN(test.candidateId)
-                            ? `Candidat #${test.candidateId}`
-                            : test.id && !isNaN(test.id)
-                              ? `Candidat #${test.id}`
+                    const candidate = testAny.candidate;
+                    const candidateName = candidate?.firstName && candidate?.lastName 
+                      ? `${candidate.firstName} ${candidate.lastName}`
+                      : candidate?.firstName 
+                        ? candidate.firstName
+                        : candidate?.id && !isNaN(candidate.id)
+                          ? `Candidat #${candidate.id}`
+                          : testAny.candidateId && !isNaN(testAny.candidateId)
+                            ? `Candidat #${testAny.candidateId}`
+                            : testAny.id && !isNaN(testAny.id)
+                              ? `Candidat #${testAny.id}`
                               : 'Candidat inconnu';
                     
                     // Gérer les données manquantes du poste avec fallback robuste
-                    const positionTitle = test.internshipPosition?.title || 
-                                       test.position?.title || 
-                                       test.positionTitle ||
+                    const positionTitle = testAny.internshipPosition?.title || 
+                                       testAny.position?.title || 
+                                       testAny.positionTitle ||
                                        'Poste non spécifié';
                     
                     return (
-                      <div key={`test-${test.id}-${positionTitle}`} className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
+                      <div key={`test-${testAny.id}-${positionTitle}`} className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
                         <div className="flex-1">
                           <div className="flex items-center gap-2">
                             <span className="font-medium text-sm">
                               {candidateName}
                             </span>
-                            <Badge variant={test.status === 'SUBMITTED' ? 'default' : 'secondary'}>
-                              {getStatusLabel(test.status)}
+                            <Badge variant={testAny.status === 'SUBMITTED' ? 'default' : 'secondary'}>
+                              {getStatusLabel(testAny.status)}
                             </Badge>
                           </div>
                           <div className="text-xs text-muted-foreground mt-2">
@@ -490,9 +488,9 @@ const DashboardPage = () => {
                           </div>
                         </div>
                         <div className="text-xs text-muted-foreground">
-                          {(test as { submittedAt?: string }).submittedAt || test.createdAt
+                          {testAny.submittedAt || testAny.createdAt
                             ? new Date(
-                                (test as { submittedAt?: string }).submittedAt || test.createdAt || ''
+                                testAny.submittedAt || testAny.createdAt || ''
                               ).toLocaleDateString('fr-FR')
                             : '—'}
                         </div>
@@ -533,7 +531,6 @@ const DashboardPage = () => {
               )}
             </div>
 
-            {/* Activités récentes */}
             <div className="glass-card p-6">
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-lg font-semibold flex items-center gap-2">
@@ -589,7 +586,6 @@ const DashboardPage = () => {
                 )}
               </div>
               
-              {/* Pagination pour Activités récentes */}
               {activitiesTotalPages > 1 && (
                 <div className="flex items-center justify-between mt-4 pt-4 border-t">
                   <div className="text-sm text-muted-foreground">

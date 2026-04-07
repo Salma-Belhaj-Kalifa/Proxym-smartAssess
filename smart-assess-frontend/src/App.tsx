@@ -26,7 +26,6 @@ import GenerateTestPage from "./pages/manager/tests/GenerateTestPage";
 import TestReviewPage from "./pages/manager/tests/TestReviewPage";
 import TestResultsPage from "./pages/manager/tests/TestResultsPage";
 import TestResultsListPage from './pages/manager/tests/TestResultsListPage';
-import QuestionValidationPage from "./pages/manager/tests/QuestionValidationPage";
 import PositionApplicationsPage from "./pages/manager/positions/PositionApplicationsPage";
 import PositionDetailPage from "./pages/manager/positions/PositionDetailPage";
 import NotFound from "./pages/common/NotFound";
@@ -71,7 +70,6 @@ const App = () => (
             <Route path="candidats/:id" element={<GenerateTestPage />} />
             <Route path="test-review/:testId" element={<TestReviewPage />} />
             <Route path="test-results/:testId" element={<TestResultsPage />} />
-            <Route path="tests/:id/questions" element={<QuestionValidationPage />} />
             <Route path="profil" element={<ManagerProfilePage />} />
             <Route path="settings" element={<div className="p-8 text-foreground">Paramètres</div>} />
           </Route>

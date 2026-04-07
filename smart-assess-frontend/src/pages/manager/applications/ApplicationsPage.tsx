@@ -83,9 +83,7 @@ export default function ApplicationsPage() {
 
   // Regrouper les candidatures par candidat (une candidature = plusieurs postes)
   const applications = useMemo(() => {
-    console.log('=== DEBUG APPLICATIONS LOGIQUE ===');
-    console.log('candidatures brutes:', candidatures);
-    
+
     const groupedByCandidate: Record<number, Application> = {};
     
     candidatures.forEach(candidature => {
@@ -177,7 +175,7 @@ export default function ApplicationsPage() {
       return dateB - dateA;
     })
     .map(app => {
-      // ✅ DEBUG: Vérifier le contenu de allPositions
+      // DEBUG: Vérifier le contenu de allPositions
       console.log(`DEBUG FINAL - Candidat ${app.candidateId}:`, {
         candidateName: `${app.candidate.firstName} ${app.candidate.lastName}`,
         totalAllPositions: app.allPositions?.length || 0,
@@ -185,7 +183,6 @@ export default function ApplicationsPage() {
       });
       return app;
     });
-    console.log('=== FIN DEBUG APPLICATIONS LOGIQUE ===');
   }, [candidatures]);
 
   const filteredApplications = applications.filter(app => {
@@ -251,9 +248,7 @@ export default function ApplicationsPage() {
   };
 
   const handleViewDetails = (applicationId: number) => {
-    console.log('ApplicationsPage - Clic sur "Voir les détails" pour ID:', applicationId);
-    console.log('ApplicationsPage - URL de redirection:', `/manager/candidats/${applicationId}/generer-test`);
-    
+
     navigate(`/manager/candidats/${applicationId}/generer-test`);
   };
 
@@ -365,7 +360,6 @@ export default function ApplicationsPage() {
                   </div>
 
                   <div className="flex flex-wrap items-center gap-2 mb-2">
-                    {/* ✅ TOUS LES BADGES EN GRIS : Couleur unifiée pour tous les postes */}
                     {application.allPositions?.map((position, index) => {
                       return (
                         <div key={position.id} className="flex items-center gap-1">

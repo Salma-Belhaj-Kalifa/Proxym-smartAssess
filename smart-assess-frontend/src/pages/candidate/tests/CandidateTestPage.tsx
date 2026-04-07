@@ -76,7 +76,6 @@ const CandidateTestPage: React.FC = () => {
     if (token) {
       console.log('Fetching public test with token:', token);
       
-      // Utiliser les données du hook si disponibles
       if (testDataFromHook?.test) {
         console.log('Using test data from hook:', testDataFromHook.test);
         setTestData(testDataFromHook.test);
@@ -96,13 +95,8 @@ const CandidateTestPage: React.FC = () => {
     }
   }, [testError]);
 
-  // 🎯 MODIFIER UNE RÉPONSE - Stocker l'index au lieu du texte
   const handleAnswerChange = (questionId: number, optionIndex: number) => {
-    console.log(`=== RÉPONSE MODIFIÉE ===`);
-    console.log(`Question ID: ${questionId}`);
-    console.log(`Index de l'option: ${optionIndex}`);
-    console.log(`Réponses avant:`, answers);
-    
+   
     setAnswers(prev => {
       const newAnswers = {
         ...prev,
@@ -111,7 +105,6 @@ const CandidateTestPage: React.FC = () => {
       console.log(`Réponses après:`, newAnswers);
       console.log(`Total de réponses: ${Object.keys(newAnswers).length}`);
       
-      // Auto-save des réponses dans localStorage
       if (testData && token) {
         const testIdToUse = testDataFromHook?.test?.id || testData?.testId || testDataFromHook?.id;
         const saveKey = `test_answers_${testIdToUse}_${token}`;
@@ -174,41 +167,30 @@ const CandidateTestPage: React.FC = () => {
     try {
       setIsSubmitting(true);
       
-      console.log('=== DÉBUT SOUMISSION TEST ===');
-      console.log('Test data:', testData);
-      console.log('Token:', token);
-      console.log('Answers actuels:', answers);
-      console.log('Time remaining:', timeRemaining);
-      
-      // 🎯 CONVERTIR LES INDEX EN TEXTE POUR LE BACKEND
       const formattedAnswers: Record<number, string> = {};
       Object.entries(answers).forEach(([questionId, optionIndex]) => {
         const question = questions.find(q => q.id === parseInt(questionId));
         if (question && question.options) {
-          // Convertir l'index en texte complet de l'option
           formattedAnswers[parseInt(questionId)] = indexToCorrectAnswer(optionIndex, question.options);
         } else {
-          // Fallback: envoyer l'index comme texte si la question n'est pas trouvée
           formattedAnswers[parseInt(questionId)] = optionIndex.toString();
         }
       });
       
       console.log('Formatted answers:', formattedAnswers);
       
-      // Utiliser le hook useSubmitTest déclaré au niveau du composant
       const testIdToUse = testDataFromHook?.test?.id || testData?.testId || testDataFromHook?.id;
       const response = await submitTestMutation.mutateAsync({ 
         testId: testIdToUse, 
         answers: {
-          token: token, // ← Required for backend validation
-          answers: formattedAnswers, // ← Answers as Map
+          token: token, 
+          answers: formattedAnswers, 
           timeSpent: ((testData?.duration || 20) * 60) - timeRemaining // ✅ Utiliser testData.duration
         }
       });
       
       console.log('Réponse du backend:', response);
       
-      // 🎯 NETTOYAGE APRÈS SOUMISSION - Le useEffect s'en occupera
       setTestSubmitted(true);
       toast.success('Test soumis avec succès !');
       
@@ -250,9 +232,6 @@ const CandidateTestPage: React.FC = () => {
     if (!testData || !token) return;
     
     try {
-      console.log('=== DÉMARRAGE DU TEST ===');
-      console.log('Token:', token);
-      console.log('Test duration:', testData?.duration, testData?.timeLimitMinutes);
       
       // Appeler l'API pour démarrer le test avec le token
       await startTestMutation.mutateAsync(token);
@@ -289,7 +268,6 @@ const CandidateTestPage: React.FC = () => {
     const timer = setInterval(() => {
       setTimeRemaining(prev => {
         if (prev <= 1) {
-          // Temps écoulé - soumettre automatiquement
           submitTest();
           return 0;
         }
@@ -300,7 +278,6 @@ const CandidateTestPage: React.FC = () => {
     return () => clearInterval(timer);
   }, [testStarted, testSubmitted, timeRemaining]);
 
-  // 🎯 CONTRÔLES DE SÉCURITÉ
   useEffect(() => {
     if (!testStarted || testSubmitted) return;
 
@@ -325,32 +302,26 @@ const CandidateTestPage: React.FC = () => {
     };
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Bloquer F12, Ctrl+Shift+I, Ctrl+Shift+C, Ctrl+U, F11, ESC
+      // Bloquer F12, Ctrl+Shift+I, Ctrl+Shift+C, Ctrl+U mais autoriser F11 et ESC pour la soumission
       if (
         e.key === 'F12' ||
         (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'C')) ||
-        (e.ctrlKey && e.key === 'u') ||
-        e.key === 'F11' ||
-        e.key === 'Escape'
+        (e.ctrlKey && e.key === 'u')
       ) {
         e.preventDefault();
-        if (e.key === 'Escape' && document.fullscreenElement) {
-          toast.warning('Sortie du plein écran interdite pendant le test !');
-        } else {
-          toast.warning('Outils de développement désactivés !');
-        }
+        toast.warning('Outils de développement désactivés !');
       }
+      // Ne plus bloquer F11 et Escape pour permettre la sortie du plein écran
     };
 
-    // Bloquer la sortie du plein écran
+    // Soumettre automatiquement le test en cas de sortie du plein écran
     const handleFullscreenChange = () => {
       if (!document.fullscreenElement && testStarted && !testSubmitted) {
-        toast.warning('Veuillez rester en mode plein écran !');
-        // Forcer le retour en plein écran
+        toast.error('Sortie du mode plein écran détectée ! Le test va être soumis automatiquement.');
+        
+        // Soumettre le test immédiatement
         setTimeout(() => {
-          document.documentElement.requestFullscreen().catch(() => {
-            toast.warning('Activez manuellement le mode plein écran (F11)');
-          });
+          submitTest();
         }, 1000);
       }
     };
@@ -570,6 +541,15 @@ const CandidateTestPage: React.FC = () => {
                   </p>
                 </div>
                 
+                <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+                  <p className="text-sm text-red-800">
+                    <strong>⚠️ Important : Mode plein écran obligatoire</strong><br/>
+                    Le test doit être passé en mode plein écran. <strong>Toute sortie du mode plein écran 
+                    (touche ESC, F11, ou fermeture du navigateur) entraînera la soumission automatique 
+                    et immédiate du test.</strong>
+                  </p>
+                </div>
+                
                 <Button onClick={handleStartTest} size="lg" className="bg-blue-600 hover:bg-blue-700" disabled={startTestMutation.isPending}>
                   {startTestMutation.isPending ? 'Démarrage...' : 'Commencer le test'}
                 </Button>
@@ -580,7 +560,19 @@ const CandidateTestPage: React.FC = () => {
       ) : (
         // Interface du test
         <div className="max-w-4xl mx-auto px-4 py-8">
-          {/* 🎯 AVERTISSEMENTS DE SÉCURITÉ */}
+          {/* AVERTISSEMENT MODE PLEIN ÉCRAN */}
+          <div className="mb-4 p-4 bg-orange-50 border border-orange-200 rounded-lg">
+            <div className="flex items-center space-x-2">
+              <AlertCircle className="h-5 w-5 text-orange-600" />
+              <h4 className="font-semibold text-orange-800">Mode plein écran obligatoire</h4>
+            </div>
+            <p className="text-sm text-orange-700 mt-1">
+              <strong>Toute sortie du mode plein écran entraînera la soumission automatique et immédiate du test.</strong><br/>
+              Le test doit être complété en une seule session sans interruption.
+            </p>
+          </div>
+          
+          {/* AVERTISSEMENTS DE SÉCURITÉ */}
           {securityWarnings.length > 0 && (
             <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
               <h4 className="font-semibold text-red-800 mb-2">Avertissements de sécurité:</h4>

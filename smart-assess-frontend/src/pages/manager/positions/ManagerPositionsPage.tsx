@@ -24,10 +24,6 @@ const ManagerPositionsPage: React.FC = () => {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   
-  // Debug: afficher les données reçues
-  console.log('Positions data:', positions);
-  console.log('Candidatures data:', candidatures);
-  
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
@@ -42,9 +38,6 @@ const ManagerPositionsPage: React.FC = () => {
 
   // Obtenir le nombre de candidats pour une position
   const getApplicantsCount = (positionId: number) => {
-    console.log(`Getting applicants count for position ${positionId}`);
-    console.log('Available candidatures:', candidatures.length);
-    
     return candidatures.filter(candidature => {
       // Vérifier si la candidature est pour cette position (compatibilité ancienne et nouvelle structure)
       const hasLegacyPositionId = candidature.internshipPositionId && candidature.internshipPositionId === positionId;
@@ -76,7 +69,6 @@ const ManagerPositionsPage: React.FC = () => {
   });
 
 
-  // Créer une position
   const handleCreatePosition = async () => {
     try {
       if (!formData.title.trim() || !formData.description.trim()) {
@@ -97,7 +89,7 @@ const ManagerPositionsPage: React.FC = () => {
       const newPosition = {
         title: formData.title.trim(),
         description: formData.description.trim(),
-        company: "Proxym IT", // Forcer l'entreprise à Proxym IT
+        company: "Proxym IT",
         requiredSkills,
         acceptedDomains,
         isActive: true

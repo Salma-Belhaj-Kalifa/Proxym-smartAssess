@@ -143,10 +143,6 @@ public class GeneratedTestController {
             aiPayload.put("candidate_profile", profileMap);
             aiPayload.put("number_of_questions", questionCount);
 
-            log.info("=== AI PAYLOAD (WebClient Approach) ===");
-            log.info("candidate_profile keys: {}", profileMap != null ? profileMap.keySet() : "null");
-            log.info("number_of_questions: {}", questionCount);
-
             // Utiliser WebClient comme l'ancien code fonctionnel
             Map aiResponse = webClientBuilder.build()
                     .post()

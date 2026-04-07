@@ -98,10 +98,6 @@ const CandidateTestPage: React.FC = () => {
 
   // 🎯 MODIFIER UNE RÉPONSE - Stocker l'index au lieu du texte
   const handleAnswerChange = (questionId: number, optionIndex: number) => {
-    console.log(`=== RÉPONSE MODIFIÉE ===`);
-    console.log(`Question ID: ${questionId}`);
-    console.log(`Index de l'option: ${optionIndex}`);
-    console.log(`Réponses avant:`, answers);
     
     setAnswers(prev => {
       const newAnswers = {
@@ -173,14 +169,7 @@ const CandidateTestPage: React.FC = () => {
     
     try {
       setIsSubmitting(true);
-      
-      console.log('=== DÉBUT SOUMISSION TEST ===');
-      console.log('Test data:', testData);
-      console.log('Token:', token);
-      console.log('Answers actuels:', answers);
-      console.log('Time remaining:', timeRemaining);
-      
-      // 🎯 CONVERTIR LES INDEX EN TEXTE POUR LE BACKEND
+     
       const formattedAnswers: Record<number, string> = {};
       Object.entries(answers).forEach(([questionId, optionIndex]) => {
         const question = questions.find(q => q.id === parseInt(questionId));
@@ -200,15 +189,12 @@ const CandidateTestPage: React.FC = () => {
       const response = await submitTestMutation.mutateAsync({ 
         testId: testIdToUse, 
         answers: {
-          token: token, // ← Required for backend validation
-          answers: formattedAnswers, // ← Answers as Map
-          timeSpent: ((testData?.duration || 20) * 60) - timeRemaining // ✅ Utiliser testData.duration
+          token: token, 
+          answers: formattedAnswers, 
+          timeSpent: ((testData?.duration || 20) * 60) - timeRemaining 
         }
       });
       
-      console.log('Réponse du backend:', response);
-      
-      // Sortir du mode plein écran après soumission réussie
       if (document.fullscreenElement) {
         await document.exitFullscreen();
       }
@@ -413,7 +399,6 @@ const CandidateTestPage: React.FC = () => {
             <CardContent className="space-y-6">
               <h3 className="text-lg font-medium mb-4">{currentQuestion.questionText}</h3>
               
-              {/* 🎯 RADIO GROUP - Utiliser les index au lieu du texte */}
               <RadioGroup
                 value={answers[currentQuestion.id]?.toString() || ''}
                 onValueChange={(value) => handleAnswerChange(currentQuestion.id, parseInt(value))}

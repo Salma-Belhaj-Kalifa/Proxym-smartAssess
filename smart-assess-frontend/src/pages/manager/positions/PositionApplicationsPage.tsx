@@ -32,23 +32,12 @@ interface Application {
 export default function PositionApplicationsPage() {
   const params = useParams<{ id: string }>();
   const { id: positionId } = params;
-  
-  console.log('=== URL PARAMS ===');
-  console.log('Raw params:', params);
-  console.log('PositionId from params:', positionId);
-  
+ 
   const id = parseInt(positionId || '0');
   
   const { data: positions = [] } = usePositions();
   const position = positions.find(p => p.id === id);
   const { data: candidatures = [], isLoading, error, refetch } = useCandidaturesByPosition(id);
-  
-  console.log('=== POSITION APPLICATIONS PAGE ===');
-  console.log('PositionId:', id);
-  console.log('Position:', position);
-  console.log('Candidatures from API:', candidatures);
-  console.log('IsLoading:', isLoading);
-  console.log('Error:', error);
   
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');

@@ -124,11 +124,9 @@ const SubmissionPageSimple: React.FC = () => {
       
       console.log('Creating candidature for user:', user.id, 'positions:', selectedPositions);
       
-      // ✅ NOUVELLE STRUCTURE: créer une seule candidature avec plusieurs postes
       const candidatureData = {
         candidateId: user.id,
-        positionIds: selectedPositions, // ✅ Plusieurs postes dans une seule candidature
-        status: 'PENDING'
+        positionIds: selectedPositions, 
       };
       
       console.log('Creating candidature with data:', candidatureData);
@@ -137,11 +135,7 @@ const SubmissionPageSimple: React.FC = () => {
       
       if (file) {
         try {
-            console.log('=== DÉBUT ANALYSE CV ===');
-            console.log('User ID:', user.id);
-            console.log('File:', file.name, file.size, file.type);
-            
-            // Informer l'utilisateur que l'analyse commence
+           
             toast.loading('Candidature créée ! Analyse de votre CV par l\'IA en cours...', {
               duration: 0, // Ne pas auto-dismiss
               id: 'cv-analysis'
@@ -172,13 +166,7 @@ const SubmissionPageSimple: React.FC = () => {
             }, 3000);
             
           } catch (analysisError: any) {
-            console.error('=== ERREUR ANALYSE CV DÉTAILLÉE ===');
-            console.error('CV Analysis error:', analysisError);
-            console.error('Error response:', analysisError.response);
-            console.error('Error status:', analysisError.response?.status);
-            console.error('Error data:', analysisError.response?.data);
-            console.error('=== FIN ERREUR ANALYSE CV ===');
-            
+           
             // Succès partiel : candidature soumise mais analyse échouée
             clearInterval(progressInterval);
             setUploadProgress(100);

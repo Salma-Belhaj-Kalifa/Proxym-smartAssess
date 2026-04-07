@@ -18,14 +18,6 @@ export const cvAnalysisService = {
   },
 
   analyzeCV: async (candidateId: number, file: File): Promise<CVAnalysisResult> => {
-    console.log('=== CV ANALYSIS DEBUG ===');
-    console.log('Candidate ID:', candidateId);
-    console.log('File:', file);
-    console.log('File name:', file.name);
-    console.log('File size:', file.size);
-    console.log('File type:', file.type);
-    console.log('=== END CV ANALYSIS DEBUG ===');
-    
     const formData = new FormData();
     formData.append('file', file);
     

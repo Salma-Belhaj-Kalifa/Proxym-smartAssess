@@ -75,14 +75,11 @@ Return ONLY JSON.
 
 def extract_json_from_response(response_text: str) -> dict:
     """Extract valid JSON from LLM response quickly."""
-    # Remove markdown
     response_text = re.sub(r"```json|```", "", response_text, flags=re.IGNORECASE)
     
-    # Fix common trailing commas
     response_text = re.sub(r",\s*}", "}", response_text)
     response_text = re.sub(r",\s*]", "]", response_text)
     
-    # Try direct parsing first
     try:
         return json.loads(response_text)
     except json.JSONDecodeError as e:
@@ -98,7 +95,6 @@ def extract_json_from_response(response_text: str) -> dict:
         except Exception as e2:
             logger.warning(f"Regex extraction failed: {str(e2)}")
         
-        # Try to extract individual question objects
         try:
             question_objects = re.findall(r'\{[^{}]*"technology"[^{}]*"level"[^{}]*"question"[^{}]*"options"[^{}]*"correct_answer"[^{}]*\}', response_text, flags=re.DOTALL)
             if question_objects:
