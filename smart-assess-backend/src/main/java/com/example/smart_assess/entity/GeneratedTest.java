@@ -1,6 +1,7 @@
 package com.example.smart_assess.entity;
 
 import com.example.smart_assess.enums.TestStatus;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -61,15 +62,18 @@ public class GeneratedTest {
     @Builder.Default
     private boolean isAutoSubmitted = false;
 
+    @JsonIgnoreProperties({"test"})
     @OneToMany(mappedBy = "test", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     @Builder.Default
     private List<TestQuestion> questions = new ArrayList<>();
 
     // Relation avec answers maintenue pour compatibilité mais plus utilisée principalement
+    @JsonIgnoreProperties({"test"})
     @OneToMany(mappedBy = "test", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     @Builder.Default
     private List<Answer> answers = new ArrayList<>();
 
+    @JsonIgnoreProperties({"test"})
     @OneToOne(mappedBy = "test", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private EvaluationResult evaluationResult;
 }

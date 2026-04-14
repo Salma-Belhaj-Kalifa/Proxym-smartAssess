@@ -9,6 +9,11 @@ import { usePositions } from '@/features/positions/positionsQueries';
 import { candidaturesService } from '@/features/candidatures/candidaturesService';
 import { useState, useEffect, useMemo } from 'react';
 
+// Import des nouveaux composants
+import DashboardHeader from '@/components/dashboard/DashboardHeader';
+import StatsCards from '@/components/dashboard/StatsCards';
+import RecentApplications from '@/components/dashboard/RecentApplications';
+
 export default function CandidateDashboardPage() {
   const { data: user } = useCurrentUserSafe();
   const { data: candidatures = [], isLoading: isLoadingCandidatures, error: candidaturesError } = useCandidaturesByCandidate(user?.id || 0);
@@ -183,23 +188,7 @@ export default function CandidateDashboardPage() {
   return (
     <div className="container mx-auto p-6">
       {/* Header */}
-      <div className="flex justify-between items-center mb-8">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Tableau de bord</h1>
-          <p className="text-gray-600">
-            Bienvenue, {user?.firstName || 'Candidat'} ! Voici votre résumé.
-          </p>
-        </div>
-        <div className="flex gap-4">
-          <Link to="/candidat/postes">
-            <Button className="flex items-center gap-2">
-              <Briefcase className="w-4 h-4" />
-              Voir les offres
-            </Button>
-          </Link>
-     
-        </div>
-      </div>
+      <DashboardHeader userName={user?.firstName} />
 
       {/* Loading State */}
       {isLoading && (
@@ -225,189 +214,17 @@ export default function CandidateDashboardPage() {
       {!isLoading && !error && (
         <>
           {/* Stats Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total candidatures</CardTitle>
-                <Briefcase className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{stats.totalApplications}</div>
-                <p className="text-xs text-muted-foreground">
-                  {stats.totalApplications > 0 ? 'Candidatures soumises' : 'Aucune candidature'}
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">En cours</CardTitle>
-                <Clock className="h-4 w-4 text-yellow-600" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-yellow-600">{stats.pendingApplications}</div>
-                <p className="text-xs text-muted-foreground">
-                  En attente de réponse
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Acceptées</CardTitle>
-                <CheckCircle className="h-4 w-4 text-green-600" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-green-600">{stats.acceptedApplications}</div>
-                <p className="text-xs text-muted-foreground">
-                  {stats.acceptedApplications > 0 ? 'Félicitations !' : 'En attente'}
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Rejetées</CardTitle>
-                <AlertCircle className="h-4 w-4 text-red-600" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-red-600">{stats.rejectedApplications}</div>
-                <p className="text-xs text-muted-foreground">
-                  {stats.rejectedApplications > 0 ? 'Continuez vos efforts' : 'Pas de rejet'}
-                </p>
-              </CardContent>
-            </Card>
-          </div>
+          <StatsCards stats={stats} />
 
           {/* Recent Applications */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Calendar className="w-5 h-5" />
-                Candidatures récentes
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {stats.recentApplications.length > 0 ? (
-                <div className="space-y-4">
-                  {stats.recentApplications.map((application) => (
-                    <Card key={application.id} className="border-0 shadow-sm hover:shadow-lg transition-all duration-200 bg-gradient-to-r from-white to-gray-50">
-                      <CardContent className="p-0">
-                        <div className="flex">
-                          {/* Bande latérale de statut */}
-                          <div className={`w-1 ${getStatusColor(application.status).split(' ')[0]}`}></div>
-                          
-                          {/* Contenu principal */}
-                          <div className="flex-1 p-6">
-                            <div className="flex items-start justify-between">
-                              <div className="flex-1">
-                                {/* En-tête avec icône et titre */}
-                                <div className="flex items-center gap-4 mb-4">
-                                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
-                                    application.status === 'Acceptée' ? 'bg-green-100' :
-                                    application.status === 'En cours' ? 'bg-yellow-100' :
-                                    application.status === 'Rejetée' ? 'bg-red-100' : 'bg-gray-100'
-                                  }`}>
-                                    <Briefcase className={`w-6 h-6 ${
-                                      application.status === 'Acceptée' ? 'text-green-600' :
-                                      application.status === 'En cours' ? 'text-yellow-600' :
-                                      application.status === 'Rejetée' ? 'text-red-600' : 'text-gray-600'
-                                    }`} />
-                                  </div>
-                                  <div className="flex-1">
-                                    {/* Afficher tous les postes de la candidature */}
-                                    {application.positions && application.positions.length > 0 ? (
-                                      <div className="space-y-2">
-                                        {application.positions.map((position: any, index: number) => (
-                                          <div key={position.id || index} className="flex items-center justify-between">
-                                            <div>
-                                              <h4 className="font-bold text-gray-900 text-lg">{position.title}</h4>
-                                              {position.company && (
-                                                <div className="flex items-center gap-2 text-sm text-gray-600">
-                                                  <Building className="w-4 h-4" />
-                                                  <span>{position.company}</span>
-                                                </div>
-                                              )}
-                                            </div>
-                                            {index === 0 && (
-                                              <Badge className={`${getStatusColor(application.status)} flex items-center gap-2 px-3 py-1.5 text-sm font-medium`}>
-                                                {getStatusIcon(application.status)}
-                                                {application.status}
-                                              </Badge>
-                                            )}
-                                          </div>
-                                        ))}
-                                        {/* Afficher le nombre de postes si > 1 */}
-                                        {application.positions.length > 1 && (
-                                          <div className="mt-2 text-xs text-gray-500 font-medium">
-                                            {application.positions.length} postes dans cette candidature
-                                          </div>
-                                        )}
-                                      </div>
-                                    ) : (
-                                      <div>
-                                        <h4 className="font-bold text-gray-900 text-lg mb-1">Poste non spécifié</h4>
-                                        <div className="flex items-center gap-2 text-sm text-gray-600">
-                                          <Building className="w-4 h-4" />
-                                          <span>Entreprise</span>
-                                        </div>
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-
-                                {/* Informations temporelles */}
-                                <div className="flex items-center gap-6 text-sm">
-                                  <div className="flex items-center gap-2 text-gray-600">
-                                    <Calendar className="w-4 h-4" />
-                                    <span>{formatDate(application.appliedDate)}</span>
-                                  </div>
-                                  <div className="flex items-center gap-2 text-gray-600">
-                                    <Clock className="w-4 h-4" />
-                                    <span>{getTimeSinceApplied(application.appliedDate)}</span>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-12">
-                  <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <FileText className="w-10 h-10 text-gray-400" />
-                  </div>
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">Aucune candidature</h3>
-                  <p className="text-gray-600 mb-6 max-w-md mx-auto">
-                    Vous n'avez pas encore postulé à des offres. Commencez à explorer les opportunités disponibles !
-                  </p>
-                  <Link to="/candidat/postes">
-                    <Button className="flex items-center gap-2 mx-auto">
-                      <Briefcase className="w-4 h-4" />
-                      Explorer les offres
-                    </Button>
-                  </Link>
-                </div>
-              )}
-              
-              {stats.recentApplications.length > 0 && (
-                <div className="mt-6 pt-4 border-t">
-                  <Link to="/candidat/candidatures">
-                    <Button variant="outline" className="flex items-center gap-2 mx-auto w-full max-w-xs">
-                      <FileText className="w-4 h-4" />
-                      Voir toutes les candidatures
-                      <span className="ml-auto bg-gray-100 text-gray-700 px-2 py-1 rounded-full text-xs">
-                        {stats.totalApplications}
-                      </span>
-                    </Button>
-                  </Link>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+          <RecentApplications 
+            applications={stats.recentApplications}
+            totalApplications={stats.totalApplications}
+            getStatusColor={getStatusColor}
+            getStatusIcon={getStatusIcon}
+            formatDate={formatDate}
+            getTimeSinceApplied={getTimeSinceApplied}
+          />
         </>
       )}
     </div>

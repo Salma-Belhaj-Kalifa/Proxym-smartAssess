@@ -1,5 +1,5 @@
 import { Outlet, Link, useLocation, Navigate } from "react-router-dom";
-import { LayoutDashboard, Briefcase, Users, FileText, Settings, LogOut, ChevronLeft, Menu, User, CheckCircle } from "lucide-react";
+import { LayoutDashboard, Briefcase, Users, FileText, Settings, LogOut, ChevronLeft, Menu, User, CheckCircle, Brain, Search, TrendingUp } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { useCurrentUserSafe } from '@/features/auth/authQueries';
@@ -10,7 +10,7 @@ const navItems = [
   { label: "Postes de stage", icon: Briefcase, path: "/manager/postes" },
   { label: "Candidats", icon: Users, path: "/manager/candidats" },
   { label: "Résultats des tests", icon: CheckCircle, path: "/manager/tests-resultats" },
- // { label: "Résultats IA", icon: FileText, path: "/manager/resultats" },
+  //{ label: "Matching", icon: TrendingUp, path: "/manager/positions" },
   { label: "Mon profil", icon: User, path: "/manager/profil" },
 ];
 

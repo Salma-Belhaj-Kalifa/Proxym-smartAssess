@@ -15,6 +15,13 @@ import { useCurrentUser } from '@/features/auth/authQueries';
 import { useQueryClient } from '@tanstack/react-query';
 import type { Position } from '@/features/positions/types';
 
+// Import des nouveaux composants
+import SubmissionHeader from '@/components/submission/SubmissionHeader';
+import FileUploadSection from '@/components/submission/FileUploadSection';
+import SubmissionForm from '@/components/submission/SubmissionForm';
+import FileUploadProgress from '@/components/submission/FileUploadProgress';
+import SubmissionSuccess from '@/components/submission/SubmissionSuccess';
+
 const SubmissionPageSimple: React.FC = () => {
   const navigate = useNavigate();
   const { data: user } = useCurrentUser();
@@ -228,18 +235,10 @@ const SubmissionPageSimple: React.FC = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-slate-100 p-6">
       <div className="max-w-4xl mx-auto space-y-8">
-        <div className="text-center">
-          <Link to="/candidat/postes" className="inline-flex items-center text-blue-600 hover:text-blue-700 mb-4">
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Retour aux positions
-          </Link>
-          <h1 className="text-4xl font-bold text-gray-900 mb-4">
-            Soumettre votre candidature
-          </h1>
-          <p className="text-lg text-gray-600">
-            Téléchargez votre CV et postulez aux positions sélectionnées
-          </p>
-        </div>
+        <SubmissionHeader 
+          title="Soumettre votre candidature"
+          subtitle="Téléchargez votre CV et postulez aux positions sélectionnées"
+        />
 
         <div className="flex items-center justify-center space-x-4">
           <div className="flex items-center">
@@ -346,30 +345,11 @@ const SubmissionPageSimple: React.FC = () => {
               <p className="text-sm text-gray-600 mb-4">
                 Formats acceptés: PDF, Word (max 5MB)
               </p>
-              <input
-                type="file"
-                accept=".pdf,.doc,.docx"
-                onChange={handleFileChange}
-                className="hidden"
-                id="cv-upload"
+              <FileUploadSection 
+                file={file}
+                onFileChange={handleFileChange}
               />
-              <label htmlFor="cv-upload">
-                <Button asChild>
-                  <span className="cursor-pointer">
-                    {file ? 'Changer de fichier' : 'Sélectionner un fichier'}
-                  </span>
-                </Button>
-              </label>
             </div>
-
-            {file && (
-              <div className="mt-4 p-3 bg-green-50 rounded-lg border border-green-200">
-                <div className="flex items-center gap-2 text-green-700">
-                  <CheckCircle className="w-4 h-4" />
-                  <span className="font-medium">Fichier sélectionné: {file.name}</span>
-                </div>
-              </div>
-            )}
           </CardContent>
         </Card>
 
@@ -382,7 +362,10 @@ const SubmissionPageSimple: React.FC = () => {
                   <h3 className="text-lg font-semibold">Téléchargement en cours...</h3>
                   <span className="text-sm text-gray-600">{uploadProgress}%</span>
                 </div>
-                <Progress value={uploadProgress} className="h-2" />
+                <FileUploadProgress 
+                  progress={uploadProgress}
+                  isVisible={submitStatus === 'uploading'}
+                />
                 <p className="text-sm text-gray-600">
                   Veuillez patienter pendant que nous traitons votre candidature...
                 </p>
@@ -393,23 +376,11 @@ const SubmissionPageSimple: React.FC = () => {
 
         {/* Success Message */}
         {submitStatus === 'success' && (
-          <Card className="mt-8 border-2 border-green-200 bg-gradient-to-r from-green-50 to-emerald-50 shadow-xl">
-            <CardContent className="p-8 text-center">
-              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                <CheckCircle className="w-8 h-8 text-green-600" />
-              </div>
-              <h3 className="text-2xl font-bold text-green-800 mb-4">
-                Candidature soumise avec succès !
-              </h3>
-              <p className="text-green-700 mb-6">
-                Votre CV a été téléchargé et votre candidature a été envoyée aux {selectedPositionsData.length} position(s) sélectionnée(s).
-              </p>
-              <div className="flex items-center justify-center gap-2">
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-green-600"></div>
-                <span className="text-sm text-green-600">Redirection vers vos candidatures...</span>
-              </div>
-            </CardContent>
-          </Card>
+          <SubmissionSuccess 
+            isVisible={submitStatus === 'success'}
+            message="Candidature soumise avec succès !"
+            hasCVAnalysis={!!file}
+          />
         )}
 
         {/* Error Message */}

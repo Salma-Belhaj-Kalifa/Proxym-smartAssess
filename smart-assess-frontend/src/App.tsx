@@ -21,7 +21,9 @@ import ManagerPositionsPage from "./pages/manager/positions/ManagerPositionsPage
 import ManagerProfilePage from "./pages/manager/profile/ManagerProfilePage";
 import ApplicationsPage from "./pages/manager/applications/ApplicationsPage";
 import EvaluationReportPage from "./pages/manager/reports/EvaluationReportPage";
-import AIResultsListPage from "./pages/manager/reports/AIResultsListPage";
+import AIReportDetailPage from "./pages/manager/reports/AIReportDetailPage";
+import CandidateMatchingPage from "./pages/manager/matching/CandidateMatchingPage";
+import PositionsListPage from "./pages/manager/positions/PositionsListPage";
 import GenerateTestPage from "./pages/manager/tests/GenerateTestPage";
 import TestReviewPage from "./pages/manager/tests/TestReviewPage";
 import TestResultsPage from "./pages/manager/tests/TestResultsPage";
@@ -63,8 +65,12 @@ const App = () => (
             <Route path="postes/:id" element={<PositionDetailPage />} />
             <Route path="postes/:id/candidatures" element={<PositionApplicationsPage />} />
             <Route path="candidats" element={<ApplicationsPage />} />
-            <Route path="resultats" element={<AIResultsListPage />} />
-            <Route path="resultats/:id" element={<EvaluationReportPage />} />
+                        <Route path="resultats/:id" element={<EvaluationReportPage />} />
+            <Route path="reports/:reportId" element={<AIReportDetailPage />} />
+            <Route path="evaluations/:id" element={<EvaluationReportPage />} />
+            <Route path="positions" element={<PositionsListPage />} />
+            <Route path="positions/:id" element={<PositionDetailPage />} />
+            <Route path="matching/:id" element={<CandidateMatchingPage />} />
             <Route path="tests-resultats" element={<TestResultsListPage />} />
             <Route path="candidats/:id/generer-test" element={<GenerateTestPage />} />
             <Route path="candidats/:id" element={<GenerateTestPage />} />

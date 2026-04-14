@@ -73,16 +73,22 @@ public class GeneratedTestController {
                             testMap.put("candidate", candidateMap);
                         }
                         
-                        // Informations du poste (récupérées depuis la candidature)
+                        // Informations du poste (TOUS les postes de toutes les candidatures)
                         List<Candidature> candidateCandidatures = candidatureRepository.findByCandidate_Id(test.getCandidate().getId());
-                        if (!candidateCandidatures.isEmpty() && candidateCandidatures.get(0).getInternshipPositions() != null && !candidateCandidatures.get(0).getInternshipPositions().isEmpty()) {
-                            InternshipPosition firstPosition = candidateCandidatures.get(0).getInternshipPositions().iterator().next();
-                            Map<String, Object> positionMap = new HashMap<>();
-                            positionMap.put("id", firstPosition.getId());
-                            positionMap.put("title", firstPosition.getTitle());
-                            positionMap.put("company", firstPosition.getCompany());
-                            testMap.put("internshipPosition", positionMap);
-                        }
+                        List<Map<String, Object>> allPos = candidateCandidatures.stream()
+                            .filter(c -> c.getInternshipPositions() != null)
+                            .flatMap(c -> c.getInternshipPositions().stream())
+                            .map(pos -> {
+                                Map<String, Object> p = new HashMap<>();
+                                p.put("id", pos.getId());
+                                p.put("title", pos.getTitle());
+                                p.put("company", pos.getCompany());
+                                return p;
+                            })
+                            .distinct()
+                            .collect(Collectors.toList());
+                        testMap.put("internshipPositions", allPos);
+                        if (!allPos.isEmpty()) testMap.put("internshipPosition", allPos.get(0));
                         
                         return testMap;
                     })
@@ -689,14 +695,25 @@ public class GeneratedTestController {
                 response.put("candidate", candidate);
             }
             
-            // Informations du poste (récupérées depuis la candidature)
-            if (!candidateCandidatures.isEmpty() && candidateCandidatures.get(0).getInternshipPositions() != null && !candidateCandidatures.get(0).getInternshipPositions().isEmpty()) {
-                InternshipPosition firstPosition = candidateCandidatures.get(0).getInternshipPositions().iterator().next();
-                Map<String, Object> position = new HashMap<>();
-                position.put("id", firstPosition.getId());
-                position.put("title", firstPosition.getTitle());
-                position.put("company", firstPosition.getCompany());
-                response.put("internshipPosition", position);
+            // Informations du poste (TOUS les postes de toutes les candidatures)
+            List<Map<String, Object>> allPositions = candidateCandidatures.stream()
+                .filter(c -> c.getInternshipPositions() != null)
+                .flatMap(c -> c.getInternshipPositions().stream())
+                .map(pos -> {
+                    Map<String, Object> posMap = new HashMap<>();
+                    posMap.put("id", pos.getId());
+                    posMap.put("title", pos.getTitle());
+                    posMap.put("company", pos.getCompany());
+                    return posMap;
+                })
+                .distinct()
+                .collect(Collectors.toList());
+
+            response.put("internshipPositions", allPositions); // tableau au lieu d'objet unique
+            
+            // Garder rétrocompatibilité avec l'ancien champ
+            if (!allPositions.isEmpty()) {
+                response.put("internshipPosition", allPositions.get(0));
             }
             
             // Ajouter l'ID de la candidature pour les actions d'acceptation/rejet

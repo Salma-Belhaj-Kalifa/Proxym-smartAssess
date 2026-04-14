@@ -10,6 +10,15 @@ import { useCurrentUserSafe } from '@/features/auth/authQueries';
 import { useCandidaturesByCandidate } from '@/features/candidatures/candidaturesQueries';
 import { usePositions } from '@/features/positions/positionsQueries';
 
+// Import des nouveaux composants
+import ApplicationsHeader from '@/components/applications/ApplicationsHeader';
+import ApplicationsFilters from '@/components/applications/ApplicationsFilters';
+import ApplicationCard from '@/components/applications/ApplicationCard';
+import LoadingState from '@/components/applications/LoadingState';
+import ErrorState from '@/components/applications/ErrorState';
+import EmptyState from '@/components/applications/EmptyState';
+import NoResultsState from '@/components/applications/NoResultsState';
+
 export default function CandidateApplicationsPage() {
   const { data: user, isLoading: userLoading } = useCurrentUserSafe();
   
@@ -107,165 +116,36 @@ export default function CandidateApplicationsPage() {
   );
 
   if (filteredApplications.length === 0 && searchTerm) {
-    return (
-      <div className="text-center py-12">
-        <Search className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-        <h3 className="text-lg font-medium text-gray-900 mb-2">Aucune candidature trouvée</h3>
-        <p className="text-gray-600">
-          Aucune candidature ne correspond à votre recherche "{searchTerm}".
-        </p>
-      </div>
-    );
+    return <NoResultsState searchTerm={searchTerm} />;
   }
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'Acceptée': return 'bg-green-100 text-green-800';
-      case 'En cours': return 'bg-yellow-100 text-yellow-800';
-      case 'Rejetée': return 'bg-red-100 text-red-800';
-      default: return 'bg-gray-100 text-gray-800';
-    }
-  };
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'Acceptée': return <CheckCircle className="w-4 h-4" />;
-      case 'En cours': return <Clock className="w-4 h-4" />;
-      case 'Rejetée': return <Clock className="w-4 h-4" />;
-      default: return <Clock className="w-4 h-4" />;
-    }
-  };
-
-  const formatDate = (dateString: string) => {
-    try {
-      return new Date(dateString).toLocaleDateString();
-    } catch (error) {
-      return 'Date invalide';
-    }
-  };
 
   return (
     <div className="container mx-auto p-6">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Mes candidatures</h1>
-        <div className="flex gap-4">
-          <Link to="/candidat/postes">
-            <Button variant="outline" className="flex items-center gap-2">
-              <Briefcase className="w-4 h-4" />
-              Voir les offres
-            </Button>
-          </Link>
-        </div>
-      </div>
+      <ApplicationsHeader />
 
       {/* Loading State */}
-      {isLoading && (
-        <div className="flex items-center justify-center py-12">
-          <div className="flex items-center gap-2">
-            <Loader2 className="w-6 h-6 animate-spin" />
-            <span>Chargement des candidatures...</span>
-          </div>
-        </div>
-      )}
+      {isLoading && <LoadingState />}
 
       {/* Error State */}
-      {error && (
-        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
-          <div className="flex items-center gap-2 text-red-700">
-            <AlertCircle className="w-5 h-5" />
-            <span>{error?.message || 'Erreur lors du chargement des candidatures'}</span>
-          </div>
-          <Button 
-            onClick={() => refetch()} 
-            variant="outline" 
-            size="sm" 
-            className="mt-2"
-          >
-            Réessayer
-          </Button>
-        </div>
-      )}
+      {error && <ErrorState error={error} onRetry={refetch} />}
 
       {/* Content */}
       {!isLoading && !error && (
         <>
           {/* Search Bar */}
-          <div className="mb-6">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input
-                placeholder="Rechercher une candidature..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
-              />
-            </div>
-          </div>
+          <ApplicationsFilters 
+            searchTerm={searchTerm}
+            onSearchChange={setSearchTerm}
+          />
 
           {/* Applications Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredApplications.map((application) => (
-              <Card key={application.id} className="hover:shadow-lg transition-shadow">
-                <CardHeader>
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <CardTitle className="text-lg">Ma Candidature</CardTitle>
-                      <p className="text-sm text-gray-600 mb-2">
-                        {application.positions.length} poste{application.positions.length > 1 ? 's' : ''}
-                      </p>
-                    </div>
-                    <Badge className={getStatusColor(application.status)}>
-                      <div className="flex items-center gap-2">
-                        {getStatusIcon(application.status)}
-                        {application.status}
-                      </div>
-                    </Badge>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    {/* Afficher tous les postes */}
-                    <div>
-                      <span className="text-sm text-gray-500">Poste{application.positions.length > 1 ? 's' : ''}:</span>
-                      <div className="mt-1 space-y-1">
-                        {application.positions.map((position, index) => (
-                          <div key={position.id} className="flex items-center gap-2">
-                            <Briefcase className="w-4 h-4 text-gray-400" />
-                            <span className="font-medium">{position.title}</span>
-                            {position.company && (
-                              <span className="text-sm text-gray-600">({position.company})</span>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                    
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-500">Date de candidature:</span>
-                      <span className="font-medium">{formatDate(application.appliedDate)}</span>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+              <ApplicationCard key={application.id} application={application} />
             ))}
           </div>
 
-          {filteredApplications.length === 0 && (
-            <div className="text-center py-12">
-              <div className="mb-6">
-                <FileText className="w-16 h-16 mx-auto text-gray-300 mb-4" />
-              </div>
-              <h3 className="text-xl font-semibold text-gray-600 mb-2">
-                {searchTerm ? 'Aucune candidature trouvée' : 'Aucune candidature'}
-              </h3>
-              <p className="text-gray-500">
-                {searchTerm 
-                  ? 'Essayez d\'autres termes de recherche' 
-                  : 'Commencez par déposer votre CV ou postuler aux offres disponibles'
-                }
-              </p>
-            </div>
-          )}
+          {filteredApplications.length === 0 && <EmptyState searchTerm={searchTerm} />}
         </>
       )}
     </div>

@@ -1,5 +1,6 @@
 package com.example.smart_assess.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -17,14 +18,17 @@ public class Answer {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @JsonIgnoreProperties({"answers"})
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "candidate_id", nullable = false)
     private Candidate candidate;
 
+    @JsonIgnoreProperties({"answers"})
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "question_id", nullable = false)
     private TestQuestion question;
 
+    @JsonIgnoreProperties({"answers"})
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "test_id")
     private GeneratedTest test; // Gardé pour référence mais plus obligatoire

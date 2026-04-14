@@ -1,6 +1,7 @@
 package com.example.smart_assess.entity;
 
 import com.example.smart_assess.enums.QuestionType;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.JsonNode;
 import io.hypersistence.utils.hibernate.type.json.JsonType;
 import jakarta.persistence.*;
@@ -20,6 +21,7 @@ public class TestQuestion {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @JsonIgnoreProperties({"questions", "answers", "evaluationResult"})
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "test_id", nullable = false)
     private GeneratedTest test;

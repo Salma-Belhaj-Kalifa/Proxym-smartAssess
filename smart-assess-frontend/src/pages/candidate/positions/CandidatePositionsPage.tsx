@@ -8,6 +8,11 @@ import { Badge } from '@/components/ui/badge';
 import { usePositions } from '@/features/positions/positionsQueries';
 import type { Position } from '@/features/positions/types';
 
+// Import des nouveaux composants
+import PositionsHeader from '@/components/positions/PositionsHeader';
+import PositionCard from '@/components/positions/PositionCard';
+import SelectionSummary from '@/components/positions/SelectionSummary';
+
 const CandidatePositionsPage: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedPositions, setSelectedPositions] = useState<number[]>([]);
@@ -71,14 +76,7 @@ const CandidatePositionsPage: React.FC = () => {
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-6xl mx-auto space-y-6">
         {/* Header */}
-        <div className="text-center">
-          <h1 className="text-4xl font-bold text-gray-900 mb-4">
-            Découvrez nos opportunités
-          </h1>
-          <p className="text-lg text-gray-600 mb-8">
-            Explorez les positions disponibles et postulez à celles qui correspondent à votre profil
-          </p>
-        </div>
+        <PositionsHeader />
 
         {/* Barre de recherche */}
         <div className="flex gap-4 items-center max-w-2xl mx-auto">
@@ -102,35 +100,10 @@ const CandidatePositionsPage: React.FC = () => {
         </div>
 
         {/* Positions sélectionnées */}
-        {selectedPositions.length > 0 && (
-          <Card className="bg-blue-50 border-blue-200">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="font-semibold text-blue-900 mb-2">
-                    Positions sélectionnées ({selectedPositions.length}/3)
-                  </h3>
-                  <div className="flex flex-wrap gap-2">
-                    {selectedPositions.map(id => {
-                      const position = positionsData.find(p => p.id === id);
-                      return position ? (
-                        <Badge key={id} variant="secondary" className="bg-blue-100 text-blue-800">
-                          {position.title}
-                        </Badge>
-                      ) : null;
-                    })}
-                  </div>
-                </div>
-                <Link to="/candidat/soumettre-candidature">
-                  <Button className="bg-blue-600 hover:bg-blue-700">
-                    Continuer vers la candidature
-                    <ChevronRight className="w-4 h-4 ml-2" />
-                  </Button>
-                </Link>
-              </div>
-            </CardContent>
-          </Card>
-        )}
+        <SelectionSummary 
+          selectedPositions={selectedPositions}
+          positions={positionsData}
+        />
 
         {/* Liste des positions */}
         <div className="grid gap-6">
@@ -151,67 +124,13 @@ const CandidatePositionsPage: React.FC = () => {
             </Card>
           ) : (
             filteredPositions.map((position) => (
-              <Card key={position.id} className="hover:shadow-lg transition-shadow">
-                <CardContent className="p-6">
-                  <div className="flex justify-between items-start mb-4">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-2">
-                        <h3 className="text-xl font-semibold text-gray-900">
-                          {position.title}
-                        </h3>
-                        <Badge variant={position.isActive === true ? 'default' : 'secondary'}>
-                          {position.isActive === true ? 'Actif' : 'Inactif'}
-                        </Badge>
-                      </div>
-                      <p className="text-gray-600 mb-4 line-clamp-3">
-                        {position.description}
-                      </p>
-                      <div className="flex flex-wrap gap-2 mb-4">
-                        {position.requiredSkills.slice(0, 5).map((skill, index) => (
-                          <Badge key={index} variant="outline" className="text-xs">
-                            {skill}
-                          </Badge>
-                        ))}
-                        {position.requiredSkills.length > 5 && (
-                          <Badge variant="outline" className="text-xs">
-                            +{position.requiredSkills.length - 5}
-                          </Badge>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-4 text-sm text-gray-500">
-                  
-                        <div className="flex items-center gap-1">
-                          <Clock className="w-4 h-4" />
-                          <span>Publié le {new Date(position.createdAt).toLocaleDateString('fr-FR')}</span>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="ml-4">
-                      <Button
-                        variant={selectedPositions.includes(position.id) ? "default" : "outline"}
-                        onClick={() => togglePositionSelection(position.id)}
-                        disabled={!selectedPositions.includes(position.id) && selectedPositions.length >= 3}
-                        className={`whitespace-nowrap transition-all duration-200 px-4 py-2 ${
-                          selectedPositions.includes(position.id)
-                            ? "bg-blue-600 hover:bg-blue-700 text-white border-blue-600 shadow-lg hover:shadow-xl"
-                            : "border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-gray-400"
-                        }`}
-                      >
-                        <div className="flex items-center gap-2">
-                          {selectedPositions.includes(position.id) ? (
-                            <Check className="w-4 h-4" />
-                          ) : (
-                            <div className="w-4 h-4 border-2 border-gray-400 rounded"></div>
-                          )}
-                          <span>
-                            {selectedPositions.includes(position.id) ? 'Sélectionné' : 'Sélectionner'}
-                          </span>
-                        </div>
-                      </Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+              <PositionCard
+                key={position.id}
+                position={position}
+                isSelected={selectedPositions.includes(position.id)}
+                onSelect={togglePositionSelection}
+                isDisabled={!selectedPositions.includes(position.id) && selectedPositions.length >= 3}
+              />
             ))
           )}
         </div>

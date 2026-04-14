@@ -110,6 +110,9 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.PUT, "/api/candidatures/**").authenticated()
                 .requestMatchers(HttpMethod.DELETE, "/api/candidatures/**").authenticated()
                 
+                .requestMatchers("/api/v1/evaluation/**").hasAnyRole("MANAGER", "HR")
+                .requestMatchers("/api/evaluation-reports/**").hasAnyRole("MANAGER", "HR")
+                
                 .anyRequest().authenticated()
             )
             .authenticationProvider(authenticationProvider())

@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Clock, Calendar, User, Send, Timer, CheckCircle, AlertCircle, Download, Eye, Check, X, Target, Users } from 'lucide-react';
+import { ArrowLeft, Clock, Calendar, User, Send, Timer, CheckCircle, AlertCircle, Download, Eye, Check, X, Target, Users, Briefcase } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -10,6 +10,7 @@ import apiClient from '@/lib/api';
 import { useTest } from '@/features/tests/testsQueries';
 import { useGetPublicTest, useGetTestResults } from '@/features/tests/testsQueries';
 import { useSubmitTest } from '@/features/tests/testsMutations';
+import { useCandidatures } from '@/features/candidatures/candidaturesQueries';
 import {
   Dialog,
   DialogContent,
@@ -78,18 +79,98 @@ const TestResultsPage: React.FC = () => {
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const [candidatureId, setCandidatureId] = useState<number | null>(null);
   const [candidatureStatus, setCandidatureStatus] = useState<string | null>(null);
-  
+
+  // 🎯 Importer les candidatures
+  const { data: candidatures = [] } = useCandidatures();
+
   // 🎯 États pour le modal de rejet
   const [rejectModalOpen, setRejectModalOpen] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('');
-  
+
   // 🎯 État pour afficher/masquer les détails des réponses
   const [showDetails, setShowDetails] = useState(false);
+
+  // 🎯 État pour stocker les données du résultat chargé
+  const [loadedResult, setLoadedResult] = useState<any>(null);
 
   // Vérifier si testId est un token (UUID) ou un ID numérique
   const isToken = testId && testId.includes('-');
   console.log('Test ID from URL:', testId);
   console.log('Is token:', isToken);
+
+  // LOGIQUE DÉFINITIVE: utiliser directement les données du test result
+  const candidatePositions = useMemo(() => {
+    console.log('=== FINAL LOGIC - TEST RESULT DIRECT ===');
+    console.log('loadedResult:', loadedResult);
+    
+    if (!loadedResult) {
+      console.log('❌ No loadedResult');
+      return [];
+    }
+    
+    // PRIORITÉ 1: utiliser internshipPositions (nouveau champ tableau du backend)
+    if (loadedResult.internshipPositions && Array.isArray(loadedResult.internshipPositions) && loadedResult.internshipPositions.length > 0) {
+      console.log('✅ Utilisation de internshipPositions du test result');
+      console.log('internshipPositions:', loadedResult.internshipPositions);
+      
+      const result = loadedResult.internshipPositions.map((pos: any) => ({
+        title: pos.title,
+        company: pos.company || 'Entreprise',
+        appliedAt: loadedResult.createdAt || new Date().toISOString(),
+        candidatureId: loadedResult.candidatureId || null
+      }));
+      
+      console.log('✅ RESULTAT FINAL RETOURNÉ:', result);
+      return result;
+    }
+    
+    // PRIORITÉ 2: utiliser internshipPosition (ancien champ unique pour rétrocompatibilité)
+    if (loadedResult.internshipPosition && loadedResult.internshipPosition.title) {
+      console.log('✅ Utilisation directe de internshipPosition du test result');
+      console.log('internshipPosition.title:', loadedResult.internshipPosition.title);
+      console.log('internshipPosition.company:', loadedResult.internshipPosition.company);
+      
+      const result = [{
+        title: loadedResult.internshipPosition.title,
+        company: loadedResult.internshipPosition.company || 'Entreprise',
+        appliedAt: loadedResult.createdAt || new Date().toISOString(),
+        candidatureId: loadedResult.candidatureId || null
+      }];
+      
+      console.log('✅ RESULTAT FINAL RETOURNÉ:', result);
+      return result;
+    }
+    
+    // PRIORITÉ 3: utiliser positionTitle du test result (fallback)
+    if (loadedResult.positionTitle) {
+      console.log('✅ Utilisation directe de positionTitle du test result');
+      console.log('positionTitle:', loadedResult.positionTitle);
+      console.log('positionCompany:', loadedResult.positionCompany);
+      
+      const result = [{
+        title: loadedResult.positionTitle,
+        company: loadedResult.positionCompany || 'Entreprise',
+        appliedAt: loadedResult.createdAt || new Date().toISOString(),
+        candidatureId: loadedResult.candidatureId || null
+      }];
+      
+      console.log('✅ RESULTAT FINAL RETOURNÉ:', result);
+      return result;
+    }
+    
+    // PRIORITÉ 4: fallback ultime
+    console.log('⚠️ Aucune donnée de poste trouvée dans le test result, fallback par défaut');
+    const result = [{
+      title: 'Poste non spécifié',
+      company: 'Entreprise',
+      appliedAt: loadedResult.createdAt || new Date().toISOString(),
+      candidatureId: loadedResult.candidatureId || null
+    }];
+    
+    console.log('✅ RESULTAT FINAL RETOURNÉ:', result);
+    return result;
+    
+  }, [loadedResult, loadedResult?.internshipPositions]);
 
   // Charger les données du test
   useEffect(() => {
@@ -122,6 +203,7 @@ const TestResultsPage: React.FC = () => {
         
         if (response.data) {
           const result = response.data;
+          setLoadedResult(result); // Stocker le résultat pour le useMemo
           
           // Récupérer l'ID de la candidature si disponible
           if (result.candidatureId) {
@@ -142,13 +224,22 @@ const TestResultsPage: React.FC = () => {
           const scoreData = calculateRealScore(result);
           const sessionData = calculateResponseTime(result);
           
+          // Stocker tous les postes depuis le test result
+          const positions = (() => {
+            if (result.internshipPositions?.length > 0) return result.internshipPositions;
+            if (result.internshipPosition?.title) return [result.internshipPosition];
+            return [{ title: 'Poste non spécifié', company: 'Entreprise' }];
+          })();
+
+          console.log('=== TOUS LES POSTES DU TEST RESULT ===');
+          console.log('All positions:', positions);
+          console.log('Number of positions:', positions.length);
+
           const testResult: TestResult = {
             id: result.id || parseInt(testId),
             token: result.token || '',
             candidateName: result.candidateName || result.candidate?.firstName + ' ' + result.candidate?.lastName || 'Candidat inconnu',
-            positionTitle: result.positionTitle || result.positionCompany ? 
-              `${result.positionTitle || 'Poste non spécifié'} - ${result.positionCompany || 'Entreprise'}` : 
-              'Poste non spécifié',
+            positionTitle: positions.map((p: any) => `${p.title} - ${p.company}`).join(' | '),
             status: result.status || 'UNKNOWN',
             createdAt: result.createdAt || new Date().toISOString(),
             submittedAt: result.submittedAt || result.createdAt || new Date().toISOString(),
@@ -441,199 +532,292 @@ const TestResultsPage: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-50 py-8">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="mb-8">
-          <Button 
-            variant="outline" 
+        <div className="mb-6">
+          <button
             onClick={() => navigate('/manager/tests-resultats')}
-            className="mb-4"
+            className="flex items-center gap-1.5 text-xs px-3 py-1.5 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors mb-4"
           >
-            <ArrowLeft className="h-4 w-4 mr-2" />
+            <ArrowLeft className="w-3.5 h-3.5" />
             Retour
-          </Button>
+          </button>
           
-          <div className="bg-white rounded-lg shadow p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900">Page de Résultats du Test</h1>
+          <div className="bg-white border border-gray-100 rounded-xl overflow-hidden">
+            {/* Header */}
+            <div className="px-4 pt-4 pb-0">
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center">
+                    <Timer className="w-5 h-5 text-blue-600" />
+                  </div>
+                  <div>
+                    <h1 className="text-lg font-bold text-gray-900">Page de Résultats du Test</h1>
+                    <p className="text-xs text-gray-400">Analyse détaillée des performances du candidat</p>
+                  </div>
+                </div>
+                <div className="flex-shrink-0">
+                  <Badge 
+                    className={`px-3 py-1.5 text-xs font-semibold rounded-full ${
+                      testResult.status === 'COMPLETED'
+                        ? 'bg-green-50 text-green-800 border-green-200'
+                        : testResult.status === 'SUBMITTED'
+                        ? 'bg-blue-50 text-blue-800 border-blue-200'
+                        : 'bg-gray-100 text-gray-800 border-gray-200'
+                    }`}
+                  >
+                    {getStatusLabel(testResult.status)}
+                  </Badge>
+                </div>
               </div>
-              <div className="text-right">
-                <Badge variant={getStatusVariant(testResult.status)}>
-                  {getStatusLabel(testResult.status)}
-                </Badge>
+            </div>
+
+            <div className="h-px bg-gray-100 mx-4" />
+
+            {/* Body */}
+            <div className="px-4 py-4">
+              <div className="flex items-center gap-4 text-xs text-gray-400">
+                <div className="flex items-center gap-1.5">
+                  <User className="w-3 h-3" />
+                  {testResult.candidateName}
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Calendar className="w-3 h-3" />
+                  {new Date(testResult.createdAt).toLocaleDateString('fr-FR')}
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Clock className="w-3 h-3" />
+                  {testResult.session?.timeSpentMinutes !== undefined ? 
+                    `${testResult.session.timeSpentMinutes}m ${testResult.session.timeSpentSeconds || 0}s` : 
+                    'N/A'
+                  }
+                </div>
               </div>
             </div>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <Card className="lg:col-span-2">
-            <CardHeader>
-              <CardTitle className="flex items-center">
-                <Timer className="h-5 w-5 mr-2" />
-                Informations du Test
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-sm font-medium text-gray-500">Candidat</p>
-                  <p className="text-lg font-semibold">{testResult.candidateName}</p>
-                  <p className="text-sm text-gray-600">{testResult.candidate?.email || 'Email non disponible'}</p>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+          <div className="lg:col-span-3 bg-white border border-gray-100 rounded-xl overflow-hidden">
+            {/* Header */}
+            <div className="px-4 pt-4 pb-0">
+              <div className="flex items-center gap-2 mb-4">
+                <Timer className="w-4 h-4 text-gray-400" />
+                <h3 className="text-sm font-semibold text-gray-900">Informations du Test</h3>
+              </div>
+            </div>
+
+            <div className="h-px bg-gray-100 mx-4" />
+
+            {/* Body */}
+            <div className="px-4 py-4 space-y-4">
+              {/* Candidat */}
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-full bg-blue-50 flex items-center justify-center text-blue-800 text-xs font-medium flex-shrink-0">
+                  {testResult.candidateName?.split(' ').map((n: string) => n[0]).join('')}
                 </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-500">Poste</p>
-                  <p className="text-lg font-semibold">{testResult.positionTitle?.split(' - ')[0] || 'Poste non spécifié'}</p>
-                  <p className="text-sm text-gray-600">{testResult.positionTitle?.split(' - ')[1] || 'Entreprise'}</p>
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-gray-900">{testResult.candidateName}</p>
+                  <p className="text-xs text-gray-400">{testResult.candidate?.email || 'Email non disponible'}</p>
                 </div>
               </div>
-              
-              <div className="border-t pt-4">
-                <div className="grid grid-cols-3 gap-4 text-center">
-                  <div>
-                    <p className="text-2xl font-bold text-blue-600">
-                      {Math.round(testResult.scores?.finalScore || 0)}%
-                    </p>
-                    <p className="text-sm text-gray-500">Score global</p>
+
+              {/* Postes */}
+              <div className="flex flex-col gap-1.5">
+                <p className="text-xs font-medium text-gray-500">Poste{testResult.positionTitle?.includes(' | ') ? 's' : ''}</p>
+                {testResult.positionTitle?.split(' | ').map((position, index) => {
+                  const [title, company] = position.split(' - ');
+                  return (
+                    <div key={index} className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-2">
+                      <Briefcase className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                      <div className="min-w-0">
+                        <p className="text-xs font-medium text-gray-900 truncate">{title}</p>
+                        <p className="text-xs text-gray-400">{company}</p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Stats principales */}
+              <div className="grid grid-cols-3 gap-4">
+                <div className="text-center">
+                  <p className={`text-xl font-medium ${
+                    (testResult.scores?.finalScore ?? 0) >= 80 ? 'text-green-700'
+                    : (testResult.scores?.finalScore ?? 0) >= 60 ? 'text-amber-700'
+                    : 'text-red-700'
+                  }`}>
+                    {Math.round(testResult.scores?.finalScore || 0)}%
+                  </p>
+                  <p className="text-xs text-gray-400">Score global</p>
+                  <div className="mt-1 h-1 bg-gray-100 rounded-full w-full">
+                    <div
+                      className={`h-1 rounded-full ${
+                        (testResult.scores?.finalScore ?? 0) >= 80 ? 'bg-green-500'
+                        : (testResult.scores?.finalScore ?? 0) >= 60 ? 'bg-amber-500'
+                        : 'bg-red-500'
+                      }`}
+                      style={{ width: `${Math.round(testResult.scores?.finalScore ?? 0)}%` }}
+                    />
                   </div>
-                  <div>
-                    <p className="text-2xl font-bold text-green-600">
-                      {testResult.scores?.correctAnswers || 0}/{testResult.scores?.totalQuestions || 0}
-                    </p>
-                    <p className="text-sm text-gray-500">réponses correctes</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-xl font-medium text-green-700">
+                    {testResult.scores?.correctAnswers || 0}/{testResult.scores?.totalQuestions || 0}
+                  </p>
+                  <p className="text-xs text-gray-400">réponses correctes</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-xl font-medium text-orange-700">
+                    {testResult.session?.timeSpentMinutes !== undefined ? 
+                      `${testResult.session.timeSpentMinutes}m ${testResult.session.timeSpentSeconds || 0}s` : 
+                      'N/A'
+                    }
+                  </p>
+                  <p className="text-xs text-gray-400">Temps de réponse</p>
+                </div>
+              </div>
+
+              {/* Dates */}
+              <div className="border-t border-gray-100 pt-3">
+                <div className="grid grid-cols-2 gap-4 text-xs text-gray-400">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-1.5">
+                      <Calendar className="w-3 h-3" />
+                      Début : {new Date(testResult.session?.startedAt || testResult.createdAt).toLocaleDateString('fr-FR')}
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <Calendar className="w-3 h-3" />
+                      Fin : {new Date(testResult.session?.submittedAt || testResult.submittedAt).toLocaleDateString('fr-FR')}
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-2xl font-bold text-orange-600">
-                      {testResult.session?.timeSpentMinutes !== undefined ? 
-                        `${testResult.session.timeSpentMinutes} min ${testResult.session.timeSpentSeconds || 0}s` : 
-                        'N/A'
-                      }
-                    </p>
-                    <p className="text-sm text-gray-500">Temps de réponse</p>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-1.5">
+                      <Clock className="w-3 h-3" />
+                      Durée limite : {testResult.timeLimitMinutes} min
+                    </div>
                   </div>
                 </div>
               </div>
 
-              <div className="border-t pt-4">
-                <div className="grid grid-cols-2 gap-4 text-sm text-gray-600">
-                  <div>
-                    <p><strong>Début :</strong> {new Date(testResult.session?.startedAt || testResult.createdAt).toLocaleString()}</p>
-                    <p><strong>Fin :</strong> {new Date(testResult.session?.submittedAt || testResult.submittedAt).toLocaleString()}</p>
+              {/* Décision de candidature */}
+              {candidatureId && candidatureStatus !== 'ACCEPTED' && candidatureStatus !== 'REJECTED' && (
+                <div className="border-t border-gray-100 pt-3">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Target className="w-4 h-4 text-gray-400" />
+                    <h4 className="text-sm font-semibold text-gray-900">Décision de candidature</h4>
                   </div>
-                  <div>
-                    <p><strong>Durée limite :</strong> {testResult.timeLimitMinutes} minutes</p>
-                    <p className="text-xs mt-1">
-                      {testResult.session?.hasRealTime ? (
-                        <span className="text-green-600">⏱️ Temps réel</span>
-                      ) : (
-                        <span className="text-orange-600">⏱️ Temps estimé</span>
-                      )}
-                    </p>
+                  <p className="text-xs text-gray-400 mb-3">
+                    Basée sur les résultats du test ({Math.round(testResult.scores?.finalScore || 0)}%)
+                  </p>
+                  <div className="flex gap-3">
+                    <button
+                      onClick={handleAcceptCandidature}
+                      disabled={isUpdatingStatus}
+                      className="flex-1 flex items-center justify-center gap-1.5 text-xs px-3 py-2.5 bg-green-50 text-green-700 border border-green-200 rounded-lg hover:bg-green-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <Check className="w-3.5 h-3.5" />
+                      {isUpdatingStatus ? 'Traitement...' : 'Accepter'}
+                    </button>
+                    <button
+                      onClick={handleRejectClick}
+                      disabled={isUpdatingStatus}
+                      className="flex-1 flex items-center justify-center gap-1.5 text-xs px-3 py-2.5 bg-red-50 text-red-700 border border-red-200 rounded-lg hover:bg-red-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                      {isUpdatingStatus ? 'Traitement...' : 'Rejeter'}
+                    </button>
                   </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Boutons d'action pour la candidature */}
-          {candidatureId && candidatureStatus !== 'ACCEPTED' && candidatureStatus !== 'REJECTED' && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Décision de candidature</CardTitle>
-                <p className="text-sm text-gray-600">
-                  Basée sur les résultats du test ({Math.round(testResult.scores?.finalScore || 0)}%)
-                </p>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex gap-3">
-                  <Button 
-                    onClick={handleAcceptCandidature}
-                    disabled={isUpdatingStatus}
-                    className="flex-1 bg-green-600 hover:bg-green-700 text-white"
-                  >
-                    <Check className="h-4 w-4 mr-2" />
-                    {isUpdatingStatus ? 'Traitement...' : 'Accepter'}
-                  </Button>
-                  <Button 
-                    onClick={handleRejectClick}
-                    disabled={isUpdatingStatus}
-                    variant="destructive"
-                    className="flex-1"
-                  >
-                    <X className="h-4 w-4 mr-2" />
-                    {isUpdatingStatus ? 'Traitement...' : 'Rejeter'}
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          )}
+              )}
+            </div>
+          </div>
 
           {/* Message pour candidature déjà traitée */}
           {candidatureId && (candidatureStatus === 'ACCEPTED' || candidatureStatus === 'REJECTED') && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
+            <div className="bg-white border border-gray-100 rounded-xl overflow-hidden">
+              {/* Header */}
+              <div className="px-4 pt-4 pb-0">
+                <div className="flex items-center gap-2 mb-3">
                   {candidatureStatus === 'ACCEPTED' ? (
-                    <>
-                      <Check className="h-5 w-5 text-green-600" />
-                      Candidature Acceptée
-                    </>
+                    <Check className="w-4 h-4 text-green-600" />
                   ) : (
-                    <>
-                      <X className="h-5 w-5 text-red-600" />
-                      Candidature Refusée
-                    </>
+                    <X className="w-4 h-4 text-red-600" />
                   )}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-gray-600 mb-4">
+                  <h3 className="text-sm font-semibold text-gray-900">
+                    {candidatureStatus === 'ACCEPTED' ? 'Candidature Acceptée' : 'Candidature Refusée'}
+                  </h3>
+                </div>
+              </div>
+
+              <div className="h-px bg-gray-100 mx-4" />
+
+              {/* Body */}
+              <div className="px-4 py-4">
+                <p className="text-xs text-gray-400">
                   {candidatureStatus === 'ACCEPTED' 
                     ? 'Cette candidature a été acceptée. Le candidat a été notifié de la décision.'
                     : 'Cette candidature a été refusée. Le candidat a été notifié de la décision.'
                   }
                 </p>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           )}
 
-          <Card className="lg:col-span-3">
-            <CardHeader>
-              <CardTitle>Scores par compétence</CardTitle>
-            </CardHeader>
-            <CardContent>
+          <div className="lg:col-span-3 bg-white border border-gray-100 rounded-xl overflow-hidden">
+            {/* Header */}
+            <div className="px-4 pt-4 pb-0">
+              <div className="flex items-center gap-2 mb-4">
+                <Target className="w-4 h-4 text-gray-400" />
+                <h3 className="text-sm font-semibold text-gray-900">Scores par compétence</h3>
+              </div>
+            </div>
+
+            <div className="h-px bg-gray-100 mx-4" />
+
+            {/* Body */}
+            <div className="px-4 py-4">
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
                 {Object.entries(testResult.skillScores || {}).map(([skill, data]) => {
                   const percentage = getSkillPercentage(skill);
                   const getColorClass = (percentage: number) => {
                     if (percentage >= 80) return 'bg-green-500';
                     if (percentage >= 60) return 'bg-blue-500';
-                    if (percentage >= 40) return 'bg-yellow-500';
+                    if (percentage >= 40) return 'bg-amber-500';
                     if (percentage >= 20) return 'bg-orange-500';
                     return 'bg-red-500';
                   };
                   
                   return (
-                    <div key={skill} className="p-2 bg-white border rounded hover:shadow-sm transition-shadow">
-                      <div className="space-y-1.5">
-                        <div className="flex items-center justify-between">
+                    <div key={skill} className="bg-gray-50 rounded-lg p-3 border border-gray-100 hover:border-gray-200 transition-colors">
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between gap-1">
                           <span 
-                            className="text-xs font-medium truncate w-full pr-1" 
+                            className="text-xs font-medium text-gray-900 truncate flex-1" 
                             title={skill}
-                            style={{ fontSize: skill.length > 15 ? '10px' : '11px' }}
                           >
                             {skill}
                           </span>
-                          <Badge 
-                            variant="outline" 
-                            className={`${getColorClass(percentage)} text-white border-0 text-xs font-bold px-1.5 py-0.5`}
+                          <span 
+                            className={`text-xs font-bold px-1.5 py-0.5 rounded-full text-white flex-shrink-0 ${
+                              percentage >= 80 ? 'bg-green-500'
+                              : percentage >= 60 ? 'bg-blue-500'
+                              : percentage >= 40 ? 'bg-amber-500'
+                              : percentage >= 20 ? 'bg-orange-500'
+                              : 'bg-red-500'
+                            }`}
                           >
                             {percentage}%
-                          </Badge>
+                          </span>
                         </div>
                         
-                        <div className="w-full bg-gray-100 rounded-full h-1">
+                        <div className="w-full bg-gray-200 rounded-full h-1">
                           <div 
-                            className={`${getColorClass(percentage)} h-1 rounded-full transition-all duration-300`}
+                            className={`h-1 rounded-full transition-all duration-300 ${
+                              percentage >= 80 ? 'bg-green-500'
+                              : percentage >= 60 ? 'bg-blue-500'
+                              : percentage >= 40 ? 'bg-amber-500'
+                              : percentage >= 20 ? 'bg-orange-500'
+                              : 'bg-red-500'
+                            }`}
                             style={{ width: `${percentage}%` }}
                           ></div>
                         </div>
@@ -644,66 +828,96 @@ const TestResultsPage: React.FC = () => {
               </div>
               
               {Object.keys(testResult.skillScores || {}).length === 0 && (
-                <div className="text-center py-6 text-gray-500">
-                  <AlertCircle className="w-6 h-6 mx-auto mb-2 opacity-50" />
-                  <p className="text-xs">Aucune compétence évaluée</p>
+                <div className="text-center py-8 text-gray-400">
+                  <AlertCircle className="h-8 w-8 mx-auto mb-3 text-gray-300" />
+                  <p className="text-sm">Aucune compétence évaluée</p>
                 </div>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         </div>
-
         <div className="mb-6"></div>
 
-        <Card className="lg:col-span-3">
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle>Détail des réponses</CardTitle>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowDetails(!showDetails)}
-              className="flex items-center gap-2"
-            >
-              <Eye className="w-4 h-4" />
-              {showDetails ? 'Masquer les détails' : 'Voir les détails'}
-            </Button>
-          </CardHeader>
-          
-          {showDetails && (
-            <CardContent>
-              <div className="space-y-4">
-                {testResult.questions.map((question, index) => (
-                  <div key={question.id} className="border rounded-lg p-4">
-                    <div className="flex items-start justify-between mb-2">
-                      <h3 className="font-medium text-gray-900">
-                        Question {index + 1}: {question.questionText}
-                      </h3>
-                      <Badge variant={question.isCorrect ? 'default' : 'destructive'}>
-                        {question.isCorrect ? '✓ Correct' : '✗ Incorrect'}
-                    </Badge>
-                  </div>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <p className="font-medium text-gray-700">Réponse:</p>
-                      <p className={`font-medium ${question.candidateAnswer ? 'text-blue-600' : 'text-gray-500'}`}>
-                        {question.candidateAnswer || 'Non répondue'}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="font-medium text-gray-700">Correct:</p>
-                      <p className="font-medium text-green-600">{question.correctAnswer}</p>
-                    </div>
-                  </div>
-                </div>
-              ))}
+        <div className="lg:col-span-3 bg-white border border-gray-100 rounded-xl overflow-hidden">
+          {/* Header */}
+          <div className="px-4 pt-4 pb-0">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Eye className="w-4 h-4 text-gray-400" />
+                <h3 className="text-sm font-semibold text-gray-900">Détail des réponses</h3>
+              </div>
+              <button
+                onClick={() => setShowDetails(!showDetails)}
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                <Eye className="w-3.5 h-3.5" />
+                {showDetails ? 'Masquer les détails' : 'Voir les détails'}
+              </button>
             </div>
-          </CardContent>
+             <div className="mb-4"></div>
+          </div>
+
+          <div className="h-px bg-gray-100 mx-4" />
+
+          {/* Body */}
+          {showDetails && (
+            <div className="px-4 py-4">
+              <div className="space-y-3">
+                {testResult.questions.map((question, index) => (
+                  <div key={question.id} className="bg-gray-50 rounded-lg p-4 border border-gray-100">
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="flex-1">
+                        <h4 className="text-sm font-semibold text-gray-900 mb-1">
+                          Question {index + 1}
+                        </h4>
+                        <p className="text-xs text-gray-600">{question.questionText}</p>
+                      </div>
+                      <span className={`px-2 py-1 text-xs font-semibold rounded-full flex-shrink-0 flex items-center gap-1 ${
+                        question.isCorrect 
+                          ? 'bg-green-50 text-green-800 border-green-200' 
+                          : 'bg-red-50 text-red-800 border-red-200'
+                      }`}>
+                        {question.isCorrect ? (
+                          <>
+                            <Check className="w-3 h-3" />
+                            Correct
+                          </>
+                        ) : (
+                          <>
+                            <X className="w-3 h-3" />
+                            Incorrect
+                          </>
+                        )}
+                      </span>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div className="bg-white rounded-lg p-3 border border-gray-200">
+                        <div className="flex items-center gap-1.5 mb-1">
+                          <User className="w-3 h-3 text-blue-400" />
+                          <p className="text-xs font-medium text-gray-700">Réponse du candidat</p>
+                        </div>
+                        <p className={`text-xs font-medium ${
+                          question.candidateAnswer ? 'text-blue-600' : 'text-gray-400'
+                        }`}>
+                          {question.candidateAnswer || 'Non répondue'}
+                        </p>
+                      </div>
+                      <div className="bg-white rounded-lg p-3 border border-gray-200">
+                        <div className="flex items-center gap-1.5 mb-1">
+                          <Check className="w-3 h-3 text-green-400" />
+                          <p className="text-xs font-medium text-gray-700">Réponse correcte</p>
+                        </div>
+                        <p className="text-xs font-medium text-green-600">{question.correctAnswer}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
           )}
-        </Card>
+        </div>
       </div>
-      
-      {/* 🎯 MODAL DE REJET */}
       <Dialog open={rejectModalOpen} onOpenChange={setRejectModalOpen}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>

@@ -21,6 +21,9 @@ REQUIREMENTS:
 - NO explanations
 - Use technologies from candidate profile
 - Mix difficulty levels appropriately
+- 10 percent of the questions must be IQ (logic, reasoning, pattern recognition) questions at intermediate level
+- IQ questions must NOT be based on technologies but on logical thinking and problem-solving
+- Clearly set "technology": "IQ" for those questions
 
 EXAMPLE FORMAT:
 {{"questions":[{{"technology":"Python","level":"intermediate","question":"Which statement best describes the role of list comprehension in Python?","options":["A) It creates loops only","B) It simplifies collection creation","C) It manages exceptions","D) It defines classes"],"correct_answer":"A) It simplifies collection creation"}}]}}
