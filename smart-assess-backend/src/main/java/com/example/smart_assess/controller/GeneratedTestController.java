@@ -5,6 +5,8 @@ import com.example.smart_assess.enums.*;
 import com.example.smart_assess.repository.*;
 import com.example.smart_assess.service.TechnicalProfileService;
 import com.example.smart_assess.service.EmailService;
+import com.example.smart_assess.service.EvaluationResultService;
+import com.example.smart_assess.service.NotificationService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -13,6 +15,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.reactive.function.client.WebClient;
 
@@ -32,8 +35,11 @@ public class GeneratedTestController {
     private final CandidatureRepository candidatureRepository;
     private final TestQuestionRepository testQuestionRepository;
     private final AnswerRepository answerRepository;
+    private final EvaluationResultRepository evaluationResultRepository;
     private final TechnicalProfileService technicalProfileService;
     private final EmailService emailService;
+    private final EvaluationResultService evaluationResultService;
+    private final NotificationService notificationService;
     private final WebClient.Builder webClientBuilder;
     private final ObjectMapper objectMapper;
 
@@ -112,6 +118,7 @@ public class GeneratedTestController {
     // =========================
     @PostMapping("/generate")
     @PreAuthorize("hasRole('MANAGER')")
+    @Transactional
     public ResponseEntity<Map<String, Object>> generateTest(@RequestBody Map<String, Object> testData) {
         try {
             Long candidatureId = Long.valueOf(testData.get("candidatureId").toString());
@@ -507,7 +514,7 @@ public class GeneratedTestController {
             log.info("=== GET TEST FOR REVIEW CALLED ===");
             log.info("Test ID: {}", id);
             
-            Optional<GeneratedTest> testOpt = generatedTestRepository.findById(id);
+            Optional<GeneratedTest> testOpt = generatedTestRepository.findByIdWithCandidate(id);
             if (testOpt.isEmpty()) {
                 return ResponseEntity.status(404).body(Map.of(
                     "success", false,
@@ -538,6 +545,20 @@ public class GeneratedTestController {
                 scores.put("skillScores", calculatedResult.getSkillScores());
                 log.info("Calculated scores for test {}: finalScore={}, totalScore={}, maxScore={}", 
                     test.getId(), calculatedResult.getFinalScore(), calculatedResult.getTotalScore(), calculatedResult.getMaxScore());
+                
+                // Calculer et sauvegarder le score composite automatiquement
+                try {
+                    log.info("=== TRIGGERING COMPOSITE SCORE CALCULATION FROM REVIEW ===");
+                    evaluationResultService.calculateAndSaveCompositeScore(
+                        test.getCandidate().getId(), 
+                        test.getId()
+                    );
+                    log.info("Composite score calculation triggered successfully from review for candidate: {}", test.getCandidate().getId());
+                } catch (Exception e) {
+                    log.error("Error calculating composite score from review for candidate {}: {}", 
+                        test.getCandidate().getId(), e.getMessage());
+                    // Ne pas bloquer la révision du test si le calcul du score composite échoue
+                }
             } else {
                 log.warn("Could not calculate scores for test {}", test.getId());
                 scores.put("totalScore", 0);
@@ -798,7 +819,7 @@ public class GeneratedTestController {
             log.info("Test ID: {}", id);
             log.info("Submission data: {}", submissionData);
             
-            GeneratedTest test = generatedTestRepository.findById(id)
+            GeneratedTest test = generatedTestRepository.findByIdWithCandidate(id)
                     .orElseThrow(() -> new RuntimeException("Test not found"));
             
             String token = (String) submissionData.get("token");
@@ -897,6 +918,20 @@ public class GeneratedTestController {
             EvaluationResult evaluationResult = calculateTestResults(test);
             if (evaluationResult != null) {
                 test.setEvaluationResult(evaluationResult);
+                
+                // Calculer et sauvegarder le score composite automatiquement
+                try {
+                    log.info("=== TRIGGERING AUTOMATIC COMPOSITE SCORE CALCULATION ===");
+                    evaluationResultService.calculateAndSaveCompositeScore(
+                        test.getCandidate().getId(), 
+                        test.getId()
+                    );
+                    log.info("Composite score calculation triggered successfully for candidate: {}", test.getCandidate().getId());
+                } catch (Exception e) {
+                    log.error("Error calculating composite score for candidate {}: {}", 
+                        test.getCandidate().getId(), e.getMessage());
+                    // Ne pas bloquer la soumission du test si le calcul du score composite échoue
+                }
             }
             
             // Mettre à jour le statut du test à SUBMITTED
@@ -931,6 +966,14 @@ public class GeneratedTestController {
                 
             } catch (Exception emailError) {
                 log.error("Failed to send email notification: {}", emailError.getMessage());
+            }
+            
+            // 🚀 Notifier les managers de la soumission du test
+            try {
+                notificationService.notifyTestSubmitted(test, test.getCandidate());
+                log.info("WebSocket notification sent for test submission by candidate: {}", test.getCandidate().getFirstName() + " " + test.getCandidate().getLastName());
+            } catch (Exception wsError) {
+                log.error("Failed to send WebSocket notification: {}", wsError.getMessage());
             }
             
             return ResponseEntity.ok(Map.of(
@@ -1310,24 +1353,12 @@ public class GeneratedTestController {
         try {
             log.info("=== CALCULATING TEST RESULTS FOR TEST {} ===", test.getId());
             
-            // 🎯 NOUVELLE LOGIQUE : Récupérer les réponses du candidat via candidate_id
-            List<Answer> answers = answerRepository.findByCandidateId(test.getCandidate().getId());
-            log.info("Answers found for candidate {}: {}", test.getCandidate().getId(), answers != null ? answers.size() : 0);
+            // FIX: Récupérer directement les réponses pour ce test spécifique
+            List<Answer> testAnswers = answerRepository.findByTestId(test.getId());
+            log.info("Answers found for test {}: {}", test.getId(), testAnswers != null ? testAnswers.size() : 0);
             
-            if (answers == null || answers.isEmpty()) {
-                log.warn("No answers found for candidate {}", test.getCandidate().getId());
-                return null;
-            }
-            
-            // Filtrer uniquement les réponses pour ce test spécifique
-            List<Answer> testAnswers = answers.stream()
-                    .filter(answer -> answer.getTest() != null && answer.getTest().getId().equals(test.getId()))
-                    .collect(Collectors.toList());
-            
-            log.info("Test-specific answers found: {}", testAnswers.size());
-            
-            if (testAnswers.isEmpty()) {
-                log.warn("No test-specific answers found for test {}", test.getId());
+            if (testAnswers == null || testAnswers.isEmpty()) {
+                log.warn("No answers found for test {}", test.getId());
                 return null;
             }
             
@@ -1385,7 +1416,7 @@ public class GeneratedTestController {
                         .build());
             }
             
-            return EvaluationResult.builder()
+            EvaluationResult evaluationResult = EvaluationResult.builder()
                     .test(test)
                     .totalQuestions(totalQuestions)
                     .correctAnswers((int) correctAnswers)
@@ -1395,6 +1426,12 @@ public class GeneratedTestController {
                     .skillScores(skillScores)
                     .createdAt(LocalDateTime.now())
                     .build();
+            
+            // Save EvaluationResult to database immediately so it's available for composite score calculation
+            evaluationResult = evaluationResultRepository.save(evaluationResult);
+            log.info("EvaluationResult saved to database with ID: {}", evaluationResult.getId());
+            
+            return evaluationResult;
             
         } catch (Exception e) {
             log.error("Error calculating test results: {}", e.getMessage(), e);

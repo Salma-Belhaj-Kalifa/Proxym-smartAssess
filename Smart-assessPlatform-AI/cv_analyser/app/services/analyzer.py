@@ -14,10 +14,8 @@ You are an expert CV analyzer for automated MCQ generation. Your goal is to extr
 
 Return a STRICT JSON with the following sections:
 
-1) Basic Information
-- full_name, email, phone
 
-2) Summary
+1) Summary
 - summary: Create a concise, professional summary in THIRD PERSON (2-3 sentences maximum) that captures the candidate's essence. Include:
   * Core expertise and specialization
   * Career level and experience highlight
@@ -26,11 +24,10 @@ Return a STRICT JSON with the following sections:
   * Keep it brief and impactful - maximum 2-3 sentences
 - career_level: Determine based on experience and projects (e.g., Junior, Intermediate, Senior)
 - years_of_experience: Total years of experience extracted from CV
-- key_skills: Top 5 most relevant technical and soft skills
 - strengths: Top 3 professional strengths
 - specializations: 2-3 key areas of expertise (e.g., "Full-Stack Development", "Cloud Architecture", "AI/ML Integration")
 
-3) Technical Information
+2) Technical Information
 - domain: The candidate's PRIMARY domain. Follow this strict priority order:
     STEP 1 — Check education first: If the degree or field of study is explicitly named (e.g., "Law", "Medicine", "Computer Science", "Finance", "Engineering"), set domain to that field. This applies even if the candidate is currently a student.
     STEP 2 — If no degree field is found, check work experience and projects for a dominant professional area.
@@ -41,17 +38,17 @@ Return a STRICT JSON with the following sections:
     - skill_level: Assign beginner/intermediate/advanced based on contextual proficiency.
     - Consider context from all sections (projects, experience, education, certifications).
     - DO not include languages in this section
-4) Certifications
+3) Certifications
 - Extract ONLY explicitly mentioned certifications.
 - Include certification_name, issuing_organization (if mentioned, or empty string if not found), issue_date (if mentioned, or empty string if not found), if any info missing, leave it empty.
 - Do NOT include diplomas, degrees, or job titles.
 
-5) Soft Skills
+4) Soft Skills
 - Extract ONLY explicitly mentioned complete soft skills.
 - Dynamically group into categories: communication_skills, leadership_skills, problem_solving, teamwork, time_management, adaptability.
 - If none mentioned explicitly,DO NOT HALLUCINATE and leave arrays empty.
 
-6) Projects
+5) Projects
 - For each project in CV, extract following JSON fields:
 - name: exact project name
 - tech_stack: list of technologies used
@@ -60,10 +57,10 @@ Return a STRICT JSON with the following sections:
         Do NOT describe the whole project here; only what the candidate did.
 - impact: Brief description of project impact or results achieved
 
-7) Education
+6) Education
 - Extract education information with degree, institution, field, start_date, end_date
 
-8) Languages
+7) Languages
 - Extract all mentioned languages with proficiency levels
 
 CRITICAL RULES:
@@ -81,10 +78,8 @@ ANTI-HALLUCINATION RULES:
 - If no professional experience exists, set years_of_experience to "0".
 - If domain is unclear, use "Unknown".
 - If a skill is not explicitly mentioned, do not add it.
-- Do NOT infer programming languages from spoken languages.
 - Do NOT infer leadership, problem-solving, or communication unless explicitly stated.
 - Use empty string "" or empty array [] when information is missing.
-IMPORTANT: ALWAYS include a comprehensive Summary section with career_level, years_of_experience, key_skills, strengths, and specializations. The summary should be unique, compelling, and highlight the candidate's professional value and potential.
 
 CV TEXT:
 {cv_text}
@@ -105,7 +100,7 @@ class CVAnalyzer:
 
                 self.llm = {
                     "api_key": api_key,
-                    "model": "llama-3.1-8b-instant",
+                    "model": "llama-3.3-70b-versatile",
                     "temperature": 0
                 }
                 print("DEBUG: Direct Groq API initialized successfully")
@@ -130,7 +125,8 @@ class CVAnalyzer:
                             "content": PROMPT_TEMPLATE.format(cv_text=cv_text)
                         }
                     ],
-                    "temperature": self.llm["temperature"]
+                    "temperature": self.llm["temperature"],
+                    "max_tokens": 6000
                 }
 
                 response = requests.post(

@@ -1,14 +1,17 @@
 import { Outlet, Link, useLocation, Navigate } from "react-router-dom";
-import { LayoutDashboard, Briefcase, Users, FileText, Settings, LogOut, ChevronLeft, Menu, User, CheckCircle, Brain, Search, TrendingUp } from "lucide-react";
+import { LayoutDashboard, Briefcase, Users, FileText, Settings, LogOut, ChevronLeft, Menu, User, CheckCircle, Brain, Search, TrendingUp, BarChart3, Target } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { useCurrentUserSafe } from '@/features/auth/authQueries';
 import { useLogout } from '@/features/auth/authMutations';
+import { NotificationCenter } from '@/components/NotificationCenter';
 
 const navItems = [
   { label: "Tableau de bord", icon: LayoutDashboard, path: "/manager/dashboard" },
   { label: "Postes de stage", icon: Briefcase, path: "/manager/postes" },
   { label: "Candidats", icon: Users, path: "/manager/candidats" },
+  { label: "Recherche Sémantique", icon: Target, path: "/manager/semantic-search" },
+  { label: "Ranking", icon: BarChart3, path: "/manager/ranking" },
   { label: "Résultats des tests", icon: CheckCircle, path: "/manager/tests-resultats" },
   //{ label: "Matching", icon: TrendingUp, path: "/manager/positions" },
   { label: "Mon profil", icon: User, path: "/manager/profil" },
@@ -116,12 +119,39 @@ const ManagerLayout = () => {
         </div>
       </aside>
 
-      <main className={cn(
+      <div className={cn(
         "flex-1 overflow-auto bg-background transition-all duration-300",
         collapsed ? "ml-16" : "ml-64"
       )}>
-        <Outlet />
-      </main>
+        {/* Header */}
+        <header className="bg-white border-b border-gray-200 px-6 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <h1 className="text-xl font-semibold text-gray-900">
+                {navItems.find(item => location.pathname.startsWith(item.path))?.label || "Tableau de bord"}
+              </h1>
+            </div>
+            
+            {/* Actions header */}
+            <div className="flex items-center space-x-4">
+              <NotificationCenter />
+              <div className="flex items-center space-x-2">
+                <div className="w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center">
+                  <User className="w-4 h-4 text-gray-600" />
+                </div>
+                <span className="text-sm font-medium text-gray-700">
+                  {user?.firstName} {user?.lastName}
+                </span>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        {/* Main content */}
+        <main className="p-6">
+          <Outlet />
+        </main>
+      </div>
     </div>
   );
 };

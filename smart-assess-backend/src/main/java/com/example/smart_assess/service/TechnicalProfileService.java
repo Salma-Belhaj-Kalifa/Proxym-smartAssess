@@ -10,6 +10,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -25,6 +26,10 @@ public class TechnicalProfileService {
     private final TechnicalProfileRepository technicalProfileRepository;
     private final CandidateCVRepository candidateCVRepository;
     private final ObjectMapper objectMapper;
+    @Autowired
+    private ElasticsearchService elasticsearchService;
+    @Autowired
+    private TechnicalProfileDebugService debugService;
 
     public Optional<TechnicalProfile> findByCvId(Long cvId) {
         log.info("Finding technical profile by CV ID: {}", cvId);
@@ -150,6 +155,63 @@ public class TechnicalProfileService {
             profile = technicalProfileRepository.save(profile);
             
             log.info("Technical profile created successfully with ID: {}", profile.getId());
+            
+            // Indexer le candidat dans Elasticsearch
+            try {
+                Long candidateId = cv.getCandidate().getId();
+                log.info("Indexing candidate {} in Elasticsearch after technical profile creation", candidateId);
+                
+                // Debug: Analyser les données du profil avant extraction
+                debugProfileDataExtraction(profile, cv);
+                
+                // Extraire les données du profil technique
+                String summary = "";
+                java.util.List<String> skills = java.util.Collections.emptyList();
+                Integer yearsOfExperience = 0;
+                
+                if (profile.getParsedData() != null) {
+                    JsonNode parsedData = profile.getParsedData();
+                    // Extraire le summary depuis l'objet Summary
+                    if (parsedData.has("Summary") && parsedData.get("Summary").has("summary")) {
+                        summary = parsedData.get("Summary").get("summary").asText();
+                    }
+                    
+                    // Extraire les skills depuis Technical Information: technologies
+                    if (parsedData.has("Technical Information") && parsedData.get("Technical Information").has("technologies")) {
+                        JsonNode technologiesNode = parsedData.get("Technical Information").get("technologies");
+                        if (technologiesNode.isArray()) {
+                            skills = new java.util.ArrayList<>();
+                            for (JsonNode tech : technologiesNode) {
+                                if (tech.has("technology")) {
+                                    skills.add(tech.get("technology").asText());
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Extraire les années d'expérience depuis years_of_experience dans l'objet Summary
+                    if (parsedData.has("Summary") && parsedData.get("Summary").has("years_of_experience")) {
+                        String yearsStr = parsedData.get("Summary").get("years_of_experience").asText();
+                        try {
+                            yearsOfExperience = Integer.parseInt(yearsStr);
+                        } catch (NumberFormatException e) {
+                            log.warn("Could not parse years_of_experience: {}", yearsStr);
+                            yearsOfExperience = 0;
+                        }
+                    }
+                }
+                
+                elasticsearchService.indexCandidate(candidateId, summary, skills, yearsOfExperience)
+                    .subscribe(
+                        response -> log.info("Candidate {} indexed successfully: {}", candidateId, response),
+                        error -> log.error("Failed to index candidate {}: {}", candidateId, error.getMessage())
+                    );
+                    
+            } catch (Exception e) {
+                log.error("Error indexing candidate {} in Elasticsearch: {}", cv.getCandidate().getId(), e.getMessage());
+                // Ne pas bloquer la création du profil technique si l'indexation échoue
+            }
+            
             return convertToDto(profile);
             
         } catch (Exception e) {
@@ -183,6 +245,60 @@ public class TechnicalProfileService {
             profile = technicalProfileRepository.save(profile);
             
             log.info("Technical profile created successfully with ID: {}", profile.getId());
+            
+            // Indexer le candidat dans Elasticsearch
+            try {
+                Long candidateId = cv.getCandidate().getId();
+                log.info("Indexing candidate {} in Elasticsearch after technical profile creation", candidateId);
+                
+                // Extraire les données du profil technique
+                String summary = "";
+                java.util.List<String> skills = java.util.Collections.emptyList();
+                Integer yearsOfExperience = 0;
+                
+                if (profile.getParsedData() != null) {
+                    JsonNode parsedData = profile.getParsedData();
+                    // Extraire le summary depuis l'objet Summary
+                    if (parsedData.has("Summary") && parsedData.get("Summary").has("summary")) {
+                        summary = parsedData.get("Summary").get("summary").asText();
+                    }
+                    
+                    // Extraire les skills depuis Technical Information: technologies
+                    if (parsedData.has("Technical Information") && parsedData.get("Technical Information").has("technologies")) {
+                        JsonNode technologiesNode = parsedData.get("Technical Information").get("technologies");
+                        if (technologiesNode.isArray()) {
+                            skills = new java.util.ArrayList<>();
+                            for (JsonNode tech : technologiesNode) {
+                                if (tech.has("technology")) {
+                                    skills.add(tech.get("technology").asText());
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Extraire les années d'expérience depuis years_of_experience dans l'objet Summary
+                    if (parsedData.has("Summary") && parsedData.get("Summary").has("years_of_experience")) {
+                        String yearsStr = parsedData.get("Summary").get("years_of_experience").asText();
+                        try {
+                            yearsOfExperience = Integer.parseInt(yearsStr);
+                        } catch (NumberFormatException e) {
+                            log.warn("Could not parse years_of_experience: {}", yearsStr);
+                            yearsOfExperience = 0;
+                        }
+                    }
+                }
+                
+                elasticsearchService.indexCandidate(candidateId, summary, skills, yearsOfExperience)
+                    .subscribe(
+                        response -> log.info("Candidate {} indexed successfully: {}", candidateId, response),
+                        error -> log.error("Failed to index candidate {}: {}", candidateId, error.getMessage())
+                    );
+                    
+            } catch (Exception e) {
+                log.error("Error indexing candidate {} in Elasticsearch: {}", cv.getCandidate().getId(), e.getMessage());
+                // Ne pas bloquer la création du profil technique si l'indexation échoue
+            }
+            
             return convertToDto(profile);
             
         } catch (Exception e) {
@@ -222,6 +338,62 @@ public class TechnicalProfileService {
             profile = save(profile);
             
             log.info("Technical profile saved successfully with ID: {}", profile.getId());
+            
+            // Indexer le candidat dans Elasticsearch
+            try {
+                log.info("Indexing candidate {} in Elasticsearch after technical profile creation", candidateId);
+                
+                // Debug: Analyser les données du profil avant extraction
+                debugProfileDataExtraction(profile, cv);
+                
+                // Extraire les données du profil technique
+                String summary = "";
+                java.util.List<String> skills = java.util.Collections.emptyList();
+                Integer yearsOfExperience = 0;
+                
+                if (profile.getParsedData() != null) {
+                    JsonNode parsedData = profile.getParsedData();
+                    // Extraire le summary depuis l'objet Summary
+                    if (parsedData.has("Summary") && parsedData.get("Summary").has("summary")) {
+                        summary = parsedData.get("Summary").get("summary").asText();
+                    }
+                    
+                    // Extraire les skills depuis Technical Information: technologies
+                    if (parsedData.has("Technical Information") && parsedData.get("Technical Information").has("technologies")) {
+                        JsonNode technologiesNode = parsedData.get("Technical Information").get("technologies");
+                        if (technologiesNode.isArray()) {
+                            skills = new java.util.ArrayList<>();
+                            for (JsonNode tech : technologiesNode) {
+                                if (tech.has("technology")) {
+                                    skills.add(tech.get("technology").asText());
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Extraire les années d'expérience depuis years_of_experience dans l'objet Summary
+                    if (parsedData.has("Summary") && parsedData.get("Summary").has("years_of_experience")) {
+                        String yearsStr = parsedData.get("Summary").get("years_of_experience").asText();
+                        try {
+                            yearsOfExperience = Integer.parseInt(yearsStr);
+                        } catch (NumberFormatException e) {
+                            log.warn("Could not parse years_of_experience: {}", yearsStr);
+                            yearsOfExperience = 0;
+                        }
+                    }
+                }
+                
+                elasticsearchService.indexCandidate(candidateId, summary, skills, yearsOfExperience)
+                    .subscribe(
+                        response -> log.info("Candidate {} indexed successfully: {}", candidateId, response),
+                        error -> log.error("Failed to index candidate {}: {}", candidateId, error.getMessage())
+                    );
+                    
+            } catch (Exception e) {
+                log.error("Error indexing candidate {} in Elasticsearch: {}", candidateId, e.getMessage());
+                // Ne pas bloquer la création du profil technique si l'indexation échoue
+            }
+            
             return convertToDto(profile);
             
         } catch (Exception e) {
@@ -237,5 +409,91 @@ public class TechnicalProfileService {
             log.error("Error converting Map to JsonNode", e);
             return objectMapper.createObjectNode();
         }
+    }
+    
+    /**
+     * Méthode de debug pour diagnostiquer l'extraction des données du profil technique
+     */
+    private void debugProfileDataExtraction(TechnicalProfile profile, CandidateCV cv) {
+        log.info("=== DEBUG PROFILE DATA EXTRACTION FOR PROFILE {} ===", profile.getId());
+        
+        if (profile.getParsedData() != null) {
+            JsonNode parsedData = profile.getParsedData();
+            log.info("ParsedData is not null: {}", parsedData != null);
+            
+            // Lister tous les champs disponibles
+            StringBuilder fields = new StringBuilder();
+            parsedData.fieldNames().forEachRemaining(field -> 
+                fields.append(field).append(", ")
+            );
+            log.info("ParsedData keys: {}", fields.toString());
+            
+            // Vérifier Summary
+            if (parsedData.has("Summary")) {
+                String summary = parsedData.get("Summary").asText();
+                log.info("Found Summary: '{}'", summary);
+            } else {
+                log.warn("Summary field not found in parsedData");
+            }
+            
+            // Vérifier Technical Information
+            if (parsedData.has("Technical Information")) {
+                log.info("Technical Information field found");
+                JsonNode techInfo = parsedData.get("Technical Information");
+                
+                // Lister les sous-champs de Technical Information
+                StringBuilder techFields = new StringBuilder();
+                techInfo.fieldNames().forEachRemaining(field -> 
+                    techFields.append(field).append(", ")
+                );
+                log.info("Technical Information keys: {}", techFields.toString());
+                
+                if (techInfo.has("Skills")) {
+                    JsonNode skillsNode = techInfo.get("Skills");
+                    if (skillsNode.isArray()) {
+                        StringBuilder skills = new StringBuilder();
+                        for (JsonNode skill : skillsNode) {
+                            skills.append(skill.asText()).append(", ");
+                        }
+                        log.info("Found {} skills: {}", skillsNode.size(), skills.toString());
+                    } else {
+                        log.warn("Skills field is not an array: {}", skillsNode.getNodeType());
+                        log.warn("Skills field value: {}", skillsNode.asText());
+                    }
+                } else {
+                    log.warn("Skills field not found in Technical Information");
+                }
+            } else {
+                log.warn("Technical Information field not found in parsedData");
+            }
+            
+            // Utiliser les informations de la base de données au lieu du parsed data pour Basic Information
+            if (cv.getCandidate() != null) {
+                log.info("Using candidate information from database");
+                log.info("Candidate ID: {}", cv.getCandidate().getId());
+                log.info("Candidate Name: {} {}", cv.getCandidate().getFirstName(), cv.getCandidate().getLastName());
+                log.info("Candidate Email: {}", cv.getCandidate().getEmail());
+                log.info("Candidate Phone: {}", cv.getCandidate().getPhone());
+            } else {
+                log.warn("Candidate information not available in CV");
+            }
+            
+            // Afficher la structure complète si possible (limité pour éviter les logs trop longs)
+            try {
+                String dataString = parsedData.toString();
+                if (dataString.length() > 1000) {
+                    log.info("Complete parsedData structure (truncated): {}", dataString.substring(0, 1000) + "...");
+                } else {
+                    log.info("Complete parsedData structure: {}", dataString);
+                }
+            } catch (Exception e) {
+                log.warn("Could not log complete parsedData structure: {}", e.getMessage());
+            }
+            
+        } else {
+            log.warn("ParsedData is null for profile ID: {}", profile.getId());
+        }
+        
+        log.info("=== END DEBUG PROFILE DATA EXTRACTION ===");
     }
 }

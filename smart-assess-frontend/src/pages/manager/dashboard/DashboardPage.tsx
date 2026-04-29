@@ -343,10 +343,7 @@ const DashboardPage = () => {
                       </p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                    <span>Données en temps réel</span>
-                  </div>
+                  
                 </div>
                 <div className="flex gap-3">
                   <Button variant="outline" className="bg-white/50 backdrop-blur-sm border-slate-200 hover:bg-slate-50" asChild>

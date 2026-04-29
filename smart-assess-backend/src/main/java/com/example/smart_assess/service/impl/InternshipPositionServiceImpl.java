@@ -3,12 +3,15 @@ package com.example.smart_assess.service.impl;
 import com.example.smart_assess.dto.CreateInternshipPositionRequest;
 import com.example.smart_assess.dto.InternshipPositionDto;
 import com.example.smart_assess.entity.Candidature;
+import com.example.smart_assess.entity.EvaluationReportEntity;
 import com.example.smart_assess.entity.InternshipPosition;
 import com.example.smart_assess.entity.Manager;
 import com.example.smart_assess.repository.CandidatureRepository;
+import com.example.smart_assess.repository.EvaluationReportRepository;
 import com.example.smart_assess.repository.InternshipPositionRepository;
 import com.example.smart_assess.repository.ManagerRepository;
 import com.example.smart_assess.service.InternshipPositionService;
+import com.example.smart_assess.service.ElasticsearchService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -24,6 +27,8 @@ public class InternshipPositionServiceImpl implements InternshipPositionService 
     private final InternshipPositionRepository positionRepository;
     private final ManagerRepository managerRepository;
     private final CandidatureRepository candidatureRepository;
+    private final EvaluationReportRepository evaluationReportRepository;
+    private final ElasticsearchService elasticsearchService;
 
     @Override
     public InternshipPositionDto createPosition(CreateInternshipPositionRequest request, String managerEmail) {
@@ -52,6 +57,38 @@ public class InternshipPositionServiceImpl implements InternshipPositionService 
 
         position = positionRepository.save(position);
         System.out.println("Position saved successfully with ID: " + position.getId());
+        
+        // Indexer automatiquement dans Elasticsearch
+        try {
+            log.info("Indexing new position {} in Elasticsearch", position.getId());
+            final Long positionId = position.getId();
+            final String positionTitle = position.getTitle();
+            final String positionDescription = position.getDescription();
+            
+            // Diagnostiquer requiredSkills
+            java.util.List<String> requiredSkills = position.getRequiredSkills();
+            log.info("RequiredSkills from position {}: {}", positionId, requiredSkills);
+            log.info("RequiredSkills type: {}", requiredSkills != null ? requiredSkills.getClass().getSimpleName() : "null");
+            if (requiredSkills == null) {
+                requiredSkills = new java.util.ArrayList<>();
+                log.warn("RequiredSkills was null, using empty list");
+            }
+            
+            elasticsearchService.indexPosition(
+                positionId,
+                positionTitle,
+                positionDescription,
+                "", // requirements (non utilisé dans notre modèle)
+                requiredSkills
+            ).subscribe(
+                response -> log.info("Position {} indexed successfully: {}", positionId, response),
+                error -> log.error("Failed to index position {}: {}", positionId, error.getMessage())
+            );
+        } catch (Exception e) {
+            log.error("Error indexing position {} in Elasticsearch: {}", position.getId(), e.getMessage());
+            // Ne pas bloquer la création du poste si l'indexation échoue
+        }
+        
         return toDto(position);
     }
 
@@ -130,11 +167,21 @@ public class InternshipPositionServiceImpl implements InternshipPositionService 
         InternshipPosition position = positionRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Position not found"));
         
-        // Récupérer et supprimer toutes les candidatures associées
+        // Récupérer toutes les candidatures associées
         List<Candidature> candidatures = candidatureRepository.findByInternshipPosition_IdWithRelations(id);
         log.info("Found {} candidatures associated with position {}", candidatures.size(), id);
         
         if (!candidatures.isEmpty()) {
+            // 1. D'abord supprimer les evaluation_reports qui référencent ces candidatures
+            for (Candidature candidature : candidatures) {
+                List<EvaluationReportEntity> reports = evaluationReportRepository.findByCandidatureIdOrderByGeneratedAtDesc(candidature.getId());
+                if (!reports.isEmpty()) {
+                    evaluationReportRepository.deleteAll(reports);
+                    log.info("Deleted {} evaluation reports for candidature {}", reports.size(), candidature.getId());
+                }
+            }
+            
+            // 2. Ensuite supprimer les candidatures
             candidatureRepository.deleteAll(candidatures);
             log.info("Deleted {} associated candidatures", candidatures.size());
         }

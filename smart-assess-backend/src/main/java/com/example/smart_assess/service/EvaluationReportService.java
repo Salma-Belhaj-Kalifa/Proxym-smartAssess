@@ -164,32 +164,62 @@ public class EvaluationReportService {
 
             JsonNode hiringRecommendation = fullReport.get("hiring_recommendation");
             
+            // 🆕 Vérifier si le composite_score pré-calculé existe déjà
+            if (hiringRecommendation.has("composite_score") && 
+                hiringRecommendation.get("composite_score").isNumber()) {
+                
+                double preCalculatedScore = hiringRecommendation.get("composite_score").asDouble();
+                log.info("✅ Using pre-calculated composite score: {}%", preCalculatedScore);
+                
+                // Extraire les scores nécessaires pour le breakdown
+                Double technicalScore = extractTechnicalScore(fullReport);
+                Double positionFitScore = extractPositionFitScore(fullReport);
+                
+                if (technicalScore != null && positionFitScore != null) {
+                    // Créer le breakdown avec le score pré-calculé
+                    ObjectNode breakdown = objectMapper.createObjectNode();
+                    breakdown.put("technical_test_score", technicalScore);
+                    breakdown.put("position_fit_score", positionFitScore);
+                    breakdown.put("technical_weight", 0.6);
+                    breakdown.put("position_weight", 0.4);
+                    breakdown.put("calculation_formula", "60% Test Technique + 40% Fit Poste (pré-calculé)");
+                    breakdown.put("final_composite_score", preCalculatedScore);
+
+                    // Mettre à jour le JSON SANS écraser le composite_score
+                    if (hiringRecommendation.isObject()) {
+                        ((ObjectNode) hiringRecommendation).set("composite_score_breakdown", breakdown);
+                        // 🚨 NE PAS écraser composite_score - utiliser la valeur pré-calculée
+                    }
+                }
+                
+                return fullReport;
+            }
+            
+            // 🔄 Fallback: Calculer le score composite uniquement si aucun score pré-calculé n'existe
+            log.warn("⚠️ No pre-calculated composite score found - calculating fallback score");
+            
             // Extraire les scores nécessaires
             Double technicalScore = extractTechnicalScore(fullReport);
             Double positionFitScore = extractPositionFitScore(fullReport);
-            Double cvProfileScore = extractCvProfileScore(fullReport);
             
-            if (technicalScore == null || positionFitScore == null || cvProfileScore == null) {
+            if (technicalScore == null || positionFitScore == null) {
                 return fullReport;
             }
 
-            // Calculer le score composite
-            double technicalWeight = 0.4;
-            double positionWeight = 0.3;
-            double cvWeight = 0.3;
+            // Calculer le score composite (uniquement technique + matching)
+            double technicalWeight = 0.6;  // 60% pour le test technique
+            double positionWeight = 0.4;   // 40% pour le matching poste
+
             double finalCompositeScore = technicalScore * technicalWeight + 
-                                       positionFitScore * positionWeight + 
-                                       cvProfileScore * cvWeight;
+                                       positionFitScore * positionWeight;
 
             // Créer le breakdown
             ObjectNode breakdown = objectMapper.createObjectNode();
             breakdown.put("technical_test_score", technicalScore);
             breakdown.put("position_fit_score", positionFitScore);
-            breakdown.put("cv_profile_score", cvProfileScore);
             breakdown.put("technical_weight", technicalWeight);
             breakdown.put("position_weight", positionWeight);
-            breakdown.put("cv_weight", cvWeight);
-            breakdown.put("calculation_formula", "40% Test Technique + 30% Fit Poste + 30% Profil CV");
+            breakdown.put("calculation_formula", "60% Test Technique + 40% Fit Poste");
             breakdown.put("final_composite_score", Math.round(finalCompositeScore));
 
             // Mettre à jour le JSON
@@ -225,48 +255,7 @@ public class EvaluationReportService {
         return null;
     }
 
-    private Double extractCvProfileScore(JsonNode fullReport) {
-        // Pour le CV Profile Score, nous utilisons une logique basée sur l'expérience et les compétences
-        if (fullReport.has("candidate_summary")) {
-            JsonNode candidateSummary = fullReport.get("candidate_summary");
-            
-            // Base score selon le niveau d'expérience
-            double baseScore = 50.0; // Default
-            
-            if (candidateSummary.has("experience_level")) {
-                String experienceLevel = candidateSummary.get("experience_level").asText();
-                switch (experienceLevel.toLowerCase()) {
-                    case "senior":
-                        baseScore = 85.0;
-                        break;
-                    case "intermediate":
-                    case "mid":
-                        baseScore = 70.0;
-                        break;
-                    case "junior":
-                        baseScore = 55.0;
-                        break;
-                    case "intern":
-                    case "stage":
-                        baseScore = 40.0;
-                        break;
-                }
-            }
-            
-            // Bonus pour le nombre de compétences clés
-            if (candidateSummary.has("key_skills_from_profile")) {
-                JsonNode keySkills = candidateSummary.get("key_skills_from_profile");
-                if (keySkills.isArray()) {
-                    int skillCount = keySkills.size();
-                    baseScore += Math.min(skillCount * 2, 15); // Max 15 points bonus
-                }
-            }
-            
-            return Math.min(baseScore, 100.0);
-        }
-        return 60.0; // Default fallback
-    }
-
+    
     @Transactional(readOnly = true)
     public List<EvaluationReportDto> getAllReports() {
         List<EvaluationReportEntity> entities = evaluationReportRepository.findAllByOrderByGeneratedAtDesc();

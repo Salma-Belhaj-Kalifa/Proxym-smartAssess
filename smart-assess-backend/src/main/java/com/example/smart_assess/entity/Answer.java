@@ -29,7 +29,7 @@ public class Answer {
     private TestQuestion question;
 
     @JsonIgnoreProperties({"answers"})
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.LAZY, cascade = CascadeType.REMOVE)
     @JoinColumn(name = "test_id")
     private GeneratedTest test; // Gardé pour référence mais plus obligatoire
 

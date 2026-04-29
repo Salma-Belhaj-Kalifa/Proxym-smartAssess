@@ -48,6 +48,7 @@ public class EvaluationController {
     private final CandidatureRepository candidatureRepository;
     private final InternshipPositionService internshipPositionService;
     private final EvaluationReportService evaluationReportService;
+    private final EvaluationResultService evaluationResultService;
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
 
@@ -190,6 +191,36 @@ public class EvaluationController {
             // Keep backward compatibility with single position
             String primaryPosition = appliedPositions.isEmpty() ? "Poste non spécifié" : (String) appliedPositions.get(0).get("title");
             request.put("applied_position", primaryPosition);
+            
+            // 🆕 Récupérer le composite score pré-calculé depuis evaluation_results
+            Double compositeScore = null;
+            if (test != null) {
+                log.info("=== RETRIEVING COMPOSITE SCORE FROM EVALUATION_RESULTS ===");
+                Optional<EvaluationResult> evaluationResultOpt = evaluationResultService.findByTestId(test.getId());
+                if (evaluationResultOpt.isPresent()) {
+                    EvaluationResult evalResult = evaluationResultOpt.get();
+                    compositeScore = evalResult.getCompositeScore();
+                    log.info("✅ Composite score retrieved from evaluation_results: {} (normalized)", compositeScore);
+                    
+                    // 🆕 Convertir le score normalisé (0-1) en pourcentage (0-100)
+                    if (compositeScore != null) {
+                        compositeScore = compositeScore * 100.0;
+                        log.info("✅ Composite score converted to percentage: {}%", compositeScore);
+                    }
+                } else {
+                    log.warn("⚠️ No evaluation_result found for test ID: {}", test.getId());
+                }
+                log.info("=== END COMPOSITE SCORE RETRIEVAL ===");
+            }
+            
+            // 🆕 Ajouter le composite score à la requête
+            if (compositeScore != null) {
+                request.put("composite_score", compositeScore);
+                log.info("✅ Composite score {}% added to AI service request", compositeScore);
+            } else {
+                log.warn("⚠️ No composite score available - AI service will calculate scores");
+                request.put("composite_score", null);
+            }
             
             // Call AI service
             String aiServiceUrl = "http://localhost:8000/api/v1/generate-evaluation-report";

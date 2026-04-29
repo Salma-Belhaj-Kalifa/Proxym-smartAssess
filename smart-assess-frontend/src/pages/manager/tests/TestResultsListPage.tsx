@@ -85,91 +85,18 @@ const TestResultsListPage: React.FC = () => {
 
   useEffect(() => {
     if (tests.length > 0) {
-      loadTestsWithResults();
-    }
-  }, [tests, refreshKey]);
-
-  const loadTestsWithResults = async () => {
-    try {
-      setIsLoading(true);
-      setError(null);
-
-      const results: TestResult[] = [];
-
+      // Utiliser directement les données de useTests() - ZERO appels API supplémentaires
       const completedTests = tests.filter(
         (test) => test.status === 'COMPLETED' || test.status === 'SUBMITTED'
       );
 
-      for (const test of completedTests) {
-        try {
-          const response = await apiClient.get(`/tests/${test.id}/review`);
-          const reviewData = response.data;
-
-          const testResult: TestResult = {
-            id: reviewData.id || test.id,
-            candidate: {
-              id: reviewData.candidate?.id || test.candidate?.id || 0,
-              firstName: reviewData.candidate?.firstName || test.candidate?.firstName || 'Candidat',
-              lastName: reviewData.candidate?.lastName || test.candidate?.lastName || 'Inconnu',
-              email: reviewData.candidate?.email || test.candidate?.email || 'email@example.com'
-            },
-            // ✅ Nouvelle structure: plus de internshipPosition direct
-            // Les postes seront récupérés via les candidatures du candidat
-            status: reviewData.status || 'SUBMITTED',
-            createdAt: reviewData.createdAt || test.createdAt || new Date().toISOString(),
-            submittedAt: reviewData.session?.submittedAt,
-            timeLimitMinutes: reviewData.timeLimitMinutes || test.timeLimitMinutes || 60,
-            finalScore: reviewData.scores?.finalScore,
-            testScore: reviewData.scores?.totalScore,
-            timeSpentMinutes: reviewData.session?.timeSpentMinutes,
-            timeSpentSeconds: reviewData.session?.timeSpentSeconds,
-            timeSpentFormatted: reviewData.session?.timeSpentMinutes
-              ? `${reviewData.session.timeSpentMinutes} min`
-              : 'N/A',
-            session: reviewData.session
-          };
-
-          results.push(testResult);
-        } catch {
-          const fallbackResult: TestResult = {
-            id: test.id,
-            candidate: {
-              id: test.candidate?.id || 0,
-              firstName: test.candidate?.firstName || 'Candidat',
-              lastName: test.candidate?.lastName || 'Inconnu',
-              email: test.candidate?.email || 'email@example.com'
-            },
-            // ✅ Nouvelle structure: plus de internshipPosition direct
-            status: test.status || 'SUBMITTED',
-            createdAt: test.createdAt || new Date().toISOString(),
-            submittedAt: test.session?.submittedAt,
-            timeLimitMinutes: test.timeLimitMinutes || 60,
-            finalScore: test.score,
-            testScore: test.score,
-            timeSpentMinutes: test.session?.timeSpentMinutes,
-            timeSpentSeconds: test.session?.timeSpentSeconds,
-            timeSpentFormatted: test.session?.timeSpentMinutes
-              ? `${test.session.timeSpentMinutes} min`
-              : 'N/A',
-            session: test.session
-          };
-
-          results.push(fallbackResult);
-          failedTestIds.add(test.id);
-        }
-      }
-
-      results.sort((a, b) => getResultRecencyTime(b) - getResultRecencyTime(a));
-
-      setTestResults(results);
+      // Trier par récence
+      const sortedTests = completedTests.sort((a, b) => getResultRecencyTime(b) - getResultRecencyTime(a));
+      
+      setTestResults(sortedTests);
       setRenderKey((prev) => prev + 1);
-    } catch {
-      setError('Erreur lors du chargement des résultats');
-      setTestResults([]);
-    } finally {
-      setIsLoading(false);
     }
-  };
+  }, [tests, refreshKey]);
 
   const generateReport = async (candidatureId: number) => {
     try {
@@ -179,8 +106,9 @@ const TestResultsListPage: React.FC = () => {
       
       if (response.data) {
         toast.success('Rapport IA généré avec succès!');
-        // Refresh the data to show the updated AI score
-        loadTestsWithResults();
+        // Refresh data to show the updated AI score
+        refetchTests();
+        setRefreshKey((prev) => prev + 1);
       }
     } catch (error: any) {
       console.error('Error generating report:', error);

@@ -27,4 +27,11 @@ export default defineConfig(({ mode }) => ({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  define: {
+    // Polyfill pour sockjs-client
+    global: 'globalThis',
+  },
+  optimizeDeps: {
+    include: ['sockjs-client'],
+  },
 }));

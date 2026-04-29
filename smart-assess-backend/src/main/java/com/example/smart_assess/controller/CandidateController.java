@@ -57,6 +57,22 @@ public class CandidateController {
         return ResponseEntity.ok(candidateService.updateProfile(id, request));
     }
 
+    @GetMapping("/batch")
+    @PreAuthorize("hasRole('MANAGER') or hasRole('HR')")
+    public ResponseEntity<List<CandidateDto>> getCandidatesByIds(@RequestParam List<Long> ids) {
+        log.info("=== GET CANDIDATES BY IDS CALLED ===");
+        log.info("Requested candidate IDs: {}", ids);
+        
+        try {
+            List<CandidateDto> candidates = candidateService.getCandidatesByIds(ids);
+            log.info("Successfully retrieved {} candidates", candidates.size());
+            return ResponseEntity.ok(candidates);
+        } catch (Exception e) {
+            log.error("Error getting candidates by IDs: {}", ids, e);
+            return ResponseEntity.status(500).build();
+        }
+    }
+
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('MANAGER') or hasRole('HR')")
     public ResponseEntity<Map<String, Object>> deleteCandidate(@PathVariable Long id) {
@@ -98,4 +114,5 @@ public class CandidateController {
             ));
         }
     }
-}
+
+    }

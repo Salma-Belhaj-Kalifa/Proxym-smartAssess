@@ -28,7 +28,8 @@ import {
   Briefcase,
   GraduationCap,
   Clock,
-  Code
+  Code, 
+  BarChart3
 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import apiClient from '@/lib/api';
@@ -115,7 +116,7 @@ interface ReportData {
     }>;
     recommended_positions?: Array<{
       position: string;
-      match_score: number;
+      fit_analysis?: string;
       reasoning?: string;
       strengths?: string[];
       skill_gaps?: string[];
@@ -129,10 +130,8 @@ interface ReportData {
     composite_score_breakdown?: {
       technical_test_score: number;
       position_fit_score: number;
-      cv_profile_score: number;
       technical_weight: number;
       position_weight: number;
-      cv_weight: number;
       calculation_formula: string;
       final_composite_score: number;
     };
@@ -147,14 +146,14 @@ interface ReportData {
     comment?: string;
   };
   team_fit_analysis?: {
-    collaboration_score?: number;
+    collaboration_level?: string;
     collaboration_potential?: string;
     problem_solving_approach?: string;
     readiness_for_team_environment?: string;
     team_fit?: string;
     leadership_potential?: string;
-    adaptability_score?: number;
-    communication_skills?: number;
+    adaptability_level?: string;
+    communication_level?: string;
     work_style?: string;
     teamwork_preference?: string;
     motivation_level?: string;
@@ -531,20 +530,46 @@ const AIReportDetailPage: React.FC = () => {
     return 'destructive';
   };
 
-  const getRecommendationText = (recommendation?: string) => {
-    if (!recommendation) return 'Non défini';
-    switch (recommendation) {
-      case 'Hire': return 'Embaucher';
-      case 'Consider': return 'Considérer';
-      case 'Do Not Hire': return 'Ne pas embaucher';
-      default: return recommendation;
+  const getRecommendationText = (recommendation: string) => {
+    switch (recommendation?.toLowerCase()) {
+      case 'strongly recommend':
+        return 'Fortement recommandé';
+      case 'recommend':
+        return 'Recommandé';
+      case 'consider':
+        return 'À considérer';
+      case 'do not hire':
+        return 'Ne pas embaucher';
+      default:
+        return recommendation || 'Non évalué';
     }
+  };
+
+  const formatPercentage = (value: number | string | null | undefined, decimals: number = 1) => {
+    if (value === null || value === undefined || value === 'N/A') return 'N/A';
+    const num = typeof value === 'string' ? parseFloat(value) : value;
+    if (isNaN(num)) return 'N/A';
+    return `${num.toFixed(decimals)}%`;
   };
 
   const getScoreColor = (score: number) => {
     if (score >= 75) return 'text-emerald-600';
     if (score >= 50) return 'text-amber-600';
     return 'text-red-500';
+  };
+
+  const getFitAnalysisColor = (fitAnalysis?: string) => {
+    if (!fitAnalysis) return 'text-slate-500';
+    if (fitAnalysis.toLowerCase().includes('good')) return 'text-emerald-600';
+    if (fitAnalysis.toLowerCase().includes('moyen')) return 'text-amber-600';
+    if (fitAnalysis.toLowerCase().includes('pas compatible')) return 'text-red-500';
+    return 'text-slate-600';
+  };
+
+  const getLevelVariant = (level: string) => {
+    if (level === 'Fort' || level === 'Élevé') return 'default';
+    if (level === 'Moyen') return 'secondary';
+    return 'outline';
   };
 
   const getScoreBarColor = (score: number) => {
@@ -643,109 +668,88 @@ const AIReportDetailPage: React.FC = () => {
 
       <div className="max-w-screen-xl mx-auto px-6 py-6 space-y-6">
 
-        {/* ─── ROW 1: 3 KPI SCORES */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-
-          {/* KPI: Score Technique */}
-          <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-3 flex flex-col items-center justify-center gap-1">
-            <div className="w-6 h-6 rounded bg-blue-50 flex items-center justify-center">
-              <Brain className="w-3.5 h-3.5 text-blue-600" />
+        {/* ─── SCORES SECTION: Simple & Clean */}
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+          {/* Header - Simple et direct */}
+          <div className="text-center mb-6">
+            <h3 className="text-lg font-semibold text-slate-900 mb-1">Évaluation Complète</h3>
+            <div className="text-3xl font-bold text-blue-600">
+              {formatPercentage(
+                reportData.hiring_recommendation?.composite_score_breakdown?.final_composite_score || 
+                reportData.hiring_recommendation?.composite_score || 'N/A'
+              )}
             </div>
-            <div className={`text-2xl font-bold ${getScoreColor(technicalScore)}`}>
-              {technicalScore}
-            </div>
-            <div className="text-[10px] text-slate-500 font-medium">Score Technique</div>
-            <div className="w-full bg-slate-100 rounded-full h-1">
-              <div
-                className={`h-1 rounded-full transition-all ${getScoreBarColor(technicalScore)}`}
-                style={{ width: `${Math.min(technicalScore, 100)}%` }}
-              />
-            </div>
+            <div className="text-sm text-slate-500">Score Global</div>
           </div>
 
-          {/* KPI: Recommandation */}
-          <div className={`rounded-lg border shadow-sm p-3 flex flex-col items-center justify-center gap-1 ${getRecommendationBg(reportData.hiring_recommendation?.recommendation)}`}>
-            <div className="w-6 h-6 rounded bg-white/80 flex items-center justify-center">
-              <Award className="w-3.5 h-3.5 text-slate-600" />
-            </div>
-            <Badge
-              variant={getRecommendationBadgeVariant(reportData.hiring_recommendation?.recommendation)}
-              className="text-xs px-2 py-1"
-            >
-              {getRecommendationText(reportData.hiring_recommendation?.recommendation)}
-            </Badge>
-            <div className="text-[10px] text-slate-500 font-medium">Recommandation</div>
-            {reportData.hiring_recommendation?.composite_score && (
-              <div className="text-[10px] text-slate-400">
-                Composite: {reportData.hiring_recommendation.composite_score}%
+          {/* 3 colonnes équilibrées */}
+          <div className="grid grid-cols-3 gap-6">
+            
+            {/* Score Technique */}
+            <div className="text-center">
+              <div className="flex items-center justify-center mb-2">
+                <Brain className="w-8 h-8 text-blue-500" />
               </div>
-            )}
-          </div>
+              <div className={`text-2xl font-bold mb-1 ${getScoreColor(technicalScore)}`}>
+                {formatPercentage(technicalScore)}
+              </div>
+              <div className="text-sm font-medium text-slate-700">Score Technique</div>
+              <div className="w-full bg-slate-100 rounded-full h-1.5 mt-2">
+                <div
+                  className={`h-1.5 rounded-full ${getScoreBarColor(technicalScore)}`}
+                  style={{ width: `${Math.min(technicalScore, 100)}%` }}
+                />
+              </div>
+            </div>
 
-          {/* KPI: Score composite */}
-          <div>
-                <div className="bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 rounded-xl p-4 border border-blue-200 shadow-sm">
-                  <div className="space-y-3">
-                    {/* Score principal */}
-                    <div className="text-center">
-                      <div className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                        {reportData.hiring_recommendation?.composite_score_breakdown?.final_composite_score || 
-                         reportData.hiring_recommendation?.composite_score || 'N/A'}%
-                      </div>
-                      <div className="text-xs text-blue-600 font-medium mt-1">
-                        Score Composite Global
-                      </div>
-                    </div>
+            {/* Recommandation */}
+            <div className={`text-center ${getRecommendationBg(reportData.hiring_recommendation?.recommendation)} rounded-lg p-3`}>
+              <div className="flex items-center justify-center mb-2">
+                <Award className="w-8 h-8 text-slate-600" />
+              </div>
+              <Badge
+                variant={getRecommendationBadgeVariant(reportData.hiring_recommendation?.recommendation)}
+                className="text-sm px-3 py-1 mb-2"
+              >
+                {getRecommendationText(reportData.hiring_recommendation?.recommendation)}
+              </Badge>
+              <div className="text-sm font-medium text-slate-700">Recommandation</div>
+              {reportData.hiring_recommendation?.composite_score && (
+                <div className="text-xs text-slate-600 mt-1">
+                  Score: {formatPercentage(reportData.hiring_recommendation.composite_score)}
+                </div>
+              )}
+            </div>
 
-                    {/* Barre de progression */}
-                    <div className="w-full bg-white/60 rounded-full h-2 overflow-hidden">
-                      <div
-                        className="h-full bg-gradient-to-r from-blue-500 to-purple-500 rounded-full transition-all duration-500 ease-out"
-                        style={{ 
-                          width: `${Math.min(
-                            reportData.hiring_recommendation?.composite_score_breakdown?.final_composite_score || 
-                            reportData.hiring_recommendation?.composite_score || 0, 
-                            100
-                          )}%` 
-                        }}
-                      />
-                    </div>
-
-                    {/* Formule de calcul */}
-                    <div className="text-center">
-                      <div className="text-xs text-blue-700 font-medium bg-blue-100/50 rounded-lg px-2 py-1">
-                        {reportData.hiring_recommendation?.composite_score_breakdown?.calculation_formula || 
-                         '40% Test Technique + 30% Fit Poste + 30% Profil CV'}
-                      </div>
-                    </div>
-
-                    {/* Scores détaillés */}
-                    {reportData.hiring_recommendation?.composite_score_breakdown && (
-                      <div className="grid grid-cols-3 gap-2 mt-3">
-                        <div className="text-center bg-white/40 rounded-lg p-2">
-                          <div className="text-sm font-semibold text-blue-700">
-                            {reportData.hiring_recommendation.composite_score_breakdown.technical_test_score}%
-                          </div>
-                          <div className="text-xs text-blue-600">Test Tech</div>
-                        </div>
-                        <div className="text-center bg-white/40 rounded-lg p-2">
-                          <div className="text-sm font-semibold text-indigo-700">
-                            {reportData.hiring_recommendation.composite_score_breakdown.position_fit_score}%
-                          </div>
-                          <div className="text-xs text-indigo-600">Fit Poste</div>
-                        </div>
-                        <div className="text-center bg-white/40 rounded-lg p-2">
-                          <div className="text-sm font-semibold text-purple-700">
-                            {reportData.hiring_recommendation.composite_score_breakdown.cv_profile_score}%
-                          </div>
-                          <div className="text-xs text-purple-600">Profil CV</div>
-                        </div>
-                      </div>
-                    )}
+            {/* Détail du Score */}
+            <div className="text-center">
+              <div className="flex items-center justify-center mb-2">
+                <BarChart3 className="w-8 h-8 text-purple-500" />
+              </div>
+              <div className="text-sm font-medium text-slate-700 mb-2">Détail du Score</div>
+              
+              {reportData.hiring_recommendation?.composite_score_breakdown && (
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between items-center">
+                    <span className="text-blue-600">Test Tech</span>
+                    <span className="font-semibold text-blue-700">
+                      {formatPercentage(reportData.hiring_recommendation.composite_score_breakdown.technical_test_score)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-purple-600">Fit Poste</span>
+                    <span className="font-semibold text-purple-700">
+                      {formatPercentage(reportData.hiring_recommendation.composite_score_breakdown.position_fit_score)}
+                    </span>
+                  </div>
+                  <div className="text-xs text-slate-500 mt-2">
+                    {reportData.hiring_recommendation?.composite_score_breakdown?.calculation_formula || 
+                     '60% Test + 40% Fit'}
                   </div>
                 </div>
-              </div>
-              
+              )}
+            </div>
+          </div>
         </div>
 
         {/* ─── ROW 2: HIRING RECOMMENDATION (full width) ───────── */}
@@ -933,45 +937,30 @@ const AIReportDetailPage: React.FC = () => {
               Analyse d'Intégration Équipe
             </h2>
 
-            {/* Score bars */}
-            <div className="grid grid-cols-1 gap-3 mb-5">
-              {reportData.team_fit_analysis?.collaboration_score && (
-                <div>
-                  <div className="flex justify-between items-center mb-1">
-                    <span className="text-xs text-slate-600">Collaboration</span>
-                    <span className={`text-sm font-bold ${getScoreColor(reportData.team_fit_analysis.collaboration_score * 10)}`}>
-                      {reportData.team_fit_analysis.collaboration_score}/10
-                    </span>
-                  </div>
-                  <div className="w-full bg-slate-100 rounded-full h-1.5">
-                    <div className="bg-blue-500 h-1.5 rounded-full" style={{ width: `${reportData.team_fit_analysis.collaboration_score * 10}%` }} />
-                  </div>
+            {/* Qualitative levels */}
+            <div className="flex flex-wrap gap-3 mb-5">
+              {reportData.team_fit_analysis?.collaboration_level && (
+                <div className="text-center">
+                  <div className="text-[10px] text-slate-400 mb-1">Collaboration</div>
+                  <Badge variant={getLevelVariant(reportData.team_fit_analysis.collaboration_level)} className="text-[10px]">
+                    {reportData.team_fit_analysis.collaboration_level}
+                  </Badge>
                 </div>
               )}
-              {reportData.team_fit_analysis?.adaptability_score && (
-                <div>
-                  <div className="flex justify-between items-center mb-1">
-                    <span className="text-xs text-slate-600">Adaptabilité</span>
-                    <span className={`text-sm font-bold ${getScoreColor(reportData.team_fit_analysis.adaptability_score * 10)}`}>
-                      {reportData.team_fit_analysis.adaptability_score}/10
-                    </span>
-                  </div>
-                  <div className="w-full bg-slate-100 rounded-full h-1.5">
-                    <div className="bg-emerald-500 h-1.5 rounded-full" style={{ width: `${reportData.team_fit_analysis.adaptability_score * 10}%` }} />
-                  </div>
+              {reportData.team_fit_analysis?.adaptability_level && (
+                <div className="text-center">
+                  <div className="text-[10px] text-slate-400 mb-1">Adaptabilité</div>
+                  <Badge variant={getLevelVariant(reportData.team_fit_analysis.adaptability_level)} className="text-[10px]">
+                    {reportData.team_fit_analysis.adaptability_level}
+                  </Badge>
                 </div>
               )}
-              {reportData.team_fit_analysis?.communication_skills && (
-                <div>
-                  <div className="flex justify-between items-center mb-1">
-                    <span className="text-xs text-slate-600">Communication</span>
-                    <span className={`text-sm font-bold ${getScoreColor(reportData.team_fit_analysis.communication_skills * 10)}`}>
-                      {reportData.team_fit_analysis.communication_skills}/10
-                    </span>
-                  </div>
-                  <div className="w-full bg-slate-100 rounded-full h-1.5">
-                    <div className="bg-purple-500 h-1.5 rounded-full" style={{ width: `${reportData.team_fit_analysis.communication_skills * 10}%` }} />
-                  </div>
+              {reportData.team_fit_analysis?.communication_level && (
+                <div className="text-center">
+                  <div className="text-[10px] text-slate-400 mb-1">Communication</div>
+                  <Badge variant={getLevelVariant(reportData.team_fit_analysis.communication_level)} className="text-[10px]">
+                    {reportData.team_fit_analysis.communication_level}
+                  </Badge>
                 </div>
               )}
             </div>
@@ -981,16 +970,16 @@ const AIReportDetailPage: React.FC = () => {
               {reportData.team_fit_analysis?.leadership_potential && (
                 <div className="text-center">
                   <div className="text-[10px] text-slate-400 mb-1">Leadership</div>
-                  <Badge variant={reportData.team_fit_analysis.leadership_potential === 'High' ? 'default' : 'secondary'} className="text-[10px]">
-                    {reportData.team_fit_analysis.leadership_potential === 'High' ? 'Élevé' : reportData.team_fit_analysis.leadership_potential === 'Medium' ? 'Moyen' : 'Faible'}
+                  <Badge variant={getLevelVariant(reportData.team_fit_analysis.leadership_potential)} className="text-[10px]">
+                    {reportData.team_fit_analysis.leadership_potential}
                   </Badge>
                 </div>
               )}
               {reportData.team_fit_analysis?.motivation_level && (
                 <div className="text-center">
                   <div className="text-[10px] text-slate-400 mb-1">Motivation</div>
-                  <Badge variant={reportData.team_fit_analysis.motivation_level === 'High' ? 'default' : 'secondary'} className="text-[10px]">
-                    {reportData.team_fit_analysis.motivation_level === 'High' ? 'Élevée' : reportData.team_fit_analysis.motivation_level === 'Medium' ? 'Moyenne' : 'Faible'}
+                  <Badge variant={getLevelVariant(reportData.team_fit_analysis.motivation_level)} className="text-[10px]">
+                    {reportData.team_fit_analysis.motivation_level}
                   </Badge>
                 </div>
               )}
@@ -1137,12 +1126,12 @@ const AIReportDetailPage: React.FC = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {reportData.position_analysis.recommended_positions.map((pos, i) => (
                   <div key={i} className="bg-gradient-to-br from-white to-slate-50 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow p-4">
-                    {/* Match Score - moved to top */}
-                    {pos.match_score !== undefined && (
+                    {/* Fit Analysis - moved to top */}
+                    {pos.fit_analysis && (
                       <div className="flex items-center gap-2 mb-3">
-                       
-                        <span className={`text-xs font-semibold ${getScoreColor(pos.match_score)}`}>
-                          match score: {pos.match_score}%
+                        
+                        <span className={`text-xs font-semibold ${getFitAnalysisColor(pos.fit_analysis)}`}>
+                          {pos.fit_analysis}
                         </span>
                       </div>
                     )}

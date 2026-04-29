@@ -5,6 +5,7 @@ import com.example.smart_assess.dto.CandidatureDto;
 import com.example.smart_assess.dto.UpdateCandidatureStatusRequest;
 import com.example.smart_assess.enums.CandidatureStatus;
 import com.example.smart_assess.service.CandidatureService;
+import com.example.smart_assess.service.NotificationService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -20,10 +21,13 @@ import java.util.List;
 public class CandidatureController {
 
     private final CandidatureService candidatureService;
+    private final NotificationService notificationService;
 
     @PostMapping
     public ResponseEntity<CandidatureDto> createCandidature(@Valid @RequestBody CreateCandidatureRequest request) {
-        return ResponseEntity.ok(candidatureService.createCandidature(request));
+        CandidatureDto candidature = candidatureService.createCandidature(request);
+        
+        return ResponseEntity.ok(candidature);
     }
 
     @GetMapping

@@ -36,4 +36,7 @@ public interface CandidatureRepository extends JpaRepository<Candidature, Long> 
                    "JOIN candidate_cvs cc ON tp.cv_id = cc.id " +
                    "WHERE cc.candidate_id = :candidateId", nativeQuery = true)
     List<Object[]> findTechnicalProfilesWithData(Long candidateId);
+    
+    @Query("SELECT c FROM Candidature c JOIN FETCH c.candidate WHERE c.candidate.id = :candidateId")
+    Optional<Candidature> findFirstByCandidateId(Long candidateId);
 }

@@ -21,7 +21,7 @@ interface CandidateRanking {
   rank: number;
   candidate_id: string;
   candidate_name: string;
-  match_score: number;
+  fit_analysis?: string;
   technical_match: number;
   experience_match: number;
   domain_match: number;
@@ -390,7 +390,7 @@ const CandidateMatchingPage = () => {
                         </div>
                       </div>
                       <div className="text-right">
-                        <div className="text-2xl font-bold text-primary">{Math.round(candidate.match_score)}%</div>
+                        <div className="text-2xl font-bold text-primary">{candidate.fit_analysis || 'N/A'}</div>
                         <p className="text-sm text-muted-foreground">Score de compatibilité</p>
                       </div>
                     </div>

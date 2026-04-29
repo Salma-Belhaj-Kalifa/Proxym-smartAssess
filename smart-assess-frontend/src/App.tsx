@@ -23,6 +23,8 @@ import ApplicationsPage from "./pages/manager/applications/ApplicationsPage";
 import EvaluationReportPage from "./pages/manager/reports/EvaluationReportPage";
 import AIReportDetailPage from "./pages/manager/reports/AIReportDetailPage";
 import CandidateMatchingPage from "./pages/manager/matching/CandidateMatchingPage";
+import RankingCandidatesPage from "./pages/manager/ranking/RankingCandidatesPage";
+import SemanticSearchPage from "./pages/manager/semantic-search/SemanticSearchPage";
 import PositionsListPage from "./pages/manager/positions/PositionsListPage";
 import GenerateTestPage from "./pages/manager/tests/GenerateTestPage";
 import TestReviewPage from "./pages/manager/tests/TestReviewPage";
@@ -65,6 +67,8 @@ const App = () => (
             <Route path="postes/:id" element={<PositionDetailPage />} />
             <Route path="postes/:id/candidatures" element={<PositionApplicationsPage />} />
             <Route path="candidats" element={<ApplicationsPage />} />
+            <Route path="semantic-search" element={<SemanticSearchPage />} />
+            <Route path="ranking" element={<RankingCandidatesPage />} />
                         <Route path="resultats/:id" element={<EvaluationReportPage />} />
             <Route path="reports/:reportId" element={<AIReportDetailPage />} />
             <Route path="evaluations/:id" element={<EvaluationReportPage />} />

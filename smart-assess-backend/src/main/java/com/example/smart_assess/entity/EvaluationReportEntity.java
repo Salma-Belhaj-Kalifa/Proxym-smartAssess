@@ -25,7 +25,7 @@ public class EvaluationReportEntity {
     private Candidature candidature;
 
     @JsonIgnoreProperties({"evaluationReports", "questions", "answers", "evaluationResult"})
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.LAZY, cascade = CascadeType.REMOVE)
     @JoinColumn(name = "test_id", nullable = true)
     private GeneratedTest test;
 

@@ -109,8 +109,12 @@ public class AIAnalysisController {
                     .createdAt(LocalDateTime.now())
                     .build();
 
-            // STEP 7: Save profile
-            TechnicalProfileDto savedProfile = technicalProfileService.createTechnicalProfile(technicalProfile);
+            // STEP 7: Save profile with Elasticsearch indexing
+            TechnicalProfileDto savedProfile = technicalProfileService.createOrUpdateFromAnalysis(
+                candidateId, 
+                cvDto.getId(), 
+                analysisResult
+            );
 
             // STEP 8: Response
             Map<String, Object> response = new HashMap<>();

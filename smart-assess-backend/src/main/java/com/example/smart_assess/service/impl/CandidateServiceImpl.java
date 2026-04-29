@@ -7,6 +7,7 @@ import com.example.smart_assess.entity.*;
 import com.example.smart_assess.enums.Role;
 import com.example.smart_assess.repository.*;
 import com.example.smart_assess.service.CandidateService;
+import com.example.smart_assess.service.ElasticsearchService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
@@ -16,6 +17,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -27,6 +29,7 @@ public class CandidateServiceImpl implements CandidateService {
     private final PasswordEncoder passwordEncoder;
     private final CandidatureRepository candidatureRepository;
     private final GeneratedTestRepository generatedTestRepository;
+    private final ElasticsearchService elasticsearchService;
 
     @Override
     public CandidateDto createCandidate(CreateCandidateRequest request) {
@@ -43,6 +46,68 @@ public class CandidateServiceImpl implements CandidateService {
         candidate.setRole(Role.CANDIDATE);
 
         candidate = candidateRepository.save(candidate);
+        
+        // Indexer automatiquement dans Elasticsearch
+        try {
+            log.info("Indexing new candidate {} in Elasticsearch", candidate.getId());
+            
+            // Extraire les données du profil technique depuis le JSON
+            final String summary;
+            final java.util.List<String> skills;
+            final Integer yearsOfExperience;
+            
+            if (candidate.getCv() != null && candidate.getCv().getTechnicalProfile() != null) {
+                var parsedData = candidate.getCv().getTechnicalProfile().getParsedData();
+                if (parsedData != null) {
+                    // Extraire le summary
+                    String extractedSummary = "";
+                    if (parsedData.has("summary")) {
+                        extractedSummary = parsedData.get("summary").asText();
+                    }
+                    summary = extractedSummary;
+                    
+                    // Extraire les compétences
+                    java.util.List<String> extractedSkills = new java.util.ArrayList<>();
+                    if (parsedData.has("skills")) {
+                        var skillsNode = parsedData.get("skills");
+                        for (var skill : skillsNode) {
+                            extractedSkills.add(skill.asText());
+                        }
+                    }
+                    skills = extractedSkills;
+                    
+                    // Extraire l'expérience
+                    Integer extractedYears = 0;
+                    if (parsedData.has("years_of_experience")) {
+                        extractedYears = parsedData.get("years_of_experience").asInt();
+                    }
+                    yearsOfExperience = extractedYears;
+                } else {
+                    summary = "";
+                    skills = java.util.Collections.emptyList();
+                    yearsOfExperience = 0;
+                }
+            } else {
+                summary = "";
+                skills = java.util.Collections.emptyList();
+                yearsOfExperience = 0;
+            }
+            
+            final Long candidateId = candidate.getId();
+            elasticsearchService.indexCandidate(
+                candidateId,
+                summary,
+                skills,
+                yearsOfExperience
+            ).subscribe(
+                response -> log.info("Candidate {} indexed successfully: {}", candidateId, response),
+                error -> log.error("Failed to index candidate {}: {}", candidateId, error.getMessage())
+            );
+        } catch (Exception e) {
+            log.error("Error indexing candidate {} in Elasticsearch: {}", candidate.getId(), e.getMessage());
+            // Ne pas bloquer la création du candidat si l'indexation échoue
+        }
+        
         return toDto(candidate);
     }
 
@@ -203,6 +268,25 @@ public class CandidateServiceImpl implements CandidateService {
         }
     }
 
+    @Override
+    public List<CandidateDto> getCandidatesByIds(List<Long> ids) {
+        log.info("Getting candidates by IDs from database: {}", ids);
+        try {
+            List<Candidate> candidates = candidateRepository.findAllById(ids);
+            log.info("Found {} candidates in database for {} requested IDs", candidates.size(), ids.size());
+            
+            List<CandidateDto> candidateDtos = candidates.stream()
+                    .map(this::toDto)
+                    .collect(Collectors.toList());
+            
+            log.info("Converted {} candidates to DTOs", candidateDtos.size());
+            return candidateDtos;
+        } catch (Exception e) {
+            log.error("Error getting candidates by IDs: {}", ids, e);
+            throw e;
+        }
+    }
+
     private CandidateDto toDto(Candidate candidate) {
         return CandidateDto.builder()
                 .id(candidate.getId())
@@ -213,4 +297,5 @@ public class CandidateServiceImpl implements CandidateService {
                 .createdAt(candidate.getCreatedAt())
                 .build();
     }
-}
+
+    }

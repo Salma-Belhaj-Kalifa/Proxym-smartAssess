@@ -5,6 +5,7 @@ import com.example.smart_assess.dto.CandidateDto;
 import com.example.smart_assess.dto.UpdateCandidateProfileRequest;
 
 import java.util.List;
+import java.util.Map;
 
 public interface CandidateService {
     CandidateDto createCandidate(CreateCandidateRequest request);
@@ -15,7 +16,8 @@ public interface CandidateService {
     CandidateDto getCandidateById(Long id);
     CandidateDto getCandidateByEmail(String email);
     List<CandidateDto> getAllCandidates();
-    
+    List<CandidateDto> getCandidatesByIds(List<Long> ids);
+        
     // Vérifier si l'utilisateur est le propriétaire du profil
     boolean isOwner(Long candidateId, String email);
 }

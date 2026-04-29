@@ -43,6 +43,13 @@ interface TechnicalProfileData {
   createdAt: string;
 }
 
+const getSkillName = (skill: any): string => {
+  if (!skill) return '';
+  if (typeof skill === 'string') return skill;
+  if (typeof skill === 'object') return String(skill.name || skill.skill_level || '');
+  return String(skill);
+};
+
 const GenerateTestPage = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -611,45 +618,36 @@ const GenerateTestPage = () => {
       console.log('Type de TechData:', typeof techData);
       console.log('TechData est Array:', Array.isArray(techData));
       
-      Object.keys(techData).forEach(category => {
-        const categorySkills = techData[category];
-        console.log(`Catégorie "${category}":`, categorySkills);
-        
-        if (Array.isArray(categorySkills)) {
-          categorySkills.forEach((skill, index) => {
-            console.log(`  Skill ${index}:`, skill, typeof skill);
-            
-            if (typeof skill === 'string' && skill.trim()) {
-              skills.push({ name: skill.trim(), level: "Intermédiaire" });
-              hasRealSkills = true;
-              console.log(`    → Ajouté: ${skill.trim()}`);
-            } else if (skill && typeof skill === 'object' && skill.name && skill.name.trim()) {
-              skills.push({ name: skill.name.trim(), level: skill.level || "Intermédiaire" });
-              hasRealSkills = true;
-              console.log(`    → Ajouté (objet): ${skill.name.trim()}`);
-            }
-          });
-        } else if (typeof categorySkills === 'object' && categorySkills !== null) {
-          Object.entries(categorySkills).forEach(([skillName, skillLevel]) => {
-            console.log(`  Skill: ${skillName}, Level: ${skillLevel}`);
-            
-            if (typeof skillName === 'string' && skillName.trim()) {
-              const level = typeof skillLevel === 'string' ? skillLevel : "Intermédiaire";
-              skills.push({ name: skillName.trim(), level: level });
-              hasRealSkills = true;
-              console.log(`    → Ajouté: ${skillName.trim()} (${level})`);
-            }
-          });
-        }
-      });
-    } else {
-      console.log('Aucune donnée "Technical Information" ou "technologies" trouvée');
+      // techData est un tableau d'objets: [{category: "...", technologies: [...]}]
+      if (Array.isArray(techData)) {
+        techData.forEach((categoryData, index) => {
+          console.log(`Catégorie ${index}:`, categoryData);
+          
+          if (categoryData.technologies && Array.isArray(categoryData.technologies)) {
+            categoryData.technologies.forEach((tech, techIndex) => {
+              console.log(`  Tech ${techIndex}:`, tech, typeof tech);
+              
+              if (typeof tech === 'string' && tech.trim()) {
+                skills.push({ name: tech.trim(), level: "Intermédiaire" });
+                hasRealSkills = true;
+                console.log(`    -> Ajouté: ${tech.trim()}`);
+              } else if (tech && typeof tech === 'object' && tech.name && tech.name.trim()) {
+                skills.push({ name: tech.name.trim(), level: tech.skill_level || tech.level || "Intermédiaire" });
+                hasRealSkills = true;
+                console.log(`    -> Ajouté (objet): ${tech.name.trim()}`);
+              }
+            });
+          }
+        });
+      } else {
+        console.log('Aucune donnée "Technical Information" ou "technologies" trouvée');
+      }
     }
     
     console.log('Compétences finales extraites:', skills);
     console.log('hasRealSkills:', hasRealSkills);
     
-    return hasRealSkills ? skills.slice(0, 6) : [];
+    return hasRealSkills ? skills : [];
   };
 
   const extractAnalysisFromProfile = () => {
@@ -664,47 +662,16 @@ const GenerateTestPage = () => {
     const extractKeySkills = () => {
       const skills = [];
       
-      if (data["Summary"]?.["key_skills"] && Array.isArray(data["Summary"]["key_skills"])) {
-        console.log('Key skills trouvées dans Summary:', data["Summary"]["key_skills"]);
-        data["Summary"]["key_skills"].forEach((skill: string) => {
-          if (skill && typeof skill === 'string' && skill.trim()) {
-            skills.push(skill.trim());
-          }
-        });
-      }
-      
-      // 2. Si pas de key_skills, utiliser l'ancienne méthode depuis Technical Information
-      if (skills.length === 0 && data["Technical Information"]?.["technologies"]) {
-        console.log('Fallback vers Technical Information');
+      // 1. Extraire les compétences depuis Technical Information: technologies
+      if (data["Technical Information"]?.["technologies"] && Array.isArray(data["Technical Information"]["technologies"])) {
+        console.log('Technologies trouvées dans Technical Information:', data["Technical Information"]["technologies"]);
         const techData = data["Technical Information"]["technologies"];
         
-        // Gérer le format: [{name: "React", category: "Frontend", skill_level: "advanced"}, ...]
+        // Gérer le format: [{technology: "React", skill_level: "Intermediate"}, ...]
         if (Array.isArray(techData)) {
           techData.forEach((skillObj: any) => {
-            if (skillObj && skillObj.name && typeof skillObj.name === 'string' && skillObj.name.trim()) {
-              skills.push(skillObj.name.trim());
-            }
-          });
-        }
-        // Gérer le format: {Frontend: [{name: "React", skill_level: "advanced"}], Backend: {...}}
-        else if (typeof techData === 'object' && techData !== null) {
-          Object.keys(techData).forEach(category => {
-            const categorySkills = techData[category];
-            
-            if (Array.isArray(categorySkills)) {
-              categorySkills.forEach((skill: any) => {
-                if (typeof skill === 'string' && skill.trim()) {
-                  skills.push(skill.trim());
-                } else if (skill && typeof skill === 'object' && skill.name) {
-                  skills.push(skill.name);
-                }
-              });
-            } else if (typeof categorySkills === 'object' && categorySkills !== null) {
-              Object.keys(categorySkills).forEach(skillName => {
-                if (skillName && skillName.trim()) {
-                  skills.push(skillName.trim());
-                }
-              });
+            if (skillObj && skillObj.technology && typeof skillObj.technology === 'string' && skillObj.technology.trim()) {
+              skills.push(skillObj.technology.trim());
             }
           });
         }
@@ -732,7 +699,7 @@ const GenerateTestPage = () => {
         });
       }
      
-      return [...new Set(skills)].slice(0, 5);
+      return [...new Set(skills)];
     };
     
     const extractEducation = () => {
@@ -972,7 +939,7 @@ const GenerateTestPage = () => {
         duration: testConfig.duration,
         deadline: testConfig.deadline,
         note: testConfig.note,
-        focusAreas: skills.map(skill => skill.name),
+        focusAreas: skills.map(skill => typeof skill === 'string' ? skill : skill.name || ''),
       });
 
       if (testResponse.questions && testResponse.questions.length > 0) {
@@ -1384,22 +1351,22 @@ const GenerateTestPage = () => {
                       </span>
                     </p>
                     <div className="flex flex-wrap gap-1.5">
-                      {analysis.keySkills.slice(0, 15).map((skill: string, i: number) => (
+                      {analysis.keySkills.slice(0, 20).map((skill: any, i: number) => (
                         <span
                           key={i}
                           className="text-xs px-2.5 py-1 rounded-md bg-slate-100 text-slate-700 font-medium border border-slate-200 hover:bg-slate-200 transition-colors"
                         >
-                          {skill}
+                          {getSkillName(skill)}
                         </span>
                       ))}
-                      {analysis.keySkills.length > 5 && (
+                      {analysis.keySkills.length > 20 && (
                         <Dialog open={showAllSkills} onOpenChange={setShowAllSkills}>
                           <DialogTrigger asChild>
                             <button 
                               className="text-xs px-2.5 py-1 rounded-md bg-slate-100 text-slate-700 font-medium border border-slate-200 hover:bg-slate-200 transition-colors flex items-center gap-1"
                               onClick={() => setShowAllSkills(true)}
                             >
-                              +{analysis.keySkills.length - 5}
+                              +{analysis.keySkills.length - 20}
                               <ChevronRight className="w-3 h-3" />
                             </button>
                           </DialogTrigger>
@@ -1412,12 +1379,12 @@ const GenerateTestPage = () => {
                             </DialogHeader>
                             <div className="mt-4">
                               <div className="flex flex-wrap gap-2">
-                                {analysis.keySkills.map((skill: string, i: number) => (
+                                {analysis.keySkills.map((skill: any, i: number) => (
                                   <span
                                     key={i}
                                     className="text-sm px-3 py-1.5 rounded-md bg-slate-100 text-slate-700 font-medium border border-slate-200"
                                   >
-                                    {skill}
+                                    {getSkillName(skill)}
                                   </span>
                                 ))}
                               </div>
@@ -1525,7 +1492,7 @@ const GenerateTestPage = () => {
                           )}
                         </div>
                         {mostRecent.year && mostRecent.year !== 'Non spécifié' && (
-                          <span className="ml-auto text-xs font-semibold text-blue-600 flex-shrink-0">{mostRecent.year}</span>
+                          <span className="ml-auto text-xs font-semibold text-blue-600 flex-shrink-0">{typeof mostRecent.year === 'string' ? mostRecent.year : 'Non spécifié'}</span>
                         )}
                       </div>
                       {analysis.education.length > 1 && (
@@ -1568,7 +1535,7 @@ const GenerateTestPage = () => {
                                       )}
                                     </div>
                                     {edu.year && edu.year !== 'Non spécifié' && (
-                                      <span className="text-sm font-semibold text-blue-600 flex-shrink-0">{edu.year}</span>
+                                      <span className="text-sm font-semibold text-blue-600 flex-shrink-0">{typeof edu.year === 'string' ? edu.year : 'Non spécifié'}</span>
                                     )}
                                   </div>
                                 ))}
@@ -1605,7 +1572,7 @@ const GenerateTestPage = () => {
                               )}
                             </div>
                             {cert.year && cert.year !== 'Non spécifié' && (
-                              <span className="text-[11px] font-semibold text-slate-700 flex-shrink-0">{cert.year}</span>
+                              <span className="text-[11px] font-semibold text-slate-700 flex-shrink-0">{typeof cert.year === 'string' ? cert.year : 'Non spécifié'}</span>
                             )}
                           </div>
                         ))}
@@ -1642,7 +1609,7 @@ const GenerateTestPage = () => {
                                       )}
                                     </div>
                                     {cert.year && cert.year !== 'Non spécifié' && (
-                                      <span className="text-sm font-semibold text-slate-700 flex-shrink-0">{cert.year}</span>
+                                      <span className="text-sm font-semibold text-slate-700 flex-shrink-0">{typeof cert.year === 'string' ? cert.year : 'Non spécifié'}</span>
                                     )}
                                   </div>
                                 ))}
@@ -1682,9 +1649,9 @@ const GenerateTestPage = () => {
                                 )}
                                 {project.technologies && Array.isArray(project.technologies) && project.technologies.length > 0 && (
                                   <div className="flex flex-wrap gap-1 mt-1.5">
-                                    {project.technologies.slice(0, 4).map((tech: string, ti: number) => (
+                                    {project.technologies.slice(0, 4).map((tech: any, ti: number) => (
                                       <span key={ti} className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 font-medium">
-                                        {tech}
+                                        {getSkillName(tech)}
                                       </span>
                                     ))}
                                     {project.technologies.length > 4 && (
@@ -1734,9 +1701,9 @@ const GenerateTestPage = () => {
                                         )}
                                         {project.technologies && Array.isArray(project.technologies) && project.technologies.length > 0 && (
                                           <div className="flex flex-wrap gap-2">
-                                            {project.technologies.map((tech: string, ti: number) => (
+                                            {project.technologies.map((tech: any, ti: number) => (
                                               <span key={ti} className="text-xs px-2 py-1 rounded-md bg-slate-100 text-slate-700 font-medium">
-                                                {tech}
+                                                {getSkillName(tech)}
                                               </span>
                                             ))}
                                           </div>

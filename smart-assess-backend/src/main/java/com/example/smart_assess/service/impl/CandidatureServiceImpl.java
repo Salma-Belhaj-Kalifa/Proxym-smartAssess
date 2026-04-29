@@ -11,6 +11,7 @@ import com.example.smart_assess.repository.CandidatureRepository;
 import com.example.smart_assess.repository.CandidateRepository;
 import com.example.smart_assess.repository.InternshipPositionRepository;
 import com.example.smart_assess.service.CandidatureService;
+import com.example.smart_assess.service.NotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -29,6 +30,7 @@ public class CandidatureServiceImpl implements CandidatureService {
     private final CandidatureRepository candidatureRepository;
     private final CandidateRepository candidateRepository;
     private final InternshipPositionRepository positionRepository;
+    private final NotificationService notificationService;
 
     @Override
     public CandidatureDto createCandidature(CreateCandidatureRequest request) {
@@ -72,7 +74,12 @@ public class CandidatureServiceImpl implements CandidatureService {
         }
 
         candidature = candidatureRepository.save(candidature);
-        return toDto(candidature);
+        
+        // 🚀 Notifier les managers de la nouvelle candidature
+        CandidatureDto candidatureDto = toDto(candidature);
+        notificationService.notifyNewCandidature(candidatureDto);
+        
+        return candidatureDto;
     }
 
     @Override

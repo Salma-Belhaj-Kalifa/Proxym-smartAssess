@@ -13,6 +13,21 @@ from pydantic import BaseModel, Field, model_validator
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
+def extractTechnologiesFromProfile(candidate_profile: Dict) -> List[str]:
+    """Extract technologies from Technical Information section"""
+    technologies = []
+    
+    if "Technical Information" in candidate_profile and "technologies" in candidate_profile["Technical Information"]:
+        tech_data = candidate_profile["Technical Information"]["technologies"]
+        if isinstance(tech_data, list):
+            for tech in tech_data:
+                if isinstance(tech, dict) and "technology" in tech:
+                    technologies.append(tech["technology"])
+                elif isinstance(tech, str):
+                    technologies.append(tech)
+    
+    return technologies
+
 # Enhanced evaluation report prompt template
 EVALUATION_REPORT_PROMPT = """Generate evaluation report as JSON only.
 
@@ -22,43 +37,66 @@ Score: {actual_global_score}% ({actual_correct_answers}/{actual_total_questions}
 Applied Positions: {applied_positions}
 Candidate Info: {candidate_info}
 SCORING RULE (MANDATORY):
-You must compute a final composite score using:
+🆕 FINAL SCORE ALREADY CALCULATED - DO NOT COMPUTE YOUR OWN SCORES
 
-Composite score = 
-40% Technical Test Score +
-30% Position Fit Score +
-30% CV Profile Score
+The composite score has already been calculated using advanced algorithms and stored in evaluation_results:
+Composite score = {composite_score}% (PRE-CALCULATED - USE THIS EXACT VALUE)
 
-Where:
-- Technical Test Score = {actual_global_score}
-- Position Fit Score = based on STRICT skill matching with required skills
-- CV Profile Score = based on experience level, number of relevant skills, and domain consistency
+🚨 CRITICAL - USE THE PRE-CALCULATED COMPOSITE SCORE:
+- Composite Score: {composite_score}% (already calculated and stored in evaluation_results)
+- DO NOT compute your own composite_score
+- USE EXACTLY the provided {composite_score}% value
+- This score is FINAL and AUTHORITATIVE
 
-CRITICAL:
-- The composite_score MUST equal this computed composite score
-- Do NOT invent another scoring logic
-
-IMPORTANT DECISION RULE:
-Base the hiring recommendation ONLY on the FINAL COMPOSITE SCORE:
+IMPORTANT DECISION RULE - MANDATORY:
+Base hiring recommendation ONLY on FINAL COMPOSITE SCORE:
 
 - If composite Score < 40% → "Do Not Hire"
 - If composite Score between 40-60% → "Consider"
 - If composite Score > 60% → "Hire"
 
-CRITICAL:
+CRITICAL - NO EXCEPTIONS:
 - The recommendation MUST strictly follow this rule
-- Do NOT base decision only on technical score
+- The composite_score is {composite_score}% - use this EXACT value for decision
+- If {composite_score}% < 40% → recommendation MUST be "Do Not Hire"
+- If {composite_score}% is between 40-60% → recommendation MUST be "Consider"  
+- If {composite_score}% > 60% → recommendation MUST be "Hire"
+- Do NOT contradict the composite_score value in your reasoning
+- Do NOT claim {composite_score}% is above/below 60% when it's not
+- The reasoning must be consistent with the actual composite_score value
 
 CRITICAL: Analyze ALL positions in applied_positions array. The candidate applied to multiple positions:
 - Consider each position's required skills and match with candidate's profile
-- Calculate match scores for ALL positions
-- Recommend positions where candidate has best fit
+- DO NOT calculate match scores. Instead, provide qualitative analysis: "Good fit", "Moyen", or "Pas compatible" based on skills analysis
+- Analyze if candidate's test results prove their claimed skills are real
+- Recommend positions where candidate has best fit AND proven skills
 - Don't focus only on one position
 
+CRITICAL - STRICT SKILL MATCHING (HARD RULE):
+
+For EACH position:
+- Extract the required_skills from applied_positions
+- ONLY compare candidate skills with these required_skills
+- DO NOT consider any other skills outside required_skills
+
+STRICT PROHIBITIONS:in the recommended_positions, reasoning:
+- DO NOT mention any skill that is NOT in required_skills
+- DO NOT infer, assume, or approximate skills (e.g., Next.js ≠ React unless explicitly listed)
+- DO NOT use related or similar technologies
+- DO NOT generalize (e.g., "frontend skills", "JavaScript ecosystem")
+
+OUTPUT RULE:
+- Your analysis MUST only contain skills that exist in required_skills
+- If a candidate has other strong skills but NOT in required_skills → IGNORE THEM COMPLETELY
+
+VIOLATION = INVALID RESPONSE
 CRITICAL: Use the candidate_info for accurate personal information:
 - Use candidate_info.first_name and candidate_info.last_name for the name
 - Use candidate_info.email for the email
 - Use candidate_info.position_applied and candidate_info.company for position details
+- IMPORTANT: Include ALL skills in skill_breakdown, even those with 0% score. Do not filter out any skills.
+- CRITICAL: Use ONLY skills from test_results data. Do NOT invent or add any skills that are not in the test_results.
+- CRITICAL: The test_results contains the EXACT and COMPLETE list of skills tested.
 
 Return JSON:
 {{
@@ -84,32 +122,30 @@ Return JSON:
     "position_title": "<Use candidate_info.position_applied>",
     "company": "<Use candidate_info.company>",
     "recommended_positions": [
-      {{"position": "<position_from_applied_positions>", "match_score": <score>, "reasoning": "<reason>"}},
-      {{"position": "<other_position_from_applied_positions>", "match_score": <score>, "reasoning": "<reason>"}}
+      {{"position": "<position_from_applied_positions>", "fit_analysis": "<Good fit|Moyen|Pas compatible>", "reasoning": "<detailed analysis of why this fit level based on test results and required skills>"}},
+      {{"position": "<other_position_from_applied_positions>", "fit_analysis": "<Good fit|Moyen|Pas compatible>", "reasoning": "<detailed analysis of why this fit level based on test results and required skills>"}}
     ],
     "alternative_positions": []
   }},
   "hiring_recommendation": {{
-    "recommendation": "<Do Not Hire|Consider|Hire>", "composite_score": <0-100>,
+    "recommendation": "<Do Not Hire|Consider|Hire>", "composite_score": {composite_score},
     "composite_score_breakdown": {{
-      "technical_test_score": <0-100>,
+      "technical_test_score": {actual_global_score},
       "position_fit_score": <0-100>,
-      "cv_profile_score": <0-100>,
-      "technical_weight": 0.4,
-      "position_weight": 0.3,
-      "cv_weight": 0.3,
-      "calculation_formula": "40% Test Technique + 30% Fit Poste + 30% Profil CV",
-      "final_composite_score": <0-100>
+      "technical_weight": 0.6,
+      "position_weight": 0.4,
+      "calculation_formula": "60% Test Technique + 40% Fit Poste (pré-calculé)",
+      "final_composite_score": {composite_score}
     }},
-    "reason": "<Main reason for recommendation based on composite score>",
+    "reason": "<Main reason for recommendation based on COMPOSITE SCORE value ONLY. The composite_score is {composite_score}%. If this value is >= 60%, say it's 60% or higher. If it's between 60-79%, say it's in the Consider range. If it's >= 80%, say it's excellent.>",
     "recommendation_reasoning": "<Detailed reasoning considering all applied positions and composite score>",
     "key_factors": ["<factor>"], "potential_risks": ["<risk>"],
     "strengths": ["<strength>"], "weaknesses": ["<weakness>"],
     "next_steps": ["<step>"]
   }},
   "team_fit_analysis": {{
-    "collaboration_score": <0-10>, "leadership_potential": "<Low|Medium|High>",
-    "adaptability_score": <0-10>, "communication_skills": <0-10>,
+    "collaboration_level": "<Faible|Moyen|Fort>", "leadership_potential": "<Faible|Moyen|Élevé>",
+    "adaptability_level": "<Faible|Moyen|Fort>", "communication_level": "<Faible|Moyen|Fort>",
     "problem_solving_approach": "<approach>", "teamwork_preference": "<preference>",
     "work_style": "<style>", "motivation_level": "<level>"
   }}
@@ -209,7 +245,8 @@ class AppliedPosition(BaseModel):
 
 class RecommendedPosition(BaseModel):
     position: str
-    match_score: float
+    match_score: Optional[float] = None  # Garder pour compatibilité
+    fit_analysis: Optional[str] = None  # Nouveau champ pour analyse qualitative
     reasoning: Optional[str] = None
     requirements_match: Optional[Dict[str, Any]] = None
     skill_gaps: List[str] = Field(default_factory=list)
@@ -230,10 +267,8 @@ class CompositeScoreBreakdown(BaseModel):
     """Détail du calcul du score composite"""
     technical_test_score: float = 0.0
     position_fit_score: float = 0.0
-    cv_profile_score: float = 0.0
     technical_weight: float = 0.4
     position_weight: float = 0.3
-    cv_weight: float = 0.3
     calculation_formula: str = "40% Test Technique + 30% Fit Poste + 30% Profil CV"
     final_composite_score: float = 0.0
 
@@ -253,10 +288,10 @@ class HiringRecommendation(BaseModel):
     comments: Optional[str] = None
 
 class TeamFitAnalysis(BaseModel):
-    collaboration_score: float = 0.0
-    leadership_potential: str = "Unknown"
-    adaptability_score: float = 0.0
-    communication_skills: float = 0.0
+    collaboration_level: str = "Moyen"
+    leadership_potential: str = "Moyen"
+    adaptability_level: str = "Moyen"
+    communication_level: str = "Moyen"
     problem_solving_approach: Optional[str] = None
     teamwork_preference: Optional[str] = None
     cultural_fit_indicators: List[str] = Field(default_factory=list)
@@ -264,6 +299,33 @@ class TeamFitAnalysis(BaseModel):
     motivation_level: Optional[str] = None
     conflict_resolution: Optional[str] = None
     comments: Optional[str] = None
+    
+    # Champs pour compatibilité avec le LLM qui génère parfois _score au lieu de _level
+    collaboration_score: Optional[str] = None
+    leadership_score: Optional[str] = None
+    adaptability_score: Optional[str] = None
+    communication_score: Optional[str] = None
+    
+    # Méthode pour normaliser les données du LLM
+    @classmethod
+    def normalize_llm_data(cls, data: dict) -> dict:
+        """Convertit les champs _score en _level si nécessaire"""
+        normalized = data.copy()
+        
+        # Mapper les champs _score vers _level
+        field_mappings = {
+            'collaboration_score': 'collaboration_level',
+            'leadership_score': 'leadership_potential', 
+            'adaptability_score': 'adaptability_level',
+            'communication_score': 'communication_level'
+        }
+        
+        for score_field, level_field in field_mappings.items():
+            if score_field in normalized and normalized[score_field] is not None:
+                normalized[level_field] = normalized[score_field]
+                del normalized[score_field]
+        
+        return normalized
 
 class EvaluationReport(BaseModel):
     candidate_summary: CandidateSummary
@@ -399,7 +461,8 @@ class EvaluationReportService:
         actual_global_score: float = None,
         actual_correct_answers: int = None,
         actual_total_questions: int = None,
-        candidate_info: dict = None
+        candidate_info: dict = None,
+        composite_score: float = None
     ) -> EvaluationReport:
         """
         Generate comprehensive evaluation report for a candidate
@@ -491,7 +554,8 @@ class EvaluationReportService:
                 'actual_total_questions': str(actual_total_questions) if actual_total_questions is not None else "N/A",
                 'applied_positions': safe_json_str(applied_positions) if applied_positions else "[]",
                 'applied_position': str(applied_position) if applied_position is not None else "N/A",
-                'candidate_info': safe_json_str(candidate_info) if candidate_info else "{}"
+                'candidate_info': safe_json_str(candidate_info) if candidate_info else "{}",
+                'composite_score': f"{composite_score:.2f}" if composite_score is not None else "N/A"
             }
             
             # Log format arguments for debugging
@@ -626,7 +690,7 @@ class EvaluationReportService:
         # 3. Merge candidate profile data into candidate_summary
         profile_summary = candidate_profile.get("Summary", {})
         summary_data.update({
-            "key_skills_from_profile": profile_summary.get("key_skills", []),
+            "key_skills_from_profile": extractTechnologiesFromProfile(candidate_profile),
             "career_level_from_profile": profile_summary.get("career_level"),
         })
         # Fill email from profile if LLM missed it
@@ -653,7 +717,7 @@ class EvaluationReportService:
                 technical_assessment=TechnicalAssessment(**parsed_data.get("technical_assessment", {})),
                 position_analysis=PositionAnalysis(**parsed_data.get("position_analysis", {})),
                 hiring_recommendation=HiringRecommendation(**parsed_data.get("hiring_recommendation", {})),
-                team_fit_analysis=TeamFitAnalysis(**parsed_data.get("team_fit_analysis", {}))
+                team_fit_analysis=TeamFitAnalysis(**TeamFitAnalysis.normalize_llm_data(parsed_data.get("team_fit_analysis", {})))
             )
         except Exception as e:
             logger.error(f"Pydantic model error: {e}\nData: {parsed_data}")

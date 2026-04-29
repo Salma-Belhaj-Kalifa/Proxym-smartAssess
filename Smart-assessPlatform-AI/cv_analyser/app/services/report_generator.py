@@ -13,6 +13,21 @@ from pydantic import BaseModel
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
+def extractTechnologiesFromProfile(candidate_profile: Dict) -> str:
+    """Extract technologies from Technical Information section"""
+    technologies = []
+    
+    if "Technical Information" in candidate_profile and "technologies" in candidate_profile["Technical Information"]:
+        tech_data = candidate_profile["Technical Information"]["technologies"]
+        if isinstance(tech_data, list):
+            for tech in tech_data:
+                if isinstance(tech, dict) and "technology" in tech:
+                    technologies.append(tech["technology"])
+                elif isinstance(tech, str):
+                    technologies.append(tech)
+    
+    return ", ".join(technologies)
+
 REPORT_PROMPT_TEMPLATE = """
 You are an expert HR AI assistant. Generate a professional candidate report based on CV and test results.
 
@@ -159,7 +174,7 @@ class ReportGenerator:
                 "profile_summary": {
                     "career_level": summary.get("career_level", ""),
                     "years_of_experience": summary.get("years_of_experience", ""),
-                    "key_skills": ", ".join(summary.get("key_skills", [])),
+                    "key_skills": extractTechnologiesFromProfile(candidate_profile),
                     "strengths": ", ".join(summary.get("strengths", [])),
                     "specializations": ", ".join(summary.get("specializations", []))
                 },

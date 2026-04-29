@@ -113,6 +113,9 @@ public class SecurityConfig {
                 .requestMatchers("/api/v1/evaluation/**").hasAnyRole("MANAGER", "HR")
                 .requestMatchers("/api/evaluation-reports/**").hasAnyRole("MANAGER", "HR")
                 
+                // WebSocket endpoint
+                .requestMatchers("/ws/**").permitAll()
+                
                 .anyRequest().authenticated()
             )
             .authenticationProvider(authenticationProvider())

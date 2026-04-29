@@ -2,6 +2,7 @@ package com.example.smart_assess.repository;
 
 import com.example.smart_assess.entity.GeneratedTest;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -19,4 +20,7 @@ public interface GeneratedTestRepository extends JpaRepository<GeneratedTest, Lo
     List<GeneratedTest> findAllByOrderByCreatedAtDesc();
     
     void deleteAllByCandidate_Id(Long candidateId);
+    
+    @Query("SELECT t FROM GeneratedTest t LEFT JOIN FETCH t.candidate WHERE t.id = :id")
+    Optional<GeneratedTest> findByIdWithCandidate(Long id);
 }

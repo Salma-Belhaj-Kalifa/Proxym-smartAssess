@@ -21,7 +21,7 @@ REQUIREMENTS:
 - NO explanations
 - Use technologies from candidate profile
 - Mix difficulty levels appropriately
-- 10 percent of the questions must be IQ (logic, reasoning, pattern recognition) questions at intermediate level
+- 10 percent of the questions number must be IQ (logic, reasoning, pattern recognition) questions at intermediate level
 - IQ questions must NOT be based on technologies but on logical thinking and problem-solving
 - Clearly set "technology": "IQ" for those questions
 

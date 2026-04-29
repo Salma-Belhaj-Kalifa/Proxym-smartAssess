@@ -142,12 +142,12 @@ interface EvaluationReport {
     applied_position_match: number;
     recommended_positions: {
       position: string;
-      match_score: number;
+      fit_analysis?: string;
       reasoning: string;
     }[];
     alternative_positions: {
       position: string;
-      match_score: number;
+      fit_analysis?: string;
       reasoning: string;
     }[];
   };
@@ -372,7 +372,7 @@ const EvaluationReportPage = () => {
                     <p className="font-medium">{pos.position}</p>
                     <p className="text-sm text-muted-foreground">{pos.reasoning}</p>
                   </div>
-                  <Badge variant="outline">{Math.round(pos.match_score)}%</Badge>
+                  <Badge variant="outline">{pos.fit_analysis || 'N/A'}</Badge>
                 </div>
               ))}
             </div>
@@ -388,7 +388,7 @@ const EvaluationReportPage = () => {
                       <p className="font-medium">{pos.position}</p>
                       <p className="text-sm text-muted-foreground">{pos.reasoning}</p>
                     </div>
-                    <Badge variant="secondary">{Math.round(pos.match_score)}%</Badge>
+                    <Badge variant="secondary">{pos.fit_analysis || 'N/A'}</Badge>
                   </div>
                 ))}
               </div>
